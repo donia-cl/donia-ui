@@ -15,6 +15,10 @@
             background-color: #f8fafc; /* slate-50 */
         }
     </style>
+    <!-- Shim para evitar error de process is not defined en despliegue estático -->
+    <script>
+      window.process = { env: { API_KEY: '' } };
+    </script>
 <script type="importmap">
 {
   "imports": {
@@ -28,10 +32,10 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="root"></div>
-<script type="module" src="/index.tsx"></script>
+    <!-- Punto de entrada de la aplicación -->
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>
