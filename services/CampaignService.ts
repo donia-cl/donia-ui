@@ -6,17 +6,29 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 // Intentamos obtener las variables de entorno de forma segura
 const SUPABASE_URL = typeof process !== 'undefined' ? process.env.SUPABASE_URL : undefined;
 const SUPABASE_ANON_KEY = typeof process !== 'undefined' ? process.env.SUPABASE_ANON_KEY : undefined;
+const GEMINI_KEY = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
 
 export class CampaignService {
   private static instance: CampaignService;
-  private ai: GoogleGenAI;
+  private ai: GoogleGenAI | null = null;
   private supabase: SupabaseClient | null = null;
   private isLocalMode: boolean = false;
+  private isAiAvailable: boolean = false;
 
   private constructor() {
-    // Fixed: Always use direct process.env.API_KEY for GoogleGenAI initialization
-    this.ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // Inicialización segura de IA
+    if (GEMINI_KEY && GEMINI_KEY !== '') {
+      try {
+        this.ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+        this.isAiAvailable = true;
+      } catch (e) {
+        console.error("Donia: Error al inicializar Gemini SDK", e);
+      }
+    } else {
+      console.warn("Donia: API_KEY no encontrada. Las funciones de IA estarán desactivadas.");
+    }
     
+    // Inicialización segura de Supabase
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
       try {
         this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -27,10 +39,7 @@ export class CampaignService {
       }
     } else {
       this.isLocalMode = true;
-      console.info(
-        "Donia (Info): Ejecutando en modo local. \n" +
-        "Para usar PostgreSQL real, configura SUPABASE_URL y SUPABASE_ANON_KEY en Vercel."
-      );
+      console.info("Donia: Ejecutando en modo local (localStorage).");
     }
   }
 
@@ -39,6 +48,10 @@ export class CampaignService {
       CampaignService.instance = new CampaignService();
     }
     return CampaignService.instance;
+  }
+
+  public checkAiAvailability(): boolean {
+    return this.isAiAvailable;
   }
 
   // --- AYUDANTES DE STORAGE LOCAL (Fallback) ---
@@ -56,53 +69,60 @@ export class CampaignService {
 
   async getCampaigns(): Promise<CampaignData[]> {
     if (this.supabase && !this.isLocalMode) {
-      const { data, error } = await this.supabase
-        .from('campaigns')
-        .select('*')
-        .order('fecha_creacion', { ascending: false });
+      try {
+        const { data, error } = await this.supabase
+          .from('campaigns')
+          .select('*')
+          .order('fecha_creacion', { ascending: false });
 
-      if (!error && data) {
-        return data.map(c => ({
-          id: c.id,
-          titulo: c.titulo,
-          historia: c.historia,
-          monto: c.monto,
-          recaudado: c.recaudado,
-          categoria: c.categoria,
-          ubicacion: c.ubicacion,
-          fechaCreacion: c.fecha_creacion,
-          imagenUrl: c.imagen_url,
-          estado: c.estado,
-          donantesCount: c.donantes_count
-        }));
+        if (!error && data) {
+          return data.map(c => ({
+            id: c.id,
+            titulo: c.titulo,
+            historia: c.historia,
+            monto: c.monto,
+            recaudado: c.recaudado,
+            categoria: c.categoria,
+            ubicacion: c.ubicacion,
+            fechaCreacion: c.fecha_creacion,
+            imagenUrl: c.imagen_url,
+            estado: c.estado,
+            donantesCount: c.donantes_count
+          }));
+        }
+      } catch (e) {
+        console.error("Supabase fetch error:", e);
       }
     }
-    // Fallback Local
     return this.getLocalCampaigns();
   }
 
   async getCampaignById(id: string): Promise<CampaignData | null> {
     if (this.supabase && !this.isLocalMode) {
-      const { data, error } = await this.supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', id)
-        .single();
+      try {
+        const { data, error } = await this.supabase
+          .from('campaigns')
+          .select('*')
+          .eq('id', id)
+          .single();
 
-      if (!error && data) {
-        return {
-          id: data.id,
-          titulo: data.titulo,
-          historia: data.historia,
-          monto: data.monto,
-          recaudado: data.recaudado,
-          categoria: data.categoria,
-          ubicacion: data.ubicacion,
-          fechaCreacion: data.fecha_creacion,
-          imagenUrl: data.imagen_url,
-          estado: data.estado,
-          donantesCount: data.donantes_count
-        };
+        if (!error && data) {
+          return {
+            id: data.id,
+            titulo: data.titulo,
+            historia: data.historia,
+            monto: data.monto,
+            recaudado: data.recaudado,
+            categoria: data.categoria,
+            ubicacion: data.ubicacion,
+            fechaCreacion: data.fecha_creacion,
+            imagenUrl: data.imagen_url,
+            estado: data.estado,
+            donantesCount: data.donantes_count
+          };
+        }
+      } catch (e) {
+        console.error("Supabase single fetch error:", e);
       }
     }
     return this.getLocalCampaigns().find(c => c.id === id) || null;
@@ -112,37 +132,40 @@ export class CampaignService {
     const imagenUrl = `https://picsum.photos/seed/${Math.random()}/1200/800`;
     
     if (this.supabase && !this.isLocalMode) {
-      const { data, error } = await this.supabase
-        .from('campaigns')
-        .insert([{
-          titulo: payload.titulo,
-          historia: payload.historia,
-          monto: payload.monto,
-          categoria: payload.categoria,
-          ubicacion: payload.ubicacion,
-          imagen_url: imagenUrl
-        }])
-        .select()
-        .single();
+      try {
+        const { data, error } = await this.supabase
+          .from('campaigns')
+          .insert([{
+            titulo: payload.titulo,
+            historia: payload.historia,
+            monto: payload.monto,
+            categoria: payload.categoria,
+            ubicacion: payload.ubicacion,
+            imagen_url: imagenUrl
+          }])
+          .select()
+          .single();
 
-      if (!error && data) {
-        return {
-          id: data.id,
-          titulo: data.titulo,
-          historia: data.historia,
-          monto: data.monto,
-          recaudado: data.recaudado,
-          categoria: data.categoria,
-          ubicacion: data.ubicacion,
-          fechaCreacion: data.fecha_creacion,
-          imagenUrl: data.imagen_url,
-          estado: data.estado,
-          donantesCount: data.donantes_count
-        };
+        if (!error && data) {
+          return {
+            id: data.id,
+            titulo: data.titulo,
+            historia: data.historia,
+            monto: data.monto,
+            recaudado: data.recaudado,
+            categoria: data.categoria,
+            ubicacion: data.ubicacion,
+            fechaCreacion: data.fecha_creacion,
+            imagenUrl: data.imagen_url,
+            estado: data.estado,
+            donantesCount: data.donantes_count
+          };
+        }
+      } catch (e) {
+        console.error("Supabase insert error:", e);
       }
     }
 
-    // Fallback Local
     const newCampaign: CampaignData = {
       ...payload,
       id: Math.random().toString(36).substr(2, 9),
@@ -160,34 +183,37 @@ export class CampaignService {
 
   async donate(campaignId: string, monto: number, nombre: string = 'Anónimo'): Promise<Donation> {
     if (this.supabase && !this.isLocalMode) {
-      const { data: donation, error: dError } = await this.supabase
-        .from('donations')
-        .insert([{ campaign_id: campaignId, monto, nombre_donante: nombre }])
-        .select()
-        .single();
+      try {
+        const { data: donation, error: dError } = await this.supabase
+          .from('donations')
+          .insert([{ campaign_id: campaignId, monto, nombre_donante: nombre }])
+          .select()
+          .single();
 
-      if (!dError && donation) {
-        const current = await this.getCampaignById(campaignId);
-        if (current) {
-          await this.supabase
-            .from('campaigns')
-            .update({
-              recaudado: (current.recaudado || 0) + monto,
-              donantes_count: (current.donantesCount || 0) + 1
-            })
-            .eq('id', campaignId);
+        if (!dError && donation) {
+          const current = await this.getCampaignById(campaignId);
+          if (current) {
+            await this.supabase
+              .from('campaigns')
+              .update({
+                recaudado: (current.recaudado || 0) + monto,
+                donantes_count: (current.donantesCount || 0) + 1
+              })
+              .eq('id', campaignId);
+          }
+          return {
+            id: donation.id,
+            campaignId: donation.campaign_id,
+            monto: donation.monto,
+            nombreDonante: donation.nombre_donante,
+            fecha: donation.fecha
+          };
         }
-        return {
-          id: donation.id,
-          campaignId: donation.campaign_id,
-          monto: donation.monto,
-          nombreDonante: donation.nombre_donante,
-          fecha: donation.fecha
-        };
+      } catch (e) {
+        console.error("Supabase donation error:", e);
       }
     }
 
-    // Fallback Local
     const campaigns = this.getLocalCampaigns();
     const index = campaigns.findIndex(c => c.id === campaignId);
     if (index !== -1) {
@@ -206,6 +232,10 @@ export class CampaignService {
   }
 
   async polishStory(draft: string): Promise<string> {
+    if (!this.ai || !this.isAiAvailable) {
+      console.warn("IA no disponible para pulir historia.");
+      return draft;
+    }
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -215,10 +245,9 @@ export class CampaignService {
         
         Borrador: "${draft}"`,
       });
-      // Fixed: Extracting text output correctly using the .text property
       return response.text || draft;
     } catch (error) {
-      console.warn("IA Polish error (usando borrador original):", error);
+      console.warn("IA Polish error:", error);
       return draft;
     }
   }
