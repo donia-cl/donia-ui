@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Sparkles, Wand2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Wand2, Info } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
@@ -11,7 +11,12 @@ const CreateStory: React.FC = () => {
   const { campaign, updateCampaign } = useCampaign();
   const [localStory, setLocalStory] = useState(campaign.historia || '');
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [isAiAvailable, setIsAiAvailable] = useState(true);
   const service = CampaignService.getInstance();
+
+  useEffect(() => {
+    setIsAiAvailable(service.checkAiAvailability());
+  }, []);
 
   const handleNext = () => {
     updateCampaign({ historia: localStory });
@@ -19,7 +24,7 @@ const CreateStory: React.FC = () => {
   };
 
   const handleAiPolish = async () => {
-    if (!localStory || localStory.length < 20) return;
+    if (!localStory || localStory.length < 20 || !isAiAvailable) return;
     setIsAiProcessing(true);
     const polished = await service.polishStory(localStory);
     setLocalStory(polished);
@@ -48,27 +53,33 @@ const CreateStory: React.FC = () => {
         <div className="bg-white rounded-[32px] border-2 border-slate-100 p-8 shadow-sm focus-within:border-violet-200 transition-all">
           <label className="flex justify-between items-center mb-6">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Relato de la campaña</span>
-            <button
-              onClick={handleAiPolish}
-              disabled={isAiProcessing || localStory.length < 20}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-lg ${
-                isAiProcessing 
-                ? 'bg-slate-100 text-slate-400 cursor-wait' 
-                : 'bg-gradient-to-r from-violet-600 to-sky-500 text-white hover:shadow-violet-200 hover:-translate-y-0.5'
-              }`}
-            >
-              {isAiProcessing ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Optimizando...
-                </>
-              ) : (
-                <>
-                  <Wand2 size={16} />
-                  Perfeccionar con IA
-                </>
-              )}
-            </button>
+            {isAiAvailable ? (
+              <button
+                onClick={handleAiPolish}
+                disabled={isAiProcessing || localStory.length < 20}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-lg ${
+                  isAiProcessing 
+                  ? 'bg-slate-100 text-slate-400 cursor-wait' 
+                  : 'bg-gradient-to-r from-violet-600 to-sky-500 text-white hover:shadow-violet-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:shadow-none'
+                }`}
+              >
+                {isAiProcessing ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Optimizando...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 size={16} />
+                    Perfeccionar con IA
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 text-slate-300 text-[10px] font-bold italic">
+                <Info size={14} /> IA no configurada
+              </div>
+            )}
           </label>
           <textarea
             rows={12}
