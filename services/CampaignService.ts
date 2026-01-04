@@ -3,7 +3,6 @@ import { CampaignData, Donation } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Intentamos obtener las variables de entorno de forma segura
 const SUPABASE_URL = typeof process !== 'undefined' ? process.env.SUPABASE_URL : undefined;
 const SUPABASE_ANON_KEY = typeof process !== 'undefined' ? process.env.SUPABASE_ANON_KEY : undefined;
 const GEMINI_KEY = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
@@ -16,30 +15,23 @@ export class CampaignService {
   private isAiAvailable: boolean = false;
 
   private constructor() {
-    // Inicialización segura de IA
     if (GEMINI_KEY && GEMINI_KEY !== '') {
       try {
         this.ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
         this.isAiAvailable = true;
       } catch (e) {
-        console.error("Donia: Error al inicializar Gemini SDK", e);
+        console.error("Donia AI Error:", e);
       }
-    } else {
-      console.warn("Donia: API_KEY no encontrada. Las funciones de IA estarán desactivadas.");
     }
     
-    // Inicialización segura de Supabase
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
       try {
         this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log("Donia: Conectado a PostgreSQL (Supabase)");
       } catch (err) {
-        console.warn("Donia: Error al conectar a Supabase, activando modo local.", err);
         this.isLocalMode = true;
       }
     } else {
       this.isLocalMode = true;
-      console.info("Donia: Ejecutando en modo local (localStorage).");
     }
   }
 
@@ -54,7 +46,9 @@ export class CampaignService {
     return this.isAiAvailable;
   }
 
-  // --- AYUDANTES DE STORAGE LOCAL (Fallback) ---
+  public getConnectionStatus(): 'cloud' | 'local' {
+    return this.isLocalMode ? 'local' : 'cloud';
+  }
 
   private getLocalCampaigns(): CampaignData[] {
     const data = localStorage.getItem('donia_campaigns');
@@ -64,8 +58,6 @@ export class CampaignService {
   private saveLocalCampaigns(campaigns: CampaignData[]) {
     localStorage.setItem('donia_campaigns', JSON.stringify(campaigns));
   }
-
-  // --- MÉTODOS DE CAMPAÑA ---
 
   async getCampaigns(): Promise<CampaignData[]> {
     if (this.supabase && !this.isLocalMode) {
@@ -80,8 +72,8 @@ export class CampaignService {
             id: c.id,
             titulo: c.titulo,
             historia: c.historia,
-            monto: c.monto,
-            recaudado: c.recaudado,
+            monto: Number(c.monto),
+            recaudado: Number(c.recaudado),
             categoria: c.categoria,
             ubicacion: c.ubicacion,
             fechaCreacion: c.fecha_creacion,
@@ -89,9 +81,11 @@ export class CampaignService {
             estado: c.estado,
             donantesCount: c.donantes_count
           }));
+        } else if (error) {
+          console.error("Supabase Error:", error.message);
         }
       } catch (e) {
-        console.error("Supabase fetch error:", e);
+        console.error("Fetch failed:", e);
       }
     }
     return this.getLocalCampaigns();
@@ -111,8 +105,8 @@ export class CampaignService {
             id: data.id,
             titulo: data.titulo,
             historia: data.historia,
-            monto: data.monto,
-            recaudado: data.recaudado,
+            monto: Number(data.monto),
+            recaudado: Number(data.recaudado),
             categoria: data.categoria,
             ubicacion: data.ubicacion,
             fechaCreacion: data.fecha_creacion,
@@ -122,7 +116,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Supabase single fetch error:", e);
+        console.error("Single fetch error:", e);
       }
     }
     return this.getLocalCampaigns().find(c => c.id === id) || null;
@@ -151,8 +145,8 @@ export class CampaignService {
             id: data.id,
             titulo: data.titulo,
             historia: data.historia,
-            monto: data.monto,
-            recaudado: data.recaudado,
+            monto: Number(data.monto),
+            recaudado: Number(data.recaudado),
             categoria: data.categoria,
             ubicacion: data.ubicacion,
             fechaCreacion: data.fecha_creacion,
@@ -162,7 +156,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Supabase insert error:", e);
+        console.error("Insert error:", e);
       }
     }
 
@@ -210,7 +204,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Supabase donation error:", e);
+        console.error("Donation error:", e);
       }
     }
 
@@ -232,10 +226,7 @@ export class CampaignService {
   }
 
   async polishStory(draft: string): Promise<string> {
-    if (!this.ai || !this.isAiAvailable) {
-      console.warn("IA no disponible para pulir historia.");
-      return draft;
-    }
+    if (!this.ai || !this.isAiAvailable) return draft;
     try {
       const response = await this.ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -247,7 +238,6 @@ export class CampaignService {
       });
       return response.text || draft;
     } catch (error) {
-      console.warn("IA Polish error:", error);
       return draft;
     }
   }
