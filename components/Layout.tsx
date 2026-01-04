@@ -48,7 +48,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <Heart size={24} className="text-violet-600" />
               <span className="text-xl font-bold text-slate-800">Donia</span>
             </div>
-            <p className="text-slate-500 text-sm">© 2026 Donia Chile. Juntos podemos lograr grandes cosas.</p>
+            <p className="text-slate-500 text-sm">© 2027 Donia Chile. Juntos podemos lograr grandes cosas.</p>
           </div>
         </footer>
       )}
