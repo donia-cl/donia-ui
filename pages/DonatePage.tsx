@@ -221,7 +221,7 @@ const DonatePage: React.FC = () => {
                         </button>
                         <button 
                            onClick={() => setTipPercentage(0)}
-                           className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === 0 ? 'bg-white border-slate-200 text-slate-400 hover:border-rose-200 hover:text-rose-500 shadow-sm'}`}
+                           className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === 0 ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
                         >
                            0%
                         </button>
@@ -327,7 +327,7 @@ const DonatePage: React.FC = () => {
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
                       <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Donia</span>
-                      <span className="text-slate-600 text-sm font-bold">Aporte voluntario {tipPercentage !== 'custom' && `(${tipPercentage}%)`}</span>
+                      <span className="text-slate-600 text-sm font-bold">Aporte voluntario {tipPercentage !== 'custom' && tipPercentage !== 0 && `(${tipPercentage}%)`}</span>
                     </div>
                     <span className="font-black text-slate-900 text-lg">${tipSubtotal.toLocaleString('es-CL')}</span>
                   </div>
