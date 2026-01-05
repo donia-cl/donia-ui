@@ -3,81 +3,33 @@ import { CampaignData, Donation } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-/**
- * Función robusta para obtener variables de entorno en cualquier contexto.
- * Busca con prefijos comunes (REACT_APP_, VITE_, NEXT_PUBLIC_) para asegurar compatibilidad en producción.
- */
-const getEnv = (key: string): string | undefined => {
-  const prefixes = ['', 'REACT_APP_', 'VITE_', 'NEXT_PUBLIC_'];
-  
-  // 1. Intentar via process.env (Webpack, CRA, Vercel Build-time)
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      for (const p of prefixes) {
-        const val = (process.env as any)[`${p}${key}`];
-        if (val) return val;
-      }
-    }
-  } catch (e) {}
-
-  // 2. Intentar via import.meta.env (Vite nativo)
-  try {
-    // @ts-ignore
-    const viteEnv = import.meta.env;
-    if (viteEnv) {
-      for (const p of prefixes) {
-        const val = viteEnv[`${p}${key}`];
-        if (val) return val;
-      }
-    }
-  } catch (e) {}
-
-  return undefined;
-};
-
 export class CampaignService {
   private static instance: CampaignService;
   private supabase: SupabaseClient | null = null;
   private isLocalMode: boolean = false;
-  private isAiAvailable: boolean = false;
 
   private constructor() {
-    // Detección de llaves de Supabase con fallback de prefijos
-    const sUrl = getEnv('SUPABASE_URL');
-    const sKey = getEnv('SUPABASE_ANON_KEY');
-    
-    // Acceso seguro a API_KEY según instrucciones estrictas (exclusivamente process.env.API_KEY)
-    let gKey: string | undefined;
-    try {
-      // Verificamos existencia de process para no romper la ejecución si no está definido
-      gKey = typeof process !== 'undefined' ? (process.env?.API_KEY || (process.env as any)?.REACT_APP_API_KEY) : undefined;
-    } catch (e) {
-      gKey = undefined;
-    }
+    // Buscamos las llaves con todos los prefijos posibles para compatibilidad máxima con Vercel/React
+    const sUrl = process.env.SUPABASE_URL || 
+                 process.env.REACT_APP_SUPABASE_URL || 
+                 process.env.NEXT_PUBLIC_SUPABASE_URL;
+                 
+    const sKey = process.env.SUPABASE_ANON_KEY || 
+                 process.env.REACT_APP_SUPABASE_ANON_KEY || 
+                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+                 process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-    // Diagnóstico en consola para el desarrollador
-    console.group("🚀 Donia Connection Diagnostics");
-    console.log("Supabase URL:", sUrl ? "✅ Detectada" : "❌ No encontrada");
-    console.log("Supabase Key:", sKey ? "✅ Detectada" : "❌ No encontrada");
-    console.log("Gemini API Key:", gKey ? "✅ Detectada" : "❌ No encontrada");
-    console.log("Modo de Operación:", sUrl && sKey ? "🌐 Nube (Supabase)" : "🏠 Local (LocalStorage)");
-    console.groupEnd();
-
-    // Verificación de disponibilidad de IA
-    if (gKey) {
-      this.isAiAvailable = true;
-    }
-    
-    // Inicialización de Supabase
     if (sUrl && sKey) {
       try {
         this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
+        console.log("Donia: Integración de nube inicializada correctamente.");
       } catch (err) {
-        console.error("Error al inicializar Supabase:", err);
+        console.warn("Donia: Fallo al conectar con Supabase, activando modo local.");
         this.isLocalMode = true;
       }
     } else {
+      console.warn("Donia: Faltan llaves de configuración. Operando en modo local (LocalStorage).");
       this.isLocalMode = true;
     }
   }
@@ -90,7 +42,7 @@ export class CampaignService {
   }
 
   public checkAiAvailability(): boolean {
-    return this.isAiAvailable;
+    return !!process.env.API_KEY;
   }
 
   public getConnectionStatus(): 'cloud' | 'local' {
@@ -129,8 +81,9 @@ export class CampaignService {
             donantesCount: c.donantes_count
           }));
         }
+        if (error) throw error;
       } catch (e) {
-        console.error("Error al obtener campañas de Supabase:", e);
+        console.error("Donia Fetch Error:", e);
       }
     }
     return this.getLocalCampaigns();
@@ -161,7 +114,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Error al obtener campaña por ID:", e);
+        console.error("Donia Detail Error:", e);
       }
     }
     return this.getLocalCampaigns().find(c => c.id === id) || null;
@@ -201,7 +154,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Error al crear campaña en Supabase:", e);
+        console.error("Donia Creation Error:", e);
       }
     }
 
@@ -249,7 +202,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Error al procesar donación en Supabase:", e);
+        console.error("Donia Donation Error:", e);
       }
     }
 
@@ -270,30 +223,24 @@ export class CampaignService {
     throw new Error("Campaña no encontrada");
   }
 
-  /**
-   * Mejora la narrativa de la campaña utilizando Gemini AI.
-   */
   async polishStory(story: string): Promise<string> {
-    try {
-      // Obtenemos la llave de manera segura antes de instanciar
-      const apiKey = typeof process !== 'undefined' ? (process.env?.API_KEY || (process.env as any)?.REACT_APP_API_KEY) : undefined;
-      
-      if (!apiKey) {
-        console.warn("Gemini API Key no disponible para pulir historia.");
-        return story;
-      }
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return story;
 
+    try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Por favor, mejora y pulé el siguiente relato de una campaña de recaudación de fondos para que sea más emotivo y profesional, pero manteniendo la esencia original. El texto está en español: "${story}"`,
+        contents: `Optimiza este texto para una campaña de recaudación de fondos. Hazlo más profesional, humano y persuasivo. Mantén el idioma original: "${story}"`,
         config: {
-          systemInstruction: "Eres un experto en copywriting para causas benéficas y organizaciones sin fines de lucro. Devuelve solo el texto pulido, sin introducciones ni comentarios adicionales.",
+          systemInstruction: "Eres un redactor senior experto en recaudación de fondos y storytelling emocional.",
+          temperature: 0.7,
         },
       });
+
       return response.text || story;
     } catch (e) {
-      console.error("Error al pulir la historia con Gemini:", e);
+      console.error("Donia AI Error:", e);
       return story;
     }
   }
