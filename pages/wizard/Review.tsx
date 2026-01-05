@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, CheckCircle, Edit, MapPin, Tag, HeartHandshake } from 'lucide-react';
+import { ChevronLeft, CheckCircle, Edit, MapPin, Tag, HeartHandshake, AlertCircle } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
@@ -31,10 +31,12 @@ const CreateReview: React.FC = () => {
   const { campaign, resetCampaign } = useCampaign();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const service = CampaignService.getInstance();
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setError(null);
     try {
       await service.createCampaign({
         titulo: campaign.titulo || '',
@@ -45,10 +47,10 @@ const CreateReview: React.FC = () => {
       });
       setIsSubmitting(false);
       setIsSuccess(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error publishing:", err);
+      setError(err.message || "No se pudo conectar con el servidor.");
       setIsSubmitting(false);
-      alert("Error al publicar.");
     }
   };
 
@@ -108,6 +110,16 @@ const CreateReview: React.FC = () => {
            </div>
         </div>
       </div>
+
+      {error && (
+        <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-[28px] flex gap-4 items-center animate-shake">
+          <AlertCircle className="text-red-500 shrink-0" size={24} />
+          <p className="text-red-800 font-medium text-sm">
+            <strong className="block mb-1">Error de publicación:</strong>
+            {error}
+          </p>
+        </div>
+      )}
 
       <button 
         onClick={handleSubmit}

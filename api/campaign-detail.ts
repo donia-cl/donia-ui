@@ -5,13 +5,12 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const { id } = req.query;
 
-  if (!id) return res.status(400).json({ error: 'ID required' });
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+  const supabaseKey = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-
+  if (!id) return res.status(400).json({ success: false, error: 'ID required' });
   if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ error: 'Database configuration missing' });
+    return res.status(500).json({ success: false, error: 'Database configuration missing' });
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -24,8 +23,8 @@ export default async function handler(req: any, res: any) {
       .single();
 
     if (error) throw error;
-    return res.status(200).json(data);
+    return res.status(200).json({ success: true, data });
   } catch (error: any) {
-    return res.status(404).json({ error: 'Campaign not found' });
+    return res.status(404).json({ success: false, error: 'Campaign not found' });
   }
 }

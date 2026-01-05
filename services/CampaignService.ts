@@ -22,122 +22,103 @@ export class CampaignService {
   }
 
   public getConnectionStatus(): 'cloud' | 'local' {
-    // Ahora siempre delegamos al backend, el cual maneja su propia conexión
     return 'cloud';
   }
 
-  private getLocalCampaigns(): CampaignData[] {
-    const data = localStorage.getItem('donia_campaigns');
-    return data ? JSON.parse(data) : [];
-  }
-
-  private saveLocalCampaigns(campaigns: CampaignData[]) {
-    localStorage.setItem('donia_campaigns', JSON.stringify(campaigns));
-  }
-
   private mapCampaign(c: any): CampaignData {
+    if (!c) throw new Error("Datos de campaña nulos");
     return {
-      id: c.id,
-      titulo: c.titulo,
-      historia: c.historia,
-      monto: Number(c.monto),
-      recaudado: Number(c.recaudado),
-      categoria: c.categoria,
-      ubicacion: c.ubicacion,
-      fechaCreacion: c.fecha_creacion || c.fechaCreacion,
-      imagenUrl: c.imagen_url || c.imagenUrl,
-      estado: c.estado,
-      donantesCount: c.donantes_count || c.donantesCount
+      id: c.id || String(Math.random()),
+      titulo: c.titulo || 'Sin título',
+      historia: c.historia || '',
+      monto: Number(c.monto || 0),
+      recaudado: Number(c.recaudado || 0),
+      categoria: c.categoria || 'General',
+      ubicacion: c.ubicacion || 'Chile',
+      fechaCreacion: c.fecha_creacion || c.fechaCreacion || new Date().toISOString(),
+      imagenUrl: c.imagen_url || c.imagenUrl || 'https://picsum.photos/800/600',
+      estado: c.estado || 'activa',
+      donantesCount: Number(c.donantes_count || c.donantesCount || 0)
     };
+  }
+
+  private async safeParseJson(response: Response) {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Error al parsear JSON. Respuesta del servidor:", text);
+      throw new Error("El servidor no devolvió un JSON válido. Revisa los logs de la API.");
+    }
   }
 
   async getCampaigns(): Promise<CampaignData[]> {
     try {
       const response = await fetch('/api/campaigns');
-      if (!response.ok) throw new Error('Failed to fetch from API');
-      const data = await response.json();
-      return data.map((c: any) => this.mapCampaign(c));
-    } catch (e) {
-      console.warn("Donia: Usando modo local como fallback.");
-      return this.getLocalCampaigns();
+      const result = await this.safeParseJson(response);
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Fallo en la carga de campañas');
+      }
+      
+      return (result.data || []).map((c: any) => this.mapCampaign(c));
+    } catch (e: any) {
+      console.error("Donia Fetch Error:", e.message);
+      const local = localStorage.getItem('donia_campaigns');
+      return local ? JSON.parse(local).map((c: any) => this.mapCampaign(c)) : [];
     }
   }
 
   async getCampaignById(id: string): Promise<CampaignData | null> {
     try {
       const response = await fetch(`/api/campaign-detail?id=${id}`);
-      if (!response.ok) throw new Error('Campaign not found');
-      const data = await response.json();
-      return this.mapCampaign(data);
+      const result = await this.safeParseJson(response);
+      if (!response.ok || !result.success) return null;
+      return this.mapCampaign(result.data);
     } catch (e) {
-      return this.getLocalCampaigns().find(c => c.id === id) || null;
+      return null;
     }
   }
 
   async createCampaign(payload: Omit<CampaignData, 'id' | 'recaudado' | 'fechaCreacion' | 'estado' | 'donantesCount' | 'imagenUrl'>): Promise<CampaignData> {
     const imagenUrl = `https://picsum.photos/seed/${Math.random()}/1200/800`;
     
-    try {
-      const response = await fetch('/api/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...payload, imagen_url: imagenUrl }),
-      });
+    const response = await fetch('/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, imagen_url: imagenUrl }),
+    });
 
-      if (!response.ok) throw new Error('Failed to create in API');
-      const data = await response.json();
-      return this.mapCampaign(data);
-    } catch (e) {
-      const newCampaign: CampaignData = {
-        ...payload,
-        id: Math.random().toString(36).substr(2, 9),
-        recaudado: 0,
-        donantesCount: 0,
-        fechaCreacion: new Date().toISOString(),
-        estado: 'activa',
-        imagenUrl
-      };
-      const all = this.getLocalCampaigns();
-      this.saveLocalCampaigns([newCampaign, ...all]);
-      return newCampaign;
+    const result = await this.safeParseJson(response);
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.details || 'Error al guardar en la nube');
     }
+
+    return this.mapCampaign(result.data);
   }
 
   async donate(campaignId: string, monto: number, nombre: string = 'Anónimo'): Promise<Donation> {
-    try {
-      const response = await fetch('/api/donate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ campaignId, monto, nombre }),
-      });
+    const response = await fetch('/api/donate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaignId, monto, nombre }),
+    });
 
-      if (!response.ok) throw new Error('Donation failed in API');
-      const donation = await response.json();
-      return {
-        id: donation.id,
-        campaignId: donation.campaign_id,
-        monto: donation.monto,
-        nombreDonante: donation.nombre_donante,
-        fecha: donation.fecha
-      };
-    } catch (e) {
-      // Local fallback
-      const campaigns = this.getLocalCampaigns();
-      const index = campaigns.findIndex(c => c.id === campaignId);
-      if (index !== -1) {
-        campaigns[index].recaudado += monto;
-        campaigns[index].donantesCount += 1;
-        this.saveLocalCampaigns(campaigns);
-        return {
-          id: Math.random().toString(36).substr(2, 9),
-          campaignId,
-          monto,
-          nombreDonante: nombre,
-          fecha: new Date().toISOString()
-        };
-      }
-      throw new Error("Campaña no encontrada");
+    const result = await this.safeParseJson(response);
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Error al procesar donación');
     }
+
+    const donation = result.data;
+    return {
+      id: donation.id,
+      campaignId: donation.campaign_id,
+      monto: donation.monto,
+      nombreDonante: donation.nombre_donante,
+      fecha: donation.fecha
+    };
   }
 
   async polishStory(story: string): Promise<string> {
@@ -147,11 +128,9 @@ export class CampaignService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ story }),
       });
-      if (!response.ok) throw new Error(`Error: ${response.status}`);
-      const data = await response.json();
+      const data = await this.safeParseJson(response);
       return data.text || story;
     } catch (e) {
-      console.error("Donia AI Error:", e);
       return story;
     }
   }

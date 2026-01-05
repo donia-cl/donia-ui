@@ -3,20 +3,22 @@ import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { campaignId, monto, nombre } = req.body;
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+  const supabaseKey = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ error: 'Database configuration missing' });
+    return res.status(500).json({ success: false, error: 'Database configuration missing' });
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    // 1. Registrar donación
     const { data: donation, error: dError } = await supabase
       .from('donations')
       .insert([{ campaign_id: campaignId, monto, nombre_donante: nombre }])
@@ -25,7 +27,6 @@ export default async function handler(req: any, res: any) {
 
     if (dError) throw dError;
 
-    // 2. Obtener valores actuales para actualizar
     const { data: campaign, error: cError } = await supabase
       .from('campaigns')
       .select('recaudado, donantes_count')
@@ -34,7 +35,6 @@ export default async function handler(req: any, res: any) {
 
     if (cError) throw cError;
 
-    // 3. Actualizar campaña
     const { error: uError } = await supabase
       .from('campaigns')
       .update({
@@ -45,8 +45,8 @@ export default async function handler(req: any, res: any) {
 
     if (uError) throw uError;
 
-    return res.status(200).json(donation);
+    return res.status(200).json({ success: true, data: donation });
   } catch (error: any) {
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 }
