@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { AuthService, supabase } from '../services/AuthService';
+import { AuthService } from '../services/AuthService';
 
 interface AuthContextType {
   user: User | null;
@@ -19,34 +19,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    // Verificar sesión inicial
-    const checkUser = async () => {
+    const initAuth = async () => {
+      // 1. Esperamos a que el servicio se configure (pida las llaves al API)
+      await authService.initialize();
+      
+      // 2. Verificamos si hay un usuario logueado
       const currentUser = await authService.getCurrentUser();
+      
       if (mounted) {
         setUser(currentUser);
         setLoading(false);
       }
+
+      // 3. Suscribirse a cambios de estado
+      const client = authService.getSupabase();
+      if (client && mounted) {
+        const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+          if (mounted) {
+            setUser(session?.user ?? null);
+          }
+        });
+
+        return () => {
+          subscription.unsubscribe();
+        };
+      }
     };
 
-    checkUser();
+    const cleanupPromise = initAuth();
 
-    // Listener de cambios de auth
-    if (supabase) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (mounted) {
-          setUser(session?.user ?? null);
-          setLoading(false);
-        }
-      });
-
-      return () => {
-        mounted = false;
-        subscription.unsubscribe();
-      };
-    } else {
-      setLoading(false);
-      return () => { mounted = false; };
-    }
+    return () => {
+      mounted = false;
+      // Nota: No podemos retornar la cleanup directamente de un async en useEffect, 
+      // pero el flag 'mounted' protegerá los estados internos.
+    };
   }, []);
 
   const signOut = async () => {
