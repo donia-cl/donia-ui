@@ -92,7 +92,7 @@ const CreateStory: React.FC = () => {
             className={`w-full p-0 text-slate-700 text-lg leading-relaxed placeholder:text-slate-200 border-none outline-none resize-none bg-transparent transition-opacity ${
               isAiProcessing ? 'opacity-40' : 'opacity-100'
             }`}
-            placeholder="Érase una vez..."
+            placeholder="Escribe tu historia aquí..."
             value={localStory}
             onChange={(e) => setLocalStory(e.target.value)}
           />

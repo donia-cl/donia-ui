@@ -155,7 +155,7 @@ const CreateDetails: React.FC = () => {
             <input
               type="text"
               className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
-              placeholder="Ej: Ayudemos a Sofía en su tratamiento"
+              placeholder="Ej: Ayudemos a Juan en su tratamiento"
               value={formData.titulo}
               onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
             />
