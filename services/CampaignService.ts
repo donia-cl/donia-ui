@@ -3,16 +3,35 @@ import { CampaignData, Donation } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Intentamos capturar las variables directamente. 
-// En entornos de producción como Vercel, el bundler reemplaza estos valores durante el build.
-const getSupabaseUrl = () => {
-  try { return process.env.SUPABASE_URL; } catch { return undefined; }
-};
-const getSupabaseKey = () => {
-  try { return process.env.SUPABASE_ANON_KEY; } catch { return undefined; }
-};
-const getGeminiKey = () => {
-  try { return process.env.API_KEY; } catch { return undefined; }
+/**
+ * Buscador universal de variables de entorno.
+ * Intenta encontrar la configuración sin importar qué prefijo use el hosting (Vercel/Netlify).
+ */
+const getEnv = (key: string): string | undefined => {
+  const prefixes = ['', 'NEXT_PUBLIC_', 'REACT_APP_', 'VITE_'];
+  
+  try {
+    // 1. Buscar en process.env (Vercel/CRA)
+    for (const p of prefixes) {
+      const val = (process.env as any)[`${p}${key}`];
+      if (val) return val;
+    }
+
+    // 2. Casos especiales de nombres (como se vio en la captura del usuario)
+    if (key === 'SUPABASE_ANON_KEY') {
+      const special = (process.env as any)['REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY'];
+      if (special) return special;
+    }
+
+    // 3. Fallback para import.meta.env (Vite)
+    for (const p of prefixes) {
+      const val = (import.meta as any).env?.[`${p}${key}`];
+      if (val) return val;
+    }
+  } catch (e) {
+    // Silencioso
+  }
+  return undefined;
 };
 
 export class CampaignService {
@@ -23,31 +42,35 @@ export class CampaignService {
   private isAiAvailable: boolean = false;
 
   private constructor() {
-    const sUrl = getSupabaseUrl();
-    const sKey = getSupabaseKey();
-    const gKey = getGeminiKey();
+    // Intentamos obtener las variables con sus nombres base
+    const sUrl = getEnv('SUPABASE_URL');
+    const sKey = getEnv('SUPABASE_ANON_KEY');
+    const gKey = getEnv('API_KEY');
 
-    console.log("Donia Debug - Supabase URL exists:", !!sUrl);
-    console.log("Donia Debug - Supabase Key exists:", !!sKey);
-    console.log("Donia Debug - Gemini Key exists:", !!gKey);
+    console.group("🔍 Diagnóstico de Conexión Donia");
+    console.log("Supabase URL:", sUrl ? "✅ OK" : "❌ No encontrada");
+    console.log("Supabase Key:", sKey ? "✅ OK" : "❌ No encontrada");
+    console.log("Gemini API Key:", gKey ? "✅ OK" : "❌ No encontrada");
+    console.groupEnd();
 
     // Inicialización de IA
-    if (gKey && gKey !== "") {
+    if (gKey) {
       try {
         this.ai = new GoogleGenAI({ apiKey: gKey });
         this.isAiAvailable = true;
       } catch (e) {
-        console.error("Donia AI Init Error:", e);
+        console.error("Error IA:", e);
       }
     }
     
     // Inicialización de Supabase
-    if (sUrl && sKey && sUrl !== "" && sKey !== "") {
+    if (sUrl && sKey) {
       try {
         this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
+        console.log("📡 Conectado a Supabase");
       } catch (err) {
-        console.warn("Donia Connection Error:", err);
+        console.error("Error Supabase:", err);
         this.isLocalMode = true;
       }
     } else {
@@ -102,9 +125,8 @@ export class CampaignService {
             donantesCount: c.donantes_count
           }));
         }
-        if (error) console.error("Supabase Query Error:", error);
       } catch (e) {
-        console.error("Fetch failed:", e);
+        console.error("Fetch error:", e);
       }
     }
     return this.getLocalCampaigns();
@@ -135,7 +157,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Single fetch error:", e);
+        console.error("GetById error:", e);
       }
     }
     return this.getLocalCampaigns().find(c => c.id === id) || null;
@@ -174,9 +196,8 @@ export class CampaignService {
             donantesCount: data.donantes_count
           };
         }
-        if (error) console.error("Supabase Insert Error:", error);
       } catch (e) {
-        console.error("Insert error:", e);
+        console.error("Create error:", e);
       }
     }
 
@@ -224,7 +245,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Donation error:", e);
+        console.error("Donate error:", e);
       }
     }
 
