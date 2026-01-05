@@ -17,24 +17,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authService = AuthService.getInstance();
 
   useEffect(() => {
-    // Verificar sesión activa inicialmente
-    authService.getCurrentUser().then(currentUser => {
-      setUser(currentUser);
-      setLoading(false);
-    });
+    let mounted = true;
 
-    // Escuchar cambios de estado solo si supabase existe
+    // Verificar sesión inicial
+    const checkUser = async () => {
+      const currentUser = await authService.getCurrentUser();
+      if (mounted) {
+        setUser(currentUser);
+        setLoading(false);
+      }
+    };
+
+    checkUser();
+
+    // Listener de cambios de auth
     if (supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
+        if (mounted) {
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
       });
 
       return () => {
-        if (subscription) subscription.unsubscribe();
+        mounted = false;
+        subscription.unsubscribe();
       };
     } else {
       setLoading(false);
+      return () => { mounted = false; };
     }
   }, []);
 
