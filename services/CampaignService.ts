@@ -99,13 +99,25 @@ export class CampaignService {
     return this.mapCampaign(result.data);
   }
 
-  async donate(campaignId: string, monto: number, nombre: string, comentario: string): Promise<Donation> {
-    const result = await this.safeFetch('/api/donate', {
+  // Nuevo método para procesar el pago desde el Payment Brick
+  async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
+    return await this.safeFetch('/api/process-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ campaignId, monto, nombre, comentario }),
+      body: JSON.stringify({ paymentData, campaignId, metadata }),
     });
-    return result.data;
+  }
+
+  async createPaymentPreference(campaignId: string, campaignTitle: string, monto: number, nombre: string, comentario: string): Promise<{ init_point: string, preference_id: string }> {
+    const result = await this.safeFetch('/api/preference', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaignId, campaignTitle, monto, nombre, comentario }),
+    });
+    return { 
+      init_point: result.init_point, 
+      preference_id: result.preference_id 
+    };
   }
 
   async polishStory(story: string): Promise<string> {
