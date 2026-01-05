@@ -1,14 +1,11 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, 
   MapPin, 
   Users, 
-  Heart, 
-  Share2, 
   ShieldCheck, 
-  User, 
   MessageCircle, 
   AlertCircle, 
   Calendar,
@@ -16,21 +13,14 @@ import {
   Twitter,
   Link as LinkIcon,
   Check,
-  CreditCard,
   Loader2,
-  Lock,
   ArrowRight,
   X,
-  MessageSquare
+  MessageSquare,
+  Heart
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, Donation } from '../types';
-
-declare global {
-  interface Window {
-    MercadoPago: any;
-  }
-}
 
 const CampaignDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,19 +28,9 @@ const CampaignDetail: React.FC = () => {
   
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [donationAmount, setDonationAmount] = useState<number>(5000);
-  
-  const [donorName, setDonorName] = useState<string>('');
-  const [donorComment, setDonorComment] = useState<string>('');
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
-  const [error, setError] = useState<string | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'rejected' | 'pending'>('idle');
-  
   const [showAllMessages, setShowAllMessages] = useState(false);
 
-  const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
-  const brickInstanceRef = useRef<any>(null);
   const service = CampaignService.getInstance();
 
   const fetchDetail = async () => {
@@ -68,60 +48,6 @@ const CampaignDetail: React.FC = () => {
   useEffect(() => {
     fetchDetail();
   }, [id]);
-
-  useEffect(() => {
-    if (showPaymentForm && window.MercadoPago && paymentBrickContainerRef.current && campaign) {
-      const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, {
-        locale: 'es-CL'
-      });
-      const bricksBuilder = mp.bricks();
-
-      const renderPaymentBrick = async () => {
-        if (paymentBrickContainerRef.current) paymentBrickContainerRef.current.innerHTML = '';
-        
-        try {
-          brickInstanceRef.current = await bricksBuilder.create('payment', 'paymentBrick_container', {
-            initialization: { amount: donationAmount },
-            customization: {
-              paymentMethods: { creditCard: 'all', debitCard: 'all', mercadoPago: 'all' },
-              visual: { style: { theme: 'flat' }, borderRadius: '16px' }
-            },
-            callbacks: {
-              onSubmit: async ({ formData }: any) => {
-                try {
-                  const result = await service.processPayment(formData, campaign.id, { nombre: donorName, comentario: donorComment });
-                  if (result.status === 'approved') {
-                    setPaymentStatus('success');
-                    fetchDetail();
-                  } else {
-                    setPaymentStatus('rejected');
-                  }
-                } catch (e: any) {
-                  setError(e.message || "Error procesando el pago.");
-                }
-              },
-              onError: (error: any) => {
-                console.error("Error en Brick:", error);
-                setError("Error al cargar la pasarela.");
-              }
-            }
-          });
-        } catch (e) {
-          console.error("Error renderizando brick:", e);
-        }
-      };
-      renderPaymentBrick();
-    }
-  }, [showPaymentForm, donationAmount, campaign]);
-
-  const handleStartDonation = () => {
-    if (donationAmount < 500) {
-      setError("Monto mínimo: $500 CLP");
-      return;
-    }
-    setError(null);
-    setShowPaymentForm(true);
-  };
 
   const copyToClipboard = async () => {
     try {
@@ -152,24 +78,11 @@ const CampaignDetail: React.FC = () => {
   const limitedDonations = campaign.donations?.slice(0, 5) || [];
   const totalDonations = campaign.donations?.length || 0;
 
-  if (paymentStatus === 'success') {
-    return (
-      <div className="max-w-md mx-auto px-6 py-20 text-center">
-        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm">
-          <Check size={40} />
-        </div>
-        <h1 className="text-3xl font-black text-slate-900 mb-3">¡Gracias por donar!</h1>
-        <p className="text-slate-500 mb-10 font-medium">Tu aporte para <span className="text-violet-600 font-bold">{campaign.beneficiarioNombre}</span> fue recibido con éxito.</p>
-        <button onClick={() => { setPaymentStatus('idle'); setShowPaymentForm(false); }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold">Volver</button>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-slate-50 min-h-screen pb-16 relative">
       <div className="max-w-6xl mx-auto px-4 pt-8">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-slate-400 hover:text-violet-600 font-bold mb-6 transition-colors group text-sm">
-          <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> Volver
+        <button onClick={() => navigate('/explorar')} className="flex items-center gap-1.5 text-slate-400 hover:text-violet-600 font-bold mb-6 transition-colors group text-sm">
+          <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> Volver a explorar
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -220,7 +133,7 @@ const CampaignDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Mensajes de apoyo con fuentes más legibles */}
+            {/* Mensajes de apoyo */}
             <div className="bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-slate-100">
                 <div className="flex justify-between items-center mb-8">
                   <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
@@ -278,7 +191,7 @@ const CampaignDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Sidebar de Donación */}
+          {/* Sidebar de Resumen y Donación */}
           <div className="lg:sticky lg:top-24 h-fit">
             <div className="bg-white rounded-3xl p-8 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100">
               <div className="mb-8">
@@ -297,79 +210,14 @@ const CampaignDetail: React.FC = () => {
                 </div>
               </div>
 
-              {error && (
-                <div className="mb-5 p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 items-center text-rose-700 text-xs font-bold">
-                  <AlertCircle size={16} />
-                  <p>{error}</p>
-                </div>
-              )}
-
               <div className="space-y-6">
-                {!showPaymentForm ? (
-                  <>
-                    <div className="space-y-4">
-                      <div className="relative group">
-                         <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-base group-focus-within:text-violet-400">$</span>
-                         <input 
-                            type="number" 
-                            className="w-full pl-8 pr-4 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-black text-slate-900 transition-all text-base"
-                            placeholder="Monto a donar"
-                            value={donationAmount || ''}
-                            onChange={(e) => setDonationAmount(Number(e.target.value))}
-                          />
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[3000, 5000, 10000].map(amt => (
-                          <button 
-                            key={amt}
-                            onClick={() => setDonationAmount(amt)}
-                            className={`py-3 rounded-xl text-xs font-black border transition-all ${donationAmount === amt ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500 hover:border-violet-200'}`}
-                          >
-                            ${amt.toLocaleString()}
-                          </button>
-                        ))}
-                      </div>
-                      <input 
-                        type="text" 
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-700 transition-all text-sm"
-                        placeholder="Nombre (opcional)"
-                        value={donorName}
-                        onChange={(e) => setDonorName(e.target.value)}
-                      />
-                      <textarea 
-                        rows={2}
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-medium text-slate-600 resize-none transition-all text-sm"
-                        placeholder="Escribe un mensaje..."
-                        value={donorComment}
-                        onChange={(e) => setDonorComment(e.target.value)}
-                      />
-                    </div>
-
-                    <button 
-                      onClick={handleStartDonation}
-                      className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-violet-100 active:scale-95"
-                    >
-                      Donar ahora <ArrowRight size={20} />
-                    </button>
-                  </>
-                ) : (
-                  <div className="bg-slate-50 p-6 rounded-2xl border border-violet-100 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="font-black text-slate-900 text-xs uppercase tracking-widest flex items-center gap-1.5">
-                        <CreditCard size={14} className="text-violet-600" /> Formulario de Pago
-                      </h4>
-                      <button onClick={() => setShowPaymentForm(false)} className="text-[10px] font-black text-violet-600 uppercase underline">Modificar</button>
-                    </div>
-                    <div className="flex justify-between items-center mb-6 bg-white p-5 rounded-xl border border-slate-100">
-                      <span className="text-slate-500 text-xs font-bold uppercase tracking-widest">Total Donación</span>
-                      <span className="text-xl font-black text-violet-600">${donationAmount.toLocaleString('es-CL')}</span>
-                    </div>
-                    <div id="paymentBrick_container" ref={paymentBrickContainerRef} className="min-h-[250px]"></div>
-                    <p className="mt-5 text-[10px] text-center text-slate-400 font-black uppercase tracking-widest flex items-center justify-center gap-1.5">
-                      <Lock size={10} /> Transacción Encriptada
-                    </p>
-                  </div>
-                )}
+                <button 
+                  onClick={() => navigate(`/campana/${campaign.id}/donar`)}
+                  className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-violet-100 active:scale-95"
+                >
+                  <Heart size={20} className="fill-current" />
+                  Contribuir ahora
+                </button>
 
                 <div className="pt-8 border-t border-slate-100">
                   <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 block">Compartir causa</span>
@@ -392,7 +240,6 @@ const CampaignDetail: React.FC = () => {
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAllMessages(false)}></div>
           
           <div className="bg-white w-full max-w-2xl rounded-[32px] shadow-2xl relative z-10 flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
-            {/* Header del Modal */}
             <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-[32px]">
               <div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">Todos los mensajes</h3>
@@ -406,7 +253,6 @@ const CampaignDetail: React.FC = () => {
               </button>
             </div>
             
-            {/* Cuerpo del Modal con Scroll */}
             <div className="flex-grow overflow-y-auto p-8 space-y-5 custom-scrollbar">
               {campaign.donations?.map((don: Donation) => (
                 <div key={don.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
@@ -436,7 +282,6 @@ const CampaignDetail: React.FC = () => {
               ))}
             </div>
             
-            {/* Footer del Modal */}
             <div className="p-7 border-t border-slate-100 text-center">
               <button 
                 onClick={() => setShowAllMessages(false)}
@@ -449,7 +294,6 @@ const CampaignDetail: React.FC = () => {
         </div>
       )}
 
-      {/* Estilos para scrollbar del modal */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;

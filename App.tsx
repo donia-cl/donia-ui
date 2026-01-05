@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import Landing from './pages/Landing';
 import Explore from './pages/Explore';
 import CampaignDetail from './pages/CampaignDetail';
+import DonatePage from './pages/DonatePage';
 import CreateIntro from './pages/wizard/Intro';
 import CreateStory from './pages/wizard/Story';
 import CreateDetails from './pages/wizard/Details';
@@ -25,6 +26,9 @@ const App: React.FC = () => {
             
             {/* Campaign Detail */}
             <Route path="/campana/:id" element={<CampaignDetail />} />
+            
+            {/* Donation Flow */}
+            <Route path="/campana/:id/donar" element={<DonatePage />} />
 
             {/* Wizard Routes */}
             <Route path="/crear" element={<CreateIntro />} />
