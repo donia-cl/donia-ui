@@ -19,7 +19,9 @@ import {
   CreditCard,
   Loader2,
   Lock,
-  ArrowRight
+  ArrowRight,
+  X,
+  MessageSquare
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, Donation } from '../types';
@@ -44,6 +46,9 @@ const CampaignDetail: React.FC = () => {
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'rejected' | 'pending'>('idle');
+  
+  // Estado para el Modal de mensajes
+  const [showAllMessages, setShowAllMessages] = useState(false);
 
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
   const brickInstanceRef = useRef<any>(null);
@@ -77,29 +82,15 @@ const CampaignDetail: React.FC = () => {
         
         try {
           brickInstanceRef.current = await bricksBuilder.create('payment', 'paymentBrick_container', {
-            initialization: {
-              amount: donationAmount,
-            },
+            initialization: { amount: donationAmount },
             customization: {
-              paymentMethods: {
-                creditCard: 'all',
-                debitCard: 'all',
-                mercadoPago: 'all',
-              },
-              visual: {
-                style: { theme: 'flat' },
-                borderRadius: '16px',
-              }
+              paymentMethods: { creditCard: 'all', debitCard: 'all', mercadoPago: 'all' },
+              visual: { style: { theme: 'flat' }, borderRadius: '16px' }
             },
             callbacks: {
               onSubmit: async ({ formData }: any) => {
                 try {
-                  const result = await service.processPayment(
-                    formData, 
-                    campaign.id, 
-                    { nombre: donorName, comentario: donorComment }
-                  );
-                  
+                  const result = await service.processPayment(formData, campaign.id, { nombre: donorName, comentario: donorComment });
                   if (result.status === 'approved') {
                     setPaymentStatus('success');
                     fetchDetail();
@@ -120,7 +111,6 @@ const CampaignDetail: React.FC = () => {
           console.error("Error renderizando brick:", e);
         }
       };
-
       renderPaymentBrick();
     }
   }, [showPaymentForm, donationAmount, campaign]);
@@ -160,6 +150,8 @@ const CampaignDetail: React.FC = () => {
   );
 
   const progress = Math.min((campaign.recaudado / campaign.monto) * 100, 100);
+  const limitedDonations = campaign.donations?.slice(0, 5) || [];
+  const totalDonations = campaign.donations?.length || 0;
 
   if (paymentStatus === 'success') {
     return (
@@ -175,7 +167,7 @@ const CampaignDetail: React.FC = () => {
   }
 
   return (
-    <div className="bg-slate-50 min-h-screen pb-16">
+    <div className="bg-slate-50 min-h-screen pb-16 relative">
       <div className="max-w-6xl mx-auto px-4 pt-8">
         <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-slate-400 hover:text-violet-600 font-bold mb-6 transition-colors group text-sm">
           <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> Volver
@@ -195,8 +187,8 @@ const CampaignDetail: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100 mb-8">
-              <div className="flex flex-wrap gap-6 mb-8 pb-6 border-b border-slate-50">
+            <div className="bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-slate-100 mb-8">
+              <div className="flex flex-wrap gap-6 mb-10 pb-6 border-b border-slate-50">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 bg-violet-50 rounded-lg flex items-center justify-center text-violet-600">
                     <MapPin size={16} />
@@ -218,54 +210,70 @@ const CampaignDetail: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-sky-50 rounded-2xl p-5 border border-sky-100 flex items-center gap-4">
-                <ShieldCheck size={24} className="text-sky-600 shrink-0" />
+              <div className="bg-sky-50 rounded-2xl p-6 border border-sky-100 flex items-center gap-4">
+                <ShieldCheck size={28} className="text-sky-600 shrink-0" />
                 <div>
-                  <h3 className="font-black text-sky-900 uppercase text-[10px] tracking-widest">Causa Verificada</h3>
+                  <h3 className="font-black text-sky-900 uppercase text-[10px] tracking-widest mb-1">Causa Verificada</h3>
                   <p className="text-sky-800 text-xs font-medium">
-                    Fondos para <span className="font-black">{campaign.beneficiarioNombre}</span> ({campaign.beneficiarioRelacion}).
+                    Los fondos serán destinados a <span className="font-black underline">{campaign.beneficiarioNombre}</span> ({campaign.beneficiarioRelacion}).
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Mensajes */}
-            <div className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100">
-                <h2 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                  <MessageCircle size={20} className="text-violet-600" />
-                  Mensajes de apoyo
-                </h2>
+            {/* Mensajes de apoyo con límite */}
+            <div className="bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-8">
+                  <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                    <MessageCircle size={22} className="text-violet-600" />
+                    Mensajes de apoyo ({totalDonations})
+                  </h2>
+                </div>
                 
                 <div className="space-y-4">
-                  {campaign.donations && campaign.donations.length > 0 ? (
-                    campaign.donations.map((don: Donation) => (
-                      <div key={don.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-violet-600 font-black text-[10px] border border-slate-100 shadow-sm">
-                              {don.nombreDonante.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-black text-slate-800 text-xs">{don.nombreDonante}</p>
-                              <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                                <Calendar size={8} />
-                                {new Date(don.fecha).toLocaleDateString('es-CL')}
+                  {totalDonations > 0 ? (
+                    <>
+                      {limitedDonations.map((don: Donation) => (
+                        <div key={don.id} className="bg-slate-50 p-5 rounded-2xl border border-slate-100 transition-colors hover:bg-white hover:border-violet-100">
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center text-violet-600 font-black text-[10px] border border-slate-100 shadow-sm uppercase">
+                                {don.nombreDonante.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-black text-slate-800 text-xs">{don.nombreDonante}</p>
+                                <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                                  <Calendar size={8} />
+                                  {new Date(don.fecha).toLocaleDateString('es-CL')}
+                                </div>
                               </div>
                             </div>
+                            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                              +${don.monto?.toLocaleString('es-CL')}
+                            </span>
                           </div>
-                          <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
-                            +${don.monto?.toLocaleString('es-CL')}
-                          </span>
+                          {don.comentario && (
+                            <p className="text-slate-500 text-sm font-medium italic ml-11 border-l-2 border-slate-200 pl-3">
+                              "{don.comentario}"
+                            </p>
+                          )}
                         </div>
-                        {don.comentario && (
-                          <p className="text-slate-500 text-sm font-medium italic ml-11 border-l-2 border-slate-200 pl-3">
-                            "{don.comentario}"
-                          </p>
-                        )}
-                      </div>
-                    ))
+                      ))}
+                      
+                      {totalDonations > 5 && (
+                        <button 
+                          onClick={() => setShowAllMessages(true)}
+                          className="w-full py-4 mt-2 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 font-black text-xs uppercase tracking-widest hover:border-violet-300 hover:text-violet-600 transition-all flex items-center justify-center gap-2"
+                        >
+                          Ver los {totalDonations} mensajes <ArrowRight size={14} />
+                        </button>
+                      )}
+                    </>
                   ) : (
-                    <p className="text-center py-6 text-slate-400 font-bold text-sm">Aún no hay mensajes de apoyo.</p>
+                    <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <MessageSquare className="mx-auto text-slate-200 mb-2" size={32} />
+                      <p className="text-slate-400 font-bold text-sm">Aún no hay mensajes. ¡Sé el primero!</p>
+                    </div>
                   )}
                 </div>
             </div>
@@ -273,9 +281,9 @@ const CampaignDetail: React.FC = () => {
 
           {/* Sidebar de Donación */}
           <div className="lg:sticky lg:top-24 h-fit">
-            <div className="bg-white rounded-3xl p-6 md:p-7 shadow-xl shadow-slate-200/50 border border-slate-100">
-              <div className="mb-6">
-                <div className="flex justify-between items-end mb-3">
+            <div className="bg-white rounded-3xl p-8 shadow-xl shadow-slate-200/50 border border-slate-100">
+              <div className="mb-8">
+                <div className="flex justify-between items-end mb-4">
                   <div>
                     <span className="text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1 block">Recaudado</span>
                     <span className="text-3xl font-black text-slate-900">${campaign.recaudado.toLocaleString('es-CL')}</span>
@@ -286,7 +294,7 @@ const CampaignDetail: React.FC = () => {
                   </div>
                 </div>
                 <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-violet-600 to-sky-400 rounded-full" style={{ width: `${progress}%` }} />
+                  <div className="h-full bg-gradient-to-r from-violet-600 to-sky-400 rounded-full shadow-inner" style={{ width: `${progress}%` }} />
                 </div>
               </div>
 
@@ -297,15 +305,15 @@ const CampaignDetail: React.FC = () => {
                 </div>
               )}
 
-              <div className="space-y-5">
+              <div className="space-y-6">
                 {!showPaymentForm ? (
                   <>
-                    <div className="space-y-3">
-                      <div className="relative">
-                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-300 text-sm">$</span>
+                    <div className="space-y-4">
+                      <div className="relative group">
+                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-black text-slate-300 text-sm group-focus-within:text-violet-400">$</span>
                          <input 
                             type="number" 
-                            className="w-full pl-7 pr-4 py-3 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-black text-slate-900 transition-all text-sm"
+                            className="w-full pl-7 pr-4 py-3.5 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-black text-slate-900 transition-all text-sm"
                             placeholder="Monto a donar"
                             value={donationAmount || ''}
                             onChange={(e) => setDonationAmount(Number(e.target.value))}
@@ -316,7 +324,7 @@ const CampaignDetail: React.FC = () => {
                           <button 
                             key={amt}
                             onClick={() => setDonationAmount(amt)}
-                            className={`py-2 rounded-xl text-[10px] font-black border transition-all ${donationAmount === amt ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500 hover:border-violet-200'}`}
+                            className={`py-2.5 rounded-xl text-[10px] font-black border transition-all ${donationAmount === amt ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500 hover:border-violet-200'}`}
                           >
                             ${amt.toLocaleString()}
                           </button>
@@ -324,15 +332,15 @@ const CampaignDetail: React.FC = () => {
                       </div>
                       <input 
                         type="text" 
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-700 transition-all text-sm"
+                        className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-700 transition-all text-sm"
                         placeholder="Nombre (opcional)"
                         value={donorName}
                         onChange={(e) => setDonorName(e.target.value)}
                       />
                       <textarea 
                         rows={2}
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-medium text-slate-600 resize-none transition-all text-sm"
-                        placeholder="Mensaje..."
+                        className="w-full px-4 py-3.5 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-medium text-slate-600 resize-none transition-all text-sm"
+                        placeholder="Escribe un mensaje..."
                         value={donorComment}
                         onChange={(e) => setDonorComment(e.target.value)}
                       />
@@ -340,39 +348,37 @@ const CampaignDetail: React.FC = () => {
 
                     <button 
                       onClick={handleStartDonation}
-                      className="w-full py-4 rounded-2xl font-black text-base bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-100"
+                      className="w-full py-4.5 rounded-2xl font-black text-base bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-100 active:scale-95"
                     >
                       Donar ahora <ArrowRight size={18} />
                     </button>
                   </>
                 ) : (
-                  <div className="bg-slate-50 p-5 rounded-2xl border border-violet-100 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="flex items-center justify-between mb-3">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-violet-100 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex items-center justify-between mb-4">
                       <h4 className="font-black text-slate-900 text-[10px] uppercase tracking-widest flex items-center gap-1.5">
-                        <CreditCard size={12} className="text-violet-600" /> Checkout
+                        <CreditCard size={12} className="text-violet-600" /> Formulario de Pago
                       </h4>
-                      <button onClick={() => setShowPaymentForm(false)} className="text-[9px] font-black text-violet-600 uppercase underline">Editar</button>
+                      <button onClick={() => setShowPaymentForm(false)} className="text-[9px] font-black text-violet-600 uppercase underline">Modificar</button>
                     </div>
-                    <div className="flex justify-between items-center mb-4 bg-white p-3 rounded-xl border border-slate-100">
-                      <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Total</span>
+                    <div className="flex justify-between items-center mb-6 bg-white p-4 rounded-xl border border-slate-100">
+                      <span className="text-slate-500 text-[10px] font-bold uppercase tracking-widest">Total Donación</span>
                       <span className="text-lg font-black text-violet-600">${donationAmount.toLocaleString('es-CL')}</span>
                     </div>
                     <div id="paymentBrick_container" ref={paymentBrickContainerRef} className="min-h-[250px]"></div>
-                    <p className="mt-4 text-[8px] text-center text-slate-400 font-black uppercase tracking-widest flex items-center justify-center gap-1.5">
-                      <Lock size={8} /> Pago Protegido
+                    <p className="mt-5 text-[8px] text-center text-slate-400 font-black uppercase tracking-widest flex items-center justify-center gap-1.5">
+                      <Lock size={8} /> Transacción Encriptada
                     </p>
                   </div>
                 )}
 
-                <div className="pt-6 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Compartir</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(campaign.titulo + " " + window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all"><MessageCircle size={18} /></button>
-                    <button onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all"><Facebook size={18} /></button>
-                    <button onClick={() => window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-slate-50 text-slate-900 rounded-xl flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all"><Twitter size={18} /></button>
-                    <button onClick={copyToClipboard} className={`flex-1 aspect-square rounded-xl flex items-center justify-center transition-all ${shareStatus === 'copied' ? 'bg-emerald-600 text-white' : 'bg-violet-50 text-violet-600 hover:bg-violet-600 hover:text-white'}`}>{shareStatus === 'copied' ? <Check size={18} /> : <LinkIcon size={18} />}</button>
+                <div className="pt-8 border-t border-slate-100">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4 block">Compartir causa</span>
+                  <div className="flex gap-3">
+                    <button onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(campaign.titulo + " " + window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={20} /></button>
+                    <button onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Facebook size={20} /></button>
+                    <button onClick={() => window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-slate-50 text-slate-900 rounded-xl flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all shadow-sm"><Twitter size={20} /></button>
+                    <button onClick={copyToClipboard} className={`flex-1 aspect-square rounded-xl flex items-center justify-center transition-all shadow-sm ${shareStatus === 'copied' ? 'bg-emerald-600 text-white' : 'bg-violet-50 text-violet-600 hover:bg-violet-600 hover:text-white'}`}>{shareStatus === 'copied' ? <Check size={20} /> : <LinkIcon size={20} />}</button>
                   </div>
                 </div>
               </div>
@@ -380,6 +386,87 @@ const CampaignDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* MODAL: Ver todos los mensajes */}
+      {showAllMessages && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 overflow-hidden">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowAllMessages(false)}></div>
+          
+          <div className="bg-white w-full max-w-2xl rounded-[32px] shadow-2xl relative z-10 flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Header del Modal */}
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-[32px]">
+              <div>
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Todos los mensajes</h3>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Historial de apoyo ({totalDonations})</p>
+              </div>
+              <button 
+                onClick={() => setShowAllMessages(false)}
+                className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 hover:rotate-90 transition-all border border-slate-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            {/* Cuerpo del Modal con Scroll */}
+            <div className="flex-grow overflow-y-auto p-8 space-y-4 custom-scrollbar">
+              {campaign.donations?.map((don: Donation) => (
+                <div key={don.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-violet-600 font-black text-[11px] border border-slate-100 shadow-sm uppercase">
+                        {don.nombreDonante.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-black text-slate-800 text-sm">{don.nombreDonante}</p>
+                        <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+                          <Calendar size={10} />
+                          {new Date(don.fecha).toLocaleDateString('es-CL')}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                      +${don.monto?.toLocaleString('es-CL')}
+                    </span>
+                  </div>
+                  {don.comentario && (
+                    <p className="text-slate-600 text-sm font-medium italic ml-12 border-l-2 border-slate-200 pl-4">
+                      "{don.comentario}"
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            {/* Footer del Modal */}
+            <div className="p-6 border-t border-slate-100 text-center">
+              <button 
+                onClick={() => setShowAllMessages(false)}
+                className="text-violet-600 font-black text-sm uppercase tracking-widest hover:underline"
+              >
+                Cerrar ventana
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Estilos para scrollbar del modal */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f8fafc;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e2e8f0;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #cbd5e1;
+        }
+      `}</style>
     </div>
   );
 };
