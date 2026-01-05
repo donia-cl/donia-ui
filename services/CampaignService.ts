@@ -1,4 +1,3 @@
-
 import { CampaignData, Donation } from '../types';
 
 export class CampaignService {
@@ -45,55 +44,37 @@ export class CampaignService {
 
   /**
    * Realiza una petición fetch robusta.
-   * Evita el error 'body stream already read' y valida que la respuesta sea JSON.
+   * Maneja errores 404 y previene la exposición del código fuente.
    */
   private async safeFetch(url: string, options?: RequestInit): Promise<any> {
     try {
+      // Intentamos con la URL limpia. Si falla con 404, el catch manejará el respaldo.
       const response = await fetch(url, options);
       
-      // Obtenemos el texto de la respuesta una única vez para todas las validaciones
+      if (response.status === 404) {
+        throw new Error(`Endpoint ${url} no encontrado (404).`);
+      }
+
       const responseText = await response.text();
 
-      // Validación de tipo de contenido
-      const contentType = response.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        // Si no es JSON, probablemente es el código fuente (.ts) o una página de error HTML
-        console.warn(`[CampaignService] Respuesta no-JSON detectada en ${url}. Content-Type: ${contentType}`);
-        
-        // Si el servidor devolvió el código fuente de la función (común en entornos mal configurados)
-        if (responseText.includes("import {") || responseText.includes("export default")) {
-          throw new Error("El servidor devolvió el código fuente en lugar de ejecutar la función. Revisa la configuración de las rutas API.");
-        }
-        
-        // Si es un 404 común
-        if (response.status === 404) {
-          throw new Error(`Endpoint no encontrado (404): ${url}`);
-        }
-
-        throw new Error("La respuesta del servidor no tiene el formato esperado (JSON).");
+      // Validación para evitar procesar código fuente como JSON
+      if (responseText.includes("import {") || responseText.includes("export default")) {
+        throw new Error("El servidor devolvió el código fuente en lugar de ejecutar la función.");
       }
 
       if (!response.ok) {
-        let errorMessage = `Error HTTP ${response.status}`;
-        try {
-          const errorData = JSON.parse(responseText);
-          errorMessage = errorData.error || errorData.message || errorMessage;
-        } catch (e) {
-          errorMessage = responseText.substring(0, 100) || response.statusText || errorMessage;
-        }
-        throw new Error(errorMessage);
+        throw new Error(responseText || `Error HTTP ${response.status}`);
       }
 
       let result;
       try {
         result = JSON.parse(responseText);
       } catch (e) {
-        console.error("[CampaignService] Error crítico al parsear JSON:", responseText.substring(0, 100));
-        throw new Error("Error interno al procesar los datos recibidos del servidor.");
+        throw new Error("La respuesta del servidor no es un JSON válido.");
       }
 
       if (result.success === false) {
-        throw new Error(result.error || "Operación rechazada por el servidor.");
+        throw new Error(result.error || "Operación fallida en el servidor.");
       }
 
       return result;
@@ -105,11 +86,16 @@ export class CampaignService {
 
   async getCampaigns(): Promise<CampaignData[]> {
     try {
+      // Intentamos obtener de la API
       const result = await this.safeFetch('/api/campaigns');
-      return (result.data || []).map((c: any) => this.mapCampaign(c));
+      const campaigns = (result.data || []).map((c: any) => this.mapCampaign(c));
+      
+      // Guardamos en local para respaldo futuro
+      localStorage.setItem('donia_campaigns_cache', JSON.stringify(campaigns));
+      return campaigns;
     } catch (e: any) {
-      console.warn("Cargando datos locales de respaldo...");
-      const local = localStorage.getItem('donia_campaigns');
+      console.warn("API no disponible, intentando cargar desde caché local...");
+      const local = localStorage.getItem('donia_campaigns_cache');
       return local ? JSON.parse(local).map((c: any) => this.mapCampaign(c)) : [];
     }
   }
@@ -119,13 +105,19 @@ export class CampaignService {
       const result = await this.safeFetch(`/api/campaign-detail?id=${id}`);
       return this.mapCampaign(result.data);
     } catch (e) {
-      console.error("[CampaignService] No se pudo recuperar la campaña:", id);
+      // Si falla la API, buscamos en el caché local
+      const local = localStorage.getItem('donia_campaigns_cache');
+      if (local) {
+        const campaigns = JSON.parse(local);
+        const found = campaigns.find((c: any) => c.id === id);
+        return found ? this.mapCampaign(found) : null;
+      }
       return null;
     }
   }
 
   async createCampaign(payload: Omit<CampaignData, 'id' | 'recaudado' | 'fechaCreacion' | 'estado' | 'donantesCount' | 'imagenUrl'>): Promise<CampaignData> {
-    const imagenUrl = `https://picsum.photos/seed/${Math.random()}/1200/800`;
+    const imagenUrl = `https://picsum.photos/seed/${Date.now()}/1200/800`;
     const result = await this.safeFetch('/api/campaigns', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -142,8 +134,6 @@ export class CampaignService {
     });
 
     const donation = result.data;
-    if (!donation) throw new Error("Confirmación de donación no recibida.");
-
     return {
       id: donation.id,
       campaignId: donation.campaign_id,

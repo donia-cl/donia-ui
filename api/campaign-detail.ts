@@ -16,15 +16,32 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { data, error } = await supabase
+    // 1. Obtener detalle de la campaña
+    const { data: campaign, error: cError } = await supabase
       .from('campaigns')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (error) throw error;
-    return res.status(200).json({ success: true, data });
+    if (cError) throw cError;
+
+    // 2. Obtener donaciones recientes
+    const { data: donations, error: dError } = await supabase
+      .from('donations')
+      .select('*')
+      .eq('campaign_id', id)
+      .order('fecha', { ascending: false })
+      .limit(10);
+
+    return res.status(200).json({ 
+      success: true, 
+      data: { 
+        ...campaign, 
+        donations: donations || [] 
+      } 
+    });
   } catch (error: any) {
+    console.error("[API/campaign-detail] Error:", error.message);
     return res.status(404).json({ success: false, error: 'Campaign not found' });
   }
 }
