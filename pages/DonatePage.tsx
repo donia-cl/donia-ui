@@ -4,7 +4,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ChevronLeft, 
   Heart, 
-  CreditCard, 
   Loader2, 
   Lock, 
   ArrowRight,
@@ -12,13 +11,11 @@ import {
   Info,
   Check,
   Zap,
-  Receipt,
-  Plus
+  Receipt
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
 
-// Declare MercadoPago on the window object to avoid TypeScript property errors
 declare global {
   interface Window {
     MercadoPago: any;
@@ -44,10 +41,9 @@ const DonatePage: React.FC = () => {
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
   const service = CampaignService.getInstance();
 
-  // Lógica de cálculos: El aporte a Donia puede ser % o monto fijo
   const tipSubtotal = tipPercentage === 'custom' 
     ? customTipAmount 
-    : Math.round(donationAmount * (tipPercentage / 100));
+    : Math.round(donationAmount * (Number(tipPercentage) / 100));
     
   const ivaAmount = Math.round(tipSubtotal * 0.19);
   const totalAmount = donationAmount + tipSubtotal + ivaAmount;
@@ -64,8 +60,13 @@ const DonatePage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    if (showPaymentForm && window.MercadoPago && paymentBrickContainerRef.current && campaign) {
-      const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, {
+    // Verificamos de forma segura si las variables existen antes de usarlas
+    const mpKey = (typeof process !== 'undefined' && process.env) 
+      ? process.env.REACT_APP_MP_PUBLIC_KEY 
+      : '';
+
+    if (showPaymentForm && window.MercadoPago && paymentBrickContainerRef.current && campaign && mpKey) {
+      const mp = new window.MercadoPago(mpKey, {
         locale: 'es-CL'
       });
       const bricksBuilder = mp.bricks();
@@ -149,7 +150,6 @@ const DonatePage: React.FC = () => {
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Formulario Izquierda */}
           <div className="lg:col-span-7 space-y-8">
             <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-sm border border-slate-100">
               <div className="flex items-center gap-4 mb-8">
@@ -164,7 +164,6 @@ const DonatePage: React.FC = () => {
 
               {!showPaymentForm ? (
                 <div className="space-y-8">
-                  {/* Selección de Monto de Donación */}
                   <div>
                     <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto de tu donación base</label>
                     <div className="relative mb-4">
@@ -190,7 +189,6 @@ const DonatePage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Propina Donia */}
                   <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                       <Zap size={80} className="text-violet-600" />
@@ -302,7 +300,6 @@ const DonatePage: React.FC = () => {
             </div>
           </div>
 
-          {/* Resumen Derecha */}
           <div className="lg:col-span-5 h-fit sticky top-24">
             <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-violet-100 overflow-hidden relative">
               <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50/50 rounded-bl-[100px] -z-0 pointer-events-none"></div>
@@ -314,7 +311,6 @@ const DonatePage: React.FC = () => {
                 </h2>
                 
                 <div className="space-y-5 mb-10">
-                  {/* Donación Base */}
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
                       <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Aporte a la Causa</span>
@@ -323,7 +319,6 @@ const DonatePage: React.FC = () => {
                     <span className="font-black text-slate-900 text-lg">${donationAmount.toLocaleString('es-CL')}</span>
                   </div>
                   
-                  {/* Aporte Donia (Subtotal) */}
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
                       <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Donia</span>
@@ -332,7 +327,6 @@ const DonatePage: React.FC = () => {
                     <span className="font-black text-slate-900 text-lg">${tipSubtotal.toLocaleString('es-CL')}</span>
                   </div>
 
-                  {/* IVA solo sobre el aporte Donia */}
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
                       <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Impuestos</span>
