@@ -23,6 +23,32 @@ import {
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, Donation } from '../types';
 
+// Componentes internos para la barra lateral
+const InfoCard = ({ icon: Icon, label, value, subValue, colorClass }: any) => (
+  <div className={`p-5 rounded-2xl border border-slate-100 bg-white shadow-sm flex items-start gap-4 transition-all hover:border-slate-200`}>
+    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${colorClass}`}>
+      <Icon size={20} />
+    </div>
+    <div className="overflow-hidden">
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{label}</p>
+      <p className="text-sm font-bold text-slate-700 truncate">{value}</p>
+      {subValue && <p className="text-[11px] text-slate-500 font-medium mt-0.5">{subValue}</p>}
+    </div>
+  </div>
+);
+
+const VerifiedBadge = () => (
+  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center gap-3">
+    <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center text-white shadow-sm">
+      <ShieldCheck size={18} />
+    </div>
+    <div>
+      <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Causa Verificada</p>
+      <p className="text-[11px] font-bold text-emerald-600/80">Fondos protegidos por Donia</p>
+    </div>
+  </div>
+);
+
 const CampaignDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -210,42 +236,35 @@ const CampaignDetail: React.FC = () => {
                   Contribuir ahora
                 </button>
 
-                {/* Bloque de Información de la Causa (NUEVO) */}
-                <div className="pt-8 border-t border-slate-100 space-y-6">
-                  <div className="bg-sky-50/50 rounded-2xl p-5 border border-sky-100">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center text-sky-600">
-                        <ShieldCheck size={18} />
-                      </div>
-                      <span className="text-[11px] font-black text-sky-900 uppercase tracking-widest">Causa Verificada</span>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-3">
-                        <UserCheck size={16} className="text-slate-400 mt-0.5" />
-                        <div>
-                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Beneficiario</p>
-                          <p className="text-sm font-bold text-slate-700">{campaign.beneficiarioNombre}</p>
-                          <p className="text-xs text-slate-500">Relación: {campaign.beneficiarioRelacion}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <MapPin size={16} className="text-slate-400 mt-0.5" />
-                        <div>
-                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Ubicación</p>
-                          <p className="text-sm font-bold text-slate-700">{campaign.ubicacion}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3">
-                        <Users size={16} className="text-slate-400 mt-0.5" />
-                        <div>
-                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Comunidad</p>
-                          <p className="text-sm font-bold text-slate-700">{campaign.donantesCount} personas han donado</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                {/* Bloques de Información Separados */}
+                <div className="pt-8 border-t border-slate-100 space-y-4">
+                  
+                  <VerifiedBadge />
 
-                  <div>
+                  <InfoCard 
+                    icon={UserCheck}
+                    label="Beneficiario"
+                    value={campaign.beneficiarioNombre}
+                    subValue={`Relación: ${campaign.beneficiarioRelacion}`}
+                    colorClass="bg-violet-50 text-violet-600"
+                  />
+
+                  <InfoCard 
+                    icon={MapPin}
+                    label="Ubicación"
+                    value={campaign.ubicacion}
+                    colorClass="bg-sky-50 text-sky-600"
+                  />
+
+                  <InfoCard 
+                    icon={Users}
+                    label="Comunidad"
+                    value={`${campaign.donantesCount} donantes`}
+                    subValue="Han apoyado esta causa"
+                    colorClass="bg-slate-50 text-slate-600"
+                  />
+
+                  <div className="pt-4">
                     <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 block">Compartir causa</span>
                     <div className="flex gap-3">
                       <button onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(campaign.titulo + " " + window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={20} /></button>
