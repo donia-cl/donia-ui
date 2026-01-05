@@ -4,6 +4,7 @@ import { createClient, User, SupabaseClient } from '@supabase/supabase-js';
 export class AuthService {
   private static instance: AuthService;
   private client: SupabaseClient | null = null;
+  private initPromise: Promise<void> | null = null;
 
   private constructor() {
     const url = process.env.REACT_APP_SUPABASE_URL;
@@ -22,22 +23,26 @@ export class AuthService {
 
   public async initialize(): Promise<void> {
     if (this.client) return;
+    if (this.initPromise) return this.initPromise;
 
-    try {
-      const resp = await fetch('/api/config');
-      if (resp.ok) {
-        const config = await resp.json();
-        const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
-        const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-        
-        if (url && key) {
-          this.client = createClient(url, key);
-          console.log("[AuthService] Supabase Auth inicializado.");
+    this.initPromise = (async () => {
+      try {
+        const resp = await fetch('/api/config');
+        if (resp.ok) {
+          const config = await resp.json();
+          const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
+          const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+          
+          if (url && key) {
+            this.client = createClient(url, key);
+          }
         }
+      } catch (e) {
+        console.error("[AuthService] Error cargando config:", e);
       }
-    } catch (e) {
-      console.error("[AuthService] Error cargando config:", e);
-    }
+    })();
+
+    return this.initPromise;
   }
 
   public getSupabase(): SupabaseClient | null {
@@ -45,36 +50,28 @@ export class AuthService {
   }
 
   async signUp(email: string, pass: string, fullName: string) {
-    if (!this.client) throw new Error("Sistema de autenticación no listo.");
-    
-    // El error 400 suele ser por validación de contraseña (min 6 caracteres) o email existente
+    await this.initialize();
+    if (!this.client) throw new Error("Sistema no listo.");
     const { data, error } = await this.client.auth.signUp({
       email,
       password: pass,
-      options: {
-        data: { full_name: fullName }
-      }
+      options: { data: { full_name: fullName } }
     });
-    
-    if (error) {
-      console.error("[AuthService] Error en signUp:", error);
-      throw error;
-    }
+    if (error) throw error;
     return data;
   }
 
   async signIn(email: string, pass: string) {
-    if (!this.client) throw new Error("Sistema de autenticación no listo.");
+    await this.initialize();
+    if (!this.client) throw new Error("Sistema no listo.");
     const { data, error } = await this.client.auth.signInWithPassword({ email, password: pass });
-    if (error) {
-      console.error("[AuthService] Error en signIn:", error);
-      throw error;
-    }
+    if (error) throw error;
     return data;
   }
 
   async signInWithGoogle() {
-    if (!this.client) throw new Error("Sistema de autenticación no listo.");
+    await this.initialize();
+    if (!this.client) throw new Error("Sistema no listo.");
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin }
@@ -89,6 +86,7 @@ export class AuthService {
   }
 
   async getCurrentUser(): Promise<User | null> {
+    await this.initialize();
     if (!this.client) return null;
     try {
       const { data: { user } } = await this.client.auth.getUser();

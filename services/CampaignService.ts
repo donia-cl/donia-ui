@@ -6,6 +6,7 @@ import { CampaignData, Donation } from '../types';
 export class CampaignService {
   private static instance: CampaignService;
   private supabase: SupabaseClient | null = null;
+  private initPromise: Promise<void> | null = null;
 
   private constructor() {
     const url = process.env.REACT_APP_SUPABASE_URL;
@@ -23,24 +24,33 @@ export class CampaignService {
     return CampaignService.instance;
   }
 
+  /**
+   * Garantiza que la configuración se cargue una sola vez y 
+   * permite que otros métodos esperen a que termine.
+   */
   public async initialize(): Promise<void> {
     if (this.supabase) return;
+    if (this.initPromise) return this.initPromise;
 
-    try {
-      const resp = await fetch('/api/config');
-      if (resp.ok) {
-        const config = await resp.json();
-        const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
-        const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    this.initPromise = (async () => {
+      try {
+        const resp = await fetch('/api/config');
+        if (resp.ok) {
+          const config = await resp.json();
+          const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
+          const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-        if (url && key) {
-          this.supabase = createClient(url, key);
-          console.log("[CampaignService] Supabase Database inicializado.");
+          if (url && key) {
+            this.supabase = createClient(url, key);
+            console.log("[CampaignService] Conectado a Supabase.");
+          }
         }
+      } catch (e) {
+        console.error("[CampaignService] Error en inicialización:", e);
       }
-    } catch (e) {
-      console.error("[CampaignService] Error inicializando base de datos:", e);
-    }
+    })();
+
+    return this.initPromise;
   }
 
   public checkAiAvailability(): boolean {
@@ -78,6 +88,7 @@ export class CampaignService {
   }
 
   async uploadImage(base64: string, fileName: string): Promise<string> {
+    await this.initialize();
     if (!this.supabase) throw new Error("Base de datos no disponible.");
     const base64Data = base64.split(',')[1];
     const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
@@ -94,6 +105,7 @@ export class CampaignService {
   }
 
   async getCampaigns(): Promise<CampaignData[]> {
+    await this.initialize();
     if (!this.supabase) return [];
     try {
       const { data, error } = await this.supabase
@@ -103,11 +115,13 @@ export class CampaignService {
       if (error) throw error;
       return (data || []).map(c => this.mapCampaign(c));
     } catch (e) {
+      console.error("Error obteniendo campañas:", e);
       return [];
     }
   }
 
   async getCampaignById(id: string): Promise<CampaignData | null> {
+    await this.initialize();
     if (!this.supabase) return null;
     try {
       const { data: campaign, error: cError } = await this.supabase
@@ -130,6 +144,7 @@ export class CampaignService {
   }
 
   async createCampaign(payload: any): Promise<CampaignData> {
+    await this.initialize();
     if (!this.supabase) throw new Error("Base de datos no disponible.");
     const { data, error } = await this.supabase
       .from('campaigns')
@@ -169,10 +184,7 @@ export class CampaignService {
   }
 
   async polishStory(story: string): Promise<string> {
-    if (!process.env.API_KEY) {
-      console.error("API_KEY no configurada.");
-      return story;
-    }
+    if (!process.env.API_KEY) return story;
     
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -180,14 +192,13 @@ export class CampaignService {
         model: 'gemini-3-flash-preview',
         contents: `Mejora y humaniza este texto para una campaña solidaria en Chile: "${story}"`,
         config: {
-          systemInstruction: "Eres un redactor experto en causas sociales en Chile. Tu tarea es mejorar el storytelling de campañas de crowdfunding. El texto debe sonar profesional, honesto, emotivo y humano.",
+          systemInstruction: "Eres un redactor experto en causas sociales en Chile. Mejora el storytelling para que sea profesional y humano.",
           temperature: 0.7,
         },
       });
 
       return response.text || story;
     } catch (e) {
-      console.error("Error al perfeccionar con IA:", e);
       return story;
     }
   }

@@ -59,7 +59,9 @@ const Landing: React.FC = () => {
 
   useEffect(() => {
     const loadCampaigns = async () => {
+      setLoading(true);
       try {
+        // Al ejecutar getCampaigns, internamente se espera a que el servicio esté listo.
         const allCampaigns = await service.getCampaigns();
         setCampaigns(allCampaigns.slice(0, 3));
       } catch (error) {
