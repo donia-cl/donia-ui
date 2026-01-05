@@ -1,6 +1,5 @@
 
 import { CampaignData, Donation } from '../types';
-import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export class CampaignService {
@@ -9,34 +8,29 @@ export class CampaignService {
   private isLocalMode: boolean = false;
 
   private constructor() {
-    // Intentar obtener variables de proceso (Vercel/Node/CRA)
-    const env = (window as any).process?.env || process.env || {};
+    // 1. Acceso Estático a Variables de Entorno (Frontend Safe)
+    // Los bundlers (Vite/Webpack/Next) reemplazan estas cadenas por sus valores reales en build-time.
+    // No usamos process.env['VAR'] dinámico.
     
-    // Lista de posibles nombres para la URL de Supabase
-    const sUrl = env.REACT_APP_SUPABASE_URL || 
-                 env.SUPABASE_URL || 
-                 env.NEXT_PUBLIC_SUPABASE_URL;
+    const sUrl = process.env.REACT_APP_SUPABASE_URL || 
+                 process.env.NEXT_PUBLIC_SUPABASE_URL;
                  
-    // Lista de posibles nombres para la Key de Supabase (Anon/Publishable)
-    const sKey = env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 
-                 env.REACT_APP_SUPABASE_ANON_KEY || 
-                 env.SUPABASE_ANON_KEY ||
-                 env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const sKey = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 
+                 process.env.REACT_APP_SUPABASE_ANON_KEY || 
+                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    // Diagnóstico en consola para el desarrollador
+    // Diagnóstico seguro en consola
     console.group("Donia System Check");
-    console.log("Supabase URL Detectada:", sUrl ? "✅ OK" : "❌ No encontrada");
-    console.log("Supabase Key Detectada:", sKey ? "✅ OK" : "❌ No encontrada");
-    console.log("Gemini API Key Detectada:", (env.API_KEY || env.REACT_APP_API_KEY) ? "✅ OK" : "❌ No encontrada");
+    console.log("Supabase Connection:", sUrl && sKey ? "✅ Configurada" : "⚠️ Modo Local (Faltan credenciales)");
+    console.log("AI Service:", "Delegado a Backend Secure Endpoint (/api/polish)");
     console.groupEnd();
 
     if (sUrl && sKey) {
       try {
         this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
-        console.log("Donia: Conectado a Supabase Cloud.");
       } catch (err) {
-        console.warn("Donia: Error al inicializar Supabase. Usando LocalMode.");
+        console.warn("Donia: Error inicializando Supabase, cambiando a modo local.");
         this.isLocalMode = true;
       }
     } else {
@@ -52,8 +46,9 @@ export class CampaignService {
   }
 
   public checkAiAvailability(): boolean {
-    const env = (window as any).process?.env || process.env || {};
-    return !!(env.API_KEY || env.REACT_APP_API_KEY);
+    // Asumimos que el backend está configurado. 
+    // Si la API Key falta en el servidor, el endpoint retornará error, pero la UI debe permitir intentarlo.
+    return true; 
   }
 
   public getConnectionStatus(): 'cloud' | 'local' {
@@ -234,24 +229,26 @@ export class CampaignService {
   }
 
   async polishStory(story: string): Promise<string> {
-    const env = (window as any).process?.env || process.env || {};
-    const apiKey = env.API_KEY || env.REACT_APP_API_KEY;
-    if (!apiKey) return story;
-
+    // LLAMADA AL BACKEND SEGURO
+    // El frontend ya no tiene la API Key. Se la pide al endpoint /api/polish
     try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Mejora y humaniza este texto para una campaña solidaria en Chile: "${story}"`,
-        config: {
-          systemInstruction: "Eres un redactor experto en causas sociales. Hazlo empático.",
-          temperature: 0.7,
+      const response = await fetch('/api/polish', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ story }),
       });
 
-      return response.text || story;
+      if (!response.ok) {
+        throw new Error(`Error del servidor: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.text || story;
     } catch (e) {
-      console.error("Donia AI Error:", e);
+      console.error("Donia AI Service Error:", e);
+      // Fallback: devolvemos la historia original si falla la IA
       return story;
     }
   }
