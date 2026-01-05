@@ -5,7 +5,8 @@ import { ArrowRight, ShieldCheck, Users, Zap, Heart, MapPin } from 'lucide-react
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
 
-const CampaignCard = ({ campaign }: { campaign: CampaignData }) => {
+// Added React.FC type to handle key prop correctly
+const CampaignCard: React.FC<{ campaign: CampaignData }> = ({ campaign }) => {
   const progress = Math.min((campaign.recaudado / campaign.monto) * 100, 100);
   
   return (

@@ -4,73 +4,66 @@ import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Buscador universal de variables de entorno.
- * Intenta encontrar la configuración sin importar qué prefijo use el hosting (Vercel/Netlify).
+ * Función robusta para obtener variables de entorno en cualquier contexto de React/Vite/Vercel.
  */
 const getEnv = (key: string): string | undefined => {
-  const prefixes = ['', 'NEXT_PUBLIC_', 'REACT_APP_', 'VITE_'];
+  // Prefijos comunes inyectados por diferentes herramientas de build
+  const prefixes = ['', 'REACT_APP_', 'NEXT_PUBLIC_', 'VITE_'];
   
-  try {
-    // 1. Buscar en process.env (Vercel/CRA)
+  // 1. Intentar via process.env (Webpack, CRA, Vercel default)
+  if (typeof process !== 'undefined' && process.env) {
     for (const p of prefixes) {
       const val = (process.env as any)[`${p}${key}`];
       if (val) return val;
     }
+  }
 
-    // 2. Casos especiales de nombres (como se vio en la captura del usuario)
-    if (key === 'SUPABASE_ANON_KEY') {
-      const special = (process.env as any)['REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY'];
-      if (special) return special;
-    }
-
-    // 3. Fallback para import.meta.env (Vite)
-    for (const p of prefixes) {
-      const val = (import.meta as any).env?.[`${p}${key}`];
-      if (val) return val;
+  // 2. Intentar via import.meta.env (Vite nativo)
+  try {
+    // @ts-ignore
+    const viteEnv = import.meta.env;
+    if (viteEnv) {
+      for (const p of prefixes) {
+        const val = viteEnv[`${p}${key}`];
+        if (val) return val;
+      }
     }
   } catch (e) {
-    // Silencioso
+    // Ignorar si import.meta.env no es soportado
   }
+
   return undefined;
 };
 
 export class CampaignService {
   private static instance: CampaignService;
-  private ai: GoogleGenAI | null = null;
   private supabase: SupabaseClient | null = null;
   private isLocalMode: boolean = false;
   private isAiAvailable: boolean = false;
 
   private constructor() {
-    // Intentamos obtener las variables con sus nombres base
     const sUrl = getEnv('SUPABASE_URL');
     const sKey = getEnv('SUPABASE_ANON_KEY');
-    const gKey = getEnv('API_KEY');
+    const gKey = process.env.API_KEY;
 
-    console.group("🔍 Diagnóstico de Conexión Donia");
-    console.log("Supabase URL:", sUrl ? "✅ OK" : "❌ No encontrada");
-    console.log("Supabase Key:", sKey ? "✅ OK" : "❌ No encontrada");
-    console.log("Gemini API Key:", gKey ? "✅ OK" : "❌ No encontrada");
+    console.group("Donia Diagnostics");
+    console.log("Database URL:", sUrl ? "✅ DETECTED" : "❌ MISSING");
+    console.log("Database Key:", sKey ? "✅ DETECTED" : "❌ MISSING");
+    console.log("Gemini AI Key:", gKey ? "✅ DETECTED" : "❌ MISSING");
     console.groupEnd();
 
-    // Inicialización de IA
+    // AI Check
     if (gKey) {
-      try {
-        this.ai = new GoogleGenAI({ apiKey: gKey });
-        this.isAiAvailable = true;
-      } catch (e) {
-        console.error("Error IA:", e);
-      }
+      this.isAiAvailable = true;
     }
     
-    // Inicialización de Supabase
+    // Supabase Init
     if (sUrl && sKey) {
       try {
         this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
-        console.log("📡 Conectado a Supabase");
       } catch (err) {
-        console.error("Error Supabase:", err);
+        console.error("Supabase Init Error:", err);
         this.isLocalMode = true;
       }
     } else {
@@ -126,7 +119,7 @@ export class CampaignService {
           }));
         }
       } catch (e) {
-        console.error("Fetch error:", e);
+        console.error("Error fetching campaigns:", e);
       }
     }
     return this.getLocalCampaigns();
@@ -157,7 +150,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("GetById error:", e);
+        console.error("Error fetching campaign:", e);
       }
     }
     return this.getLocalCampaigns().find(c => c.id === id) || null;
@@ -197,7 +190,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Create error:", e);
+        console.error("Error creating campaign:", e);
       }
     }
 
@@ -245,7 +238,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Donate error:", e);
+        console.error("Error processing donation:", e);
       }
     }
 
@@ -253,33 +246,37 @@ export class CampaignService {
     const index = campaigns.findIndex(c => c.id === campaignId);
     if (index !== -1) {
       campaigns[index].recaudado += monto;
+      // Fixed: property name is donantesCount
       campaigns[index].donantesCount += 1;
       this.saveLocalCampaigns(campaigns);
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        campaignId,
+        monto,
+        nombreDonante: nombre,
+        fecha: new Date().toISOString()
+      };
     }
-
-    return {
-      id: Math.random().toString(36).substr(2, 9),
-      campaignId,
-      monto,
-      nombreDonante: nombre,
-      fecha: new Date().toISOString()
-    };
+    throw new Error("Campaign not found");
   }
 
-  async polishStory(draft: string): Promise<string> {
-    if (!this.ai || !this.isAiAvailable) return draft;
+  /**
+   * Mejora la narrativa de la campaña utilizando Gemini AI.
+   */
+  async polishStory(story: string): Promise<string> {
     try {
-      const response = await this.ai.models.generateContent({
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Actúa como un experto en storytelling para recaudación de fondos solidarios en Chile. 
-        Toma este borrador de historia y mejóralo para que sea más emotivo, claro y transparente. 
-        Usa párrafos cortos y una estructura narrativa de: El Problema, El Impacto de la Ayuda y El Llamado a la Acción.
-        
-        Borrador: "${draft}"`,
+        contents: `Por favor, mejora y pulé el siguiente relato de una campaña de recaudación de fondos para que sea más emotivo y profesional, pero manteniendo la esencia original. El texto está en español: "${story}"`,
+        config: {
+          systemInstruction: "Eres un experto en copywriting para causas benéficas y organizaciones sin fines de lucro. Devuelve solo el texto pulido, sin introducciones ni comentarios adicionales.",
+        },
       });
-      return response.text || draft;
-    } catch (error) {
-      return draft;
+      return response.text || story;
+    } catch (e) {
+      console.error("Error polishing story:", e);
+      return story;
     }
   }
 }
