@@ -1,16 +1,26 @@
 
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Heart, Database, Cpu, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Heart, Database, Cpu, Activity, User, LogOut, ChevronDown } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
+import { useAuth } from '../context/AuthContext';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const isWizard = location.pathname.startsWith('/crear');
+  const [showUserMenu, setShowUserMenu] = useState(false);
   
   const service = CampaignService.getInstance();
   const dbStatus = service.getConnectionStatus();
   const aiActive = service.checkAiAvailability();
+
+  const handleLogout = async () => {
+    await signOut();
+    setShowUserMenu(false);
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
@@ -27,10 +37,55 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             </Link>
             
             {!isWizard && (
-              <nav className="hidden md:flex items-center space-x-8">
+              <nav className="hidden md:flex items-center space-x-6">
                 <Link to="/explorar" className={`font-medium transition-colors ${location.pathname === '/explorar' ? 'text-violet-600' : 'text-slate-600 hover:text-violet-600'}`}>Explorar</Link>
                 <Link to="/acerca" className={`font-medium transition-colors ${location.pathname === '/acerca' ? 'text-violet-600' : 'text-slate-600 hover:text-violet-600'}`}>Cómo funciona</Link>
-                <Link to="/crear" className="bg-violet-600 text-white px-5 py-2.5 rounded-full font-semibold hover:bg-violet-700 transition-all shadow-md shadow-violet-100">
+                
+                <div className="h-6 w-px bg-slate-100 mx-2"></div>
+
+                {user ? (
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowUserMenu(!showUserMenu)}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
+                    >
+                      <div className="w-8 h-8 bg-violet-100 text-violet-600 rounded-lg flex items-center justify-center font-bold text-xs">
+                        {user.user_metadata?.full_name?.charAt(0) || user.email?.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="text-sm font-bold text-slate-700 max-w-[100px] truncate">
+                        {user.user_metadata?.full_name || 'Mi Perfil'}
+                      </span>
+                      <ChevronDown size={14} className={`text-slate-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showUserMenu && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)}></div>
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-20 animate-in fade-in zoom-in-95 duration-100">
+                          <Link 
+                            to="/crear" 
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+                          >
+                            <Heart size={16} /> Crear campaña
+                          </Link>
+                          <button 
+                            onClick={handleLogout}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+                          >
+                            <LogOut size={16} /> Cerrar sesión
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <Link to="/login" className="text-slate-600 font-bold hover:text-violet-600 transition-colors text-sm">
+                    Ingresar
+                  </Link>
+                )}
+
+                <Link to="/crear" className="bg-violet-600 text-white px-5 py-2.5 rounded-full font-semibold hover:bg-violet-700 transition-all shadow-md shadow-violet-100 text-sm">
                   Comenzar campaña
                 </Link>
               </nav>
@@ -102,4 +157,16 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[11px] font-bold border transition-all ${
                   aiActive 
                   ? 'bg-sky-50 border-sky-200 text-sky-700 shadow-sm shadow-sky-100' 
-                  : 'bg-slate-100 border-slate-200 text-slate-500
+                  : 'bg-slate-100 border-slate-200 text-slate-500'
+                }`}>
+                  <Cpu size={14} />
+                  {aiActive ? 'Motor IA Activo' : 'IA Desactivada'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
