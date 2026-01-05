@@ -1,12 +1,12 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from "@google/genai";
 import { CampaignData, Donation } from '../types';
 
 export class CampaignService {
   private static instance: CampaignService;
   private supabase: SupabaseClient | null = null;
   private initPromise: Promise<void> | null = null;
+  private aiEnabled: boolean = false;
 
   private constructor() {
     const url = process.env.REACT_APP_SUPABASE_URL;
@@ -29,7 +29,6 @@ export class CampaignService {
    * permite que otros métodos esperen a que termine.
    */
   public async initialize(): Promise<void> {
-    if (this.supabase) return;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
@@ -44,6 +43,7 @@ export class CampaignService {
             this.supabase = createClient(url, key);
             console.log("[CampaignService] Conectado a Supabase.");
           }
+          this.aiEnabled = !!config.aiEnabled;
         }
       } catch (e) {
         console.error("[CampaignService] Error en inicialización:", e);
@@ -54,7 +54,7 @@ export class CampaignService {
   }
 
   public checkAiAvailability(): boolean {
-    return !!process.env.API_KEY;
+    return this.aiEnabled;
   }
 
   public getConnectionStatus(): 'cloud' | 'local' {
@@ -184,21 +184,21 @@ export class CampaignService {
   }
 
   async polishStory(story: string): Promise<string> {
-    if (!process.env.API_KEY) return story;
+    if (!this.aiEnabled) return story;
     
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Mejora y humaniza este texto para una campaña solidaria en Chile: "${story}"`,
-        config: {
-          systemInstruction: "Eres un redactor experto en causas sociales en Chile. Mejora el storytelling para que sea profesional y humano.",
-          temperature: 0.7,
-        },
+      const response = await fetch('/api/polish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ story }),
       });
-
-      return response.text || story;
+      
+      if (!response.ok) throw new Error("Error en el servidor de pulido");
+      
+      const data = await response.json();
+      return data.text || story;
     } catch (e) {
+      console.error("[CampaignService] Error al pulir historia via API:", e);
       return story;
     }
   }
