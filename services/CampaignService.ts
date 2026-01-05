@@ -8,7 +8,6 @@ export class CampaignService {
   private supabase: SupabaseClient | null = null;
 
   private constructor() {
-    // Intento de inicialización inmediata con variables de entorno REACT_APP
     const url = process.env.REACT_APP_SUPABASE_URL;
     const key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
@@ -24,10 +23,6 @@ export class CampaignService {
     return CampaignService.instance;
   }
 
-  /**
-   * Inicialización asíncrona como respaldo si las variables de entorno 
-   * no están inyectadas directamente en el cliente.
-   */
   public async initialize(): Promise<void> {
     if (this.supabase) return;
 
@@ -35,13 +30,16 @@ export class CampaignService {
       const resp = await fetch('/api/config');
       if (resp.ok) {
         const config = await resp.json();
-        if (config.supabaseUrl && config.supabaseKey) {
-          this.supabase = createClient(config.supabaseUrl, config.supabaseKey);
-          console.log("[CampaignService] Supabase conectado exitosamente.");
+        const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
+        const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+        if (url && key) {
+          this.supabase = createClient(url, key);
+          console.log("[CampaignService] Supabase Database inicializado.");
         }
       }
     } catch (e) {
-      console.error("[CampaignService] Error cargando configuración desde API:", e);
+      console.error("[CampaignService] Error inicializando base de datos:", e);
     }
   }
 
@@ -105,7 +103,6 @@ export class CampaignService {
       if (error) throw error;
       return (data || []).map(c => this.mapCampaign(c));
     } catch (e) {
-      console.error("Error obteniendo campañas:", e);
       return [];
     }
   }
@@ -128,7 +125,6 @@ export class CampaignService {
 
       return this.mapCampaign({ ...campaign, donations: donations || [] });
     } catch (e) {
-      console.error("Error obteniendo detalle de campaña:", e);
       return null;
     }
   }
@@ -172,12 +168,9 @@ export class CampaignService {
     }
   }
 
-  /**
-   * Mejora la historia usando el SDK de Gemini.
-   */
   async polishStory(story: string): Promise<string> {
     if (!process.env.API_KEY) {
-      console.error("API_KEY de Gemini no encontrada.");
+      console.error("API_KEY no configurada.");
       return story;
     }
     
@@ -185,7 +178,7 @@ export class CampaignService {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Mejora y humaniza este texto para una campaña solidaria en Chile, hazlo emotivo y profesional: "${story}"`,
+        contents: `Mejora y humaniza este texto para una campaña solidaria en Chile: "${story}"`,
         config: {
           systemInstruction: "Eres un redactor experto en causas sociales en Chile. Tu tarea es mejorar el storytelling de campañas de crowdfunding. El texto debe sonar profesional, honesto, emotivo y humano.",
           temperature: 0.7,
@@ -194,7 +187,7 @@ export class CampaignService {
 
       return response.text || story;
     } catch (e) {
-      console.error("Error en pulido de IA:", e);
+      console.error("Error al perfeccionar con IA:", e);
       return story;
     }
   }

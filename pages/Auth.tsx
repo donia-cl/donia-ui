@@ -24,17 +24,33 @@ const Auth: React.FC = () => {
     setLoading(true);
     setError(null);
 
+    // Validación básica antes de enviar
+    if (formData.password.length < 6) {
+      setError("La contraseña debe tener al menos 6 caracteres.");
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isLogin) {
         await authService.signIn(formData.email, formData.password);
       } else {
         await authService.signUp(formData.email, formData.password, formData.fullName);
+        // Si el registro es exitoso pero requiere confirmación, Supabase devuelve un objeto sin sesión activa.
+        // Podríamos mostrar un mensaje de "revisa tu email".
       }
       
       const from = (location.state as any)?.from?.pathname || '/';
       navigate(from, { replace: true });
     } catch (err: any) {
-      setError(err.message || "Ocurrió un error inesperado.");
+      console.error("Auth error catch:", err);
+      // Mapeo de errores comunes de Supabase a español amigable
+      let msg = err.message || "Ocurrió un error inesperado.";
+      if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
+      if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
+      if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
+      
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -45,7 +61,6 @@ const Auth: React.FC = () => {
     setError(null);
     try {
       await authService.signInWithGoogle();
-      // Nota: signInWithOAuth redirige la página, por lo que el estado local no persiste aquí.
     } catch (err: any) {
       setError(err.message || "No pudimos conectar con Google.");
       setGoogleLoading(false);
@@ -75,7 +90,6 @@ const Auth: React.FC = () => {
             </div>
           )}
 
-          {/* Botón de Google */}
           <button
             onClick={handleGoogleSignIn}
             disabled={googleLoading || loading}
@@ -141,11 +155,6 @@ const Auth: React.FC = () => {
             <div>
               <div className="flex justify-between items-center mb-2 ml-1">
                 <label className="block text-xs font-black uppercase tracking-widest text-slate-400">Contraseña</label>
-                {isLogin && (
-                  <button type="button" className="text-[10px] font-black uppercase tracking-widest text-violet-600 hover:underline">
-                    ¿Olvidaste tu contraseña?
-                  </button>
-                )}
               </div>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
@@ -158,6 +167,7 @@ const Auth: React.FC = () => {
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                 />
               </div>
+              <p className="text-[10px] text-slate-400 mt-2 ml-1 italic">* Mínimo 6 caracteres</p>
             </div>
 
             <button
