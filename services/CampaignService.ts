@@ -3,22 +3,17 @@ import { CampaignData, Donation } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Función auxiliar para obtener variables de entorno de forma segura en el navegador
-const getEnv = (key: string): string | undefined => {
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key];
-  }
-  // @ts-ignore - Intento de lectura de globales inyectadas por algunos entornos
-  if (typeof window !== 'undefined' && window._env_ && window._env_[key]) {
-    // @ts-ignore
-    return window._env_[key];
-  }
-  return undefined;
+// Intentamos capturar las variables directamente. 
+// En entornos de producción como Vercel, el bundler reemplaza estos valores durante el build.
+const getSupabaseUrl = () => {
+  try { return process.env.SUPABASE_URL; } catch { return undefined; }
 };
-
-const SUPABASE_URL = getEnv('SUPABASE_URL');
-const SUPABASE_ANON_KEY = getEnv('SUPABASE_ANON_KEY');
-const GEMINI_KEY = getEnv('API_KEY');
+const getSupabaseKey = () => {
+  try { return process.env.SUPABASE_ANON_KEY; } catch { return undefined; }
+};
+const getGeminiKey = () => {
+  try { return process.env.API_KEY; } catch { return undefined; }
+};
 
 export class CampaignService {
   private static instance: CampaignService;
@@ -28,29 +23,34 @@ export class CampaignService {
   private isAiAvailable: boolean = false;
 
   private constructor() {
+    const sUrl = getSupabaseUrl();
+    const sKey = getSupabaseKey();
+    const gKey = getGeminiKey();
+
+    console.log("Donia Debug - Supabase URL exists:", !!sUrl);
+    console.log("Donia Debug - Supabase Key exists:", !!sKey);
+    console.log("Donia Debug - Gemini Key exists:", !!gKey);
+
     // Inicialización de IA
-    if (GEMINI_KEY) {
+    if (gKey && gKey !== "") {
       try {
-        this.ai = new GoogleGenAI({ apiKey: GEMINI_KEY });
+        this.ai = new GoogleGenAI({ apiKey: gKey });
         this.isAiAvailable = true;
-        console.log("Donia: IA configurada correctamente.");
       } catch (e) {
         console.error("Donia AI Init Error:", e);
       }
     }
     
     // Inicialización de Supabase
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+    if (sUrl && sKey && sUrl !== "" && sKey !== "") {
       try {
-        this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
-        console.log("Donia: Cloud Sync activado.");
       } catch (err) {
-        console.warn("Donia: Error al conectar con Supabase.", err);
+        console.warn("Donia Connection Error:", err);
         this.isLocalMode = true;
       }
     } else {
-      console.warn("Donia: Faltan llaves de Supabase. Usando Local Mode.");
       this.isLocalMode = true;
     }
   }
@@ -102,6 +102,7 @@ export class CampaignService {
             donantesCount: c.donantes_count
           }));
         }
+        if (error) console.error("Supabase Query Error:", error);
       } catch (e) {
         console.error("Fetch failed:", e);
       }
@@ -173,6 +174,7 @@ export class CampaignService {
             donantesCount: data.donantes_count
           };
         }
+        if (error) console.error("Supabase Insert Error:", error);
       } catch (e) {
         console.error("Insert error:", e);
       }
