@@ -9,27 +9,37 @@ export class CampaignService {
   private isLocalMode: boolean = false;
 
   private constructor() {
-    // Siguiendo la documentación de React/Vercel que proporcionaste:
-    const sUrl = process.env.REACT_APP_SUPABASE_URL || 
-                 process.env.SUPABASE_URL || 
-                 process.env.NEXT_PUBLIC_SUPABASE_URL;
+    // Intentar obtener variables de proceso (Vercel/Node/CRA)
+    const env = (window as any).process?.env || process.env || {};
+    
+    // Lista de posibles nombres para la URL de Supabase
+    const sUrl = env.REACT_APP_SUPABASE_URL || 
+                 env.SUPABASE_URL || 
+                 env.NEXT_PUBLIC_SUPABASE_URL;
                  
-    const sKey = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 
-                 process.env.REACT_APP_SUPABASE_ANON_KEY || 
-                 process.env.SUPABASE_ANON_KEY ||
-                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    // Lista de posibles nombres para la Key de Supabase (Anon/Publishable)
+    const sKey = env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 
+                 env.REACT_APP_SUPABASE_ANON_KEY || 
+                 env.SUPABASE_ANON_KEY ||
+                 env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    // Diagnóstico en consola para el desarrollador
+    console.group("Donia System Check");
+    console.log("Supabase URL Detectada:", sUrl ? "✅ OK" : "❌ No encontrada");
+    console.log("Supabase Key Detectada:", sKey ? "✅ OK" : "❌ No encontrada");
+    console.log("Gemini API Key Detectada:", (env.API_KEY || env.REACT_APP_API_KEY) ? "✅ OK" : "❌ No encontrada");
+    console.groupEnd();
 
     if (sUrl && sKey) {
       try {
         this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
-        console.log("Donia: Conexión con Supabase establecida.");
+        console.log("Donia: Conectado a Supabase Cloud.");
       } catch (err) {
-        console.warn("Donia: Error al inicializar Supabase, activando modo local.");
+        console.warn("Donia: Error al inicializar Supabase. Usando LocalMode.");
         this.isLocalMode = true;
       }
     } else {
-      console.warn("Donia: No se detectaron llaves de API (Supabase). Operando en modo local.");
       this.isLocalMode = true;
     }
   }
@@ -42,8 +52,8 @@ export class CampaignService {
   }
 
   public checkAiAvailability(): boolean {
-    // La API Key de Gemini suele inyectarse como API_KEY o con prefijo en React
-    return !!(process.env.API_KEY || process.env.REACT_APP_API_KEY);
+    const env = (window as any).process?.env || process.env || {};
+    return !!(env.API_KEY || env.REACT_APP_API_KEY);
   }
 
   public getConnectionStatus(): 'cloud' | 'local' {
@@ -224,7 +234,8 @@ export class CampaignService {
   }
 
   async polishStory(story: string): Promise<string> {
-    const apiKey = process.env.API_KEY || process.env.REACT_APP_API_KEY;
+    const env = (window as any).process?.env || process.env || {};
+    const apiKey = env.API_KEY || env.REACT_APP_API_KEY;
     if (!apiKey) return story;
 
     try {
@@ -233,7 +244,7 @@ export class CampaignService {
         model: 'gemini-3-flash-preview',
         contents: `Mejora y humaniza este texto para una campaña solidaria en Chile: "${story}"`,
         config: {
-          systemInstruction: "Eres un redactor experto en causas sociales. Tu objetivo es hacer que el relato sea más empático y profesional.",
+          systemInstruction: "Eres un redactor experto en causas sociales. Hazlo empático.",
           temperature: 0.7,
         },
       });
