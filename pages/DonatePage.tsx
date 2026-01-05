@@ -32,6 +32,7 @@ const DonatePage: React.FC = () => {
   const [tipPercentage, setTipPercentage] = useState<number | 'custom'>(10);
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [mpPublicKey, setMpPublicKey] = useState<string>('');
   
   const [donorName, setDonorName] = useState<string>('');
   const [donorComment, setDonorComment] = useState<string>('');
@@ -48,25 +49,31 @@ const DonatePage: React.FC = () => {
   const ivaAmount = Math.round(tipSubtotal * 0.19);
   const totalAmount = donationAmount + tipSubtotal + ivaAmount;
 
+  // Cargar campaña y configuración
   useEffect(() => {
-    const fetchCampaign = async () => {
-      if (id) {
-        const data = await service.getCampaignById(id);
-        setCampaign(data);
+    const fetchData = async () => {
+      try {
+        // 1. Cargar Campaña
+        if (id) {
+          const data = await service.getCampaignById(id);
+          setCampaign(data);
+        }
+        // 2. Cargar Configuración (Llaves)
+        const res = await fetch('/api/config');
+        const config = await res.json();
+        setMpPublicKey(config.mpPublicKey);
+      } catch (e) {
+        console.error("Error cargando datos iniciales:", e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
-    fetchCampaign();
+    fetchData();
   }, [id]);
 
   useEffect(() => {
-    // Verificamos de forma segura si las variables existen antes de usarlas
-    const mpKey = (typeof process !== 'undefined' && process.env) 
-      ? process.env.REACT_APP_MP_PUBLIC_KEY 
-      : '';
-
-    if (showPaymentForm && window.MercadoPago && paymentBrickContainerRef.current && campaign && mpKey) {
-      const mp = new window.MercadoPago(mpKey, {
+    if (showPaymentForm && window.MercadoPago && paymentBrickContainerRef.current && campaign && mpPublicKey) {
+      const mp = new window.MercadoPago(mpPublicKey, {
         locale: 'es-CL'
       });
       const bricksBuilder = mp.bricks();
@@ -100,8 +107,8 @@ const DonatePage: React.FC = () => {
                 }
               },
               onError: (error: any) => {
-                console.error("Error en Brick:", error);
-                setError("Error al cargar la pasarela.");
+                console.error("Error en Mercado Pago Brick:", error);
+                setError("Error al cargar la pasarela de pagos.");
               }
             }
           });
@@ -111,7 +118,7 @@ const DonatePage: React.FC = () => {
       };
       renderPaymentBrick();
     }
-  }, [showPaymentForm, totalAmount, campaign]);
+  }, [showPaymentForm, totalAmount, campaign, mpPublicKey]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -243,7 +250,7 @@ const DonatePage: React.FC = () => {
                   <div className="space-y-4">
                     <input 
                       type="text" 
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-700 transition-all text-sm"
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
                       placeholder="Tu nombre (opcional)"
                       value={donorName}
                       onChange={(e) => setDonorName(e.target.value)}

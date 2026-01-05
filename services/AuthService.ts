@@ -16,9 +16,8 @@ export class AuthService {
   }
 
   /**
-   * Inicializa el cliente de Supabase. 
-   * Primero intenta con process.env (por si el bundler las inyectó)
-   * Si no, las pide al endpoint /api/config
+   * Inicializa el cliente de Supabase pidiendo las llaves al backend.
+   * Esto imita la forma en que el backend maneja las llaves de Gemini.
    */
   public async initialize(): Promise<void> {
     if (this.client) return;
@@ -26,32 +25,23 @@ export class AuthService {
 
     this.initializing = (async () => {
       try {
-        let url = '';
-        let key = '';
-
-        // 1. Intentar lectura directa (algunos entornos de dev lo permiten)
-        try {
-          if (typeof process !== 'undefined' && process.env) {
-            url = process.env.REACT_APP_SUPABASE_URL || '';
-            key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
-          }
-        } catch (e) {}
-
-        // 2. Si no están, pedirlas al API del servidor
-        if (!url || !key) {
-          const res = await fetch('/api/config');
-          const config = await res.json();
-          url = config.supabaseUrl;
-          key = config.supabaseKey;
-        }
+        // Pedimos la configuración al servidor (Vercel)
+        const res = await fetch('/api/config');
+        if (!res.ok) throw new Error("No se pudo obtener la configuración del servidor.");
+        
+        const config = await res.json();
+        const url = config.supabaseUrl;
+        const key = config.supabaseKey;
 
         if (url && key) {
           this.client = createClient(url, key);
+          console.log("[AuthService] Supabase configurado con éxito.");
         } else {
-          console.error("No se pudieron cargar las credenciales de Supabase.");
+          throw new Error("Las llaves de Supabase están vacías en el servidor.");
         }
       } catch (err) {
-        console.error("Error inicializando AuthService:", err);
+        console.error("[AuthService] Error crítico de inicialización:", err);
+        throw err;
       }
     })();
 
@@ -64,7 +54,7 @@ export class AuthService {
 
   async signUp(email: string, pass: string, fullName: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Sistema de autenticación no disponible.");
+    if (!this.client) throw new Error("Configuración de autenticación no encontrada.");
     
     const { data, error } = await this.client.auth.signUp({
       email,
@@ -80,7 +70,7 @@ export class AuthService {
 
   async signIn(email: string, pass: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Sistema de autenticación no disponible.");
+    if (!this.client) throw new Error("Configuración de autenticación no encontrada.");
 
     const { data, error } = await this.client.auth.signInWithPassword({
       email,
@@ -92,7 +82,7 @@ export class AuthService {
 
   async signInWithGoogle() {
     await this.initialize();
-    if (!this.client) throw new Error("Sistema de autenticación no disponible.");
+    if (!this.client) throw new Error("Configuración de autenticación no encontrada.");
 
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
@@ -121,5 +111,4 @@ export class AuthService {
   }
 }
 
-// Exportamos una instancia de conveniencia para el listener de AuthContext
 export const getSupabaseClient = () => AuthService.getInstance().getSupabase();
