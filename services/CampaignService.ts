@@ -4,19 +4,21 @@ import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Función robusta para obtener variables de entorno en cualquier contexto de React/Vite/Vercel.
+ * Función robusta para obtener variables de entorno en cualquier contexto.
+ * Busca con prefijos comunes (REACT_APP_, VITE_, NEXT_PUBLIC_) para asegurar compatibilidad en producción.
  */
 const getEnv = (key: string): string | undefined => {
-  // Prefijos comunes inyectados por diferentes herramientas de build
-  const prefixes = ['', 'REACT_APP_', 'NEXT_PUBLIC_', 'VITE_'];
+  const prefixes = ['', 'REACT_APP_', 'VITE_', 'NEXT_PUBLIC_'];
   
-  // 1. Intentar via process.env (Webpack, CRA, Vercel default)
-  if (typeof process !== 'undefined' && process.env) {
-    for (const p of prefixes) {
-      const val = (process.env as any)[`${p}${key}`];
-      if (val) return val;
+  // 1. Intentar via process.env (Webpack, CRA, Vercel Build-time)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+      for (const p of prefixes) {
+        const val = (process.env as any)[`${p}${key}`];
+        if (val) return val;
+      }
     }
-  }
+  } catch (e) {}
 
   // 2. Intentar via import.meta.env (Vite nativo)
   try {
@@ -28,9 +30,7 @@ const getEnv = (key: string): string | undefined => {
         if (val) return val;
       }
     }
-  } catch (e) {
-    // Ignorar si import.meta.env no es soportado
-  }
+  } catch (e) {}
 
   return undefined;
 };
@@ -42,28 +42,39 @@ export class CampaignService {
   private isAiAvailable: boolean = false;
 
   private constructor() {
+    // Detección de llaves de Supabase con fallback de prefijos
     const sUrl = getEnv('SUPABASE_URL');
     const sKey = getEnv('SUPABASE_ANON_KEY');
-    const gKey = process.env.API_KEY;
+    
+    // Acceso seguro a API_KEY según instrucciones estrictas (exclusivamente process.env.API_KEY)
+    let gKey: string | undefined;
+    try {
+      // Verificamos existencia de process para no romper la ejecución si no está definido
+      gKey = typeof process !== 'undefined' ? (process.env?.API_KEY || (process.env as any)?.REACT_APP_API_KEY) : undefined;
+    } catch (e) {
+      gKey = undefined;
+    }
 
-    console.group("Donia Diagnostics");
-    console.log("Database URL:", sUrl ? "✅ DETECTED" : "❌ MISSING");
-    console.log("Database Key:", sKey ? "✅ DETECTED" : "❌ MISSING");
-    console.log("Gemini AI Key:", gKey ? "✅ DETECTED" : "❌ MISSING");
+    // Diagnóstico en consola para el desarrollador
+    console.group("🚀 Donia Connection Diagnostics");
+    console.log("Supabase URL:", sUrl ? "✅ Detectada" : "❌ No encontrada");
+    console.log("Supabase Key:", sKey ? "✅ Detectada" : "❌ No encontrada");
+    console.log("Gemini API Key:", gKey ? "✅ Detectada" : "❌ No encontrada");
+    console.log("Modo de Operación:", sUrl && sKey ? "🌐 Nube (Supabase)" : "🏠 Local (LocalStorage)");
     console.groupEnd();
 
-    // AI Check
+    // Verificación de disponibilidad de IA
     if (gKey) {
       this.isAiAvailable = true;
     }
     
-    // Supabase Init
+    // Inicialización de Supabase
     if (sUrl && sKey) {
       try {
         this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
       } catch (err) {
-        console.error("Supabase Init Error:", err);
+        console.error("Error al inicializar Supabase:", err);
         this.isLocalMode = true;
       }
     } else {
@@ -119,7 +130,7 @@ export class CampaignService {
           }));
         }
       } catch (e) {
-        console.error("Error fetching campaigns:", e);
+        console.error("Error al obtener campañas de Supabase:", e);
       }
     }
     return this.getLocalCampaigns();
@@ -150,7 +161,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Error fetching campaign:", e);
+        console.error("Error al obtener campaña por ID:", e);
       }
     }
     return this.getLocalCampaigns().find(c => c.id === id) || null;
@@ -190,7 +201,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Error creating campaign:", e);
+        console.error("Error al crear campaña en Supabase:", e);
       }
     }
 
@@ -238,7 +249,7 @@ export class CampaignService {
           };
         }
       } catch (e) {
-        console.error("Error processing donation:", e);
+        console.error("Error al procesar donación en Supabase:", e);
       }
     }
 
@@ -246,7 +257,6 @@ export class CampaignService {
     const index = campaigns.findIndex(c => c.id === campaignId);
     if (index !== -1) {
       campaigns[index].recaudado += monto;
-      // Fixed: property name is donantesCount
       campaigns[index].donantesCount += 1;
       this.saveLocalCampaigns(campaigns);
       return {
@@ -257,7 +267,7 @@ export class CampaignService {
         fecha: new Date().toISOString()
       };
     }
-    throw new Error("Campaign not found");
+    throw new Error("Campaña no encontrada");
   }
 
   /**
@@ -265,7 +275,15 @@ export class CampaignService {
    */
   async polishStory(story: string): Promise<string> {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Obtenemos la llave de manera segura antes de instanciar
+      const apiKey = typeof process !== 'undefined' ? (process.env?.API_KEY || (process.env as any)?.REACT_APP_API_KEY) : undefined;
+      
+      if (!apiKey) {
+        console.warn("Gemini API Key no disponible para pulir historia.");
+        return story;
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Por favor, mejora y pulé el siguiente relato de una campaña de recaudación de fondos para que sea más emotivo y profesional, pero manteniendo la esencia original. El texto está en español: "${story}"`,
@@ -275,7 +293,7 @@ export class CampaignService {
       });
       return response.text || story;
     } catch (e) {
-      console.error("Error polishing story:", e);
+      console.error("Error al pulir la historia con Gemini:", e);
       return story;
     }
   }
