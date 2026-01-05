@@ -21,7 +21,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <div className="bg-violet-600 p-1.5 rounded-xl group-hover:bg-violet-700 transition-colors shadow-sm">
                 <Heart size={20} className="text-white fill-current" />
               </div>
-              <span className="text-2xl font-bold text-slate-900 tracking-tight">Donia</span>
+              <span className="text-2xl font-bold text-slate-900 tracking-tight">
+                Donia
+              </span>
             </Link>
             
             {!isWizard && (
@@ -47,16 +49,41 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         {children}
       </main>
 
-      <footer className="bg-slate-50 border-t border-slate-100 py-12 mt-auto">
+      <footer className="bg-slate-50 border-t border-slate-100 py-16 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
             <div className="text-center md:text-left">
               <div className="flex justify-center md:justify-start items-center gap-2 mb-4">
                 <Heart size={24} className="text-violet-600" />
-                <span className="text-xl font-bold text-slate-800">Donia</span>
+                <span className="text-xl font-bold text-slate-800 flex items-center gap-1.5">
+                  Donia <span>🇨🇱</span>
+                </span>
               </div>
-              <p className="text-slate-500 text-sm">© 2026 Donia Chile. Construyendo puentes de solidaridad.</p>
+              <p className="text-slate-500 text-sm leading-relaxed max-w-xs mx-auto md:mx-0">
+                La plataforma de crowdfunding solidario líder en Chile. Conectando corazones a través de la transparencia.
+              </p>
             </div>
+
+            <div className="text-center md:text-left">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Plataforma</h4>
+              <ul className="space-y-4">
+                <li><Link to="/explorar" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Explorar causas</Link></li>
+                <li><Link to="/crear" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Crear campaña</Link></li>
+                <li><Link to="/acerca" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Cómo funciona</Link></li>
+              </ul>
+            </div>
+
+            <div className="text-center md:text-left">
+              <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Legal</h4>
+              <ul className="space-y-4">
+                <li><Link to="/terminos" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Términos y Condiciones</Link></li>
+                <li><span className="text-slate-400 font-bold opacity-50 cursor-not-allowed">Privacidad (Próximamente)</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="pt-12 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-8">
+            <p className="text-slate-400 text-xs font-bold italic">© 2026 Donia SpA. Santiago, Chile.</p>
 
             <div className="flex flex-col items-center md:items-end gap-3">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -75,16 +102,4 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[11px] font-bold border transition-all ${
                   aiActive 
                   ? 'bg-sky-50 border-sky-200 text-sky-700 shadow-sm shadow-sky-100' 
-                  : 'bg-slate-100 border-slate-200 text-slate-500'
-                }`}>
-                  <Cpu size={14} />
-                  {aiActive ? 'Motor IA Activo' : 'IA Desactivada'}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
-  );
-};
+                  : 'bg-slate-100 border-slate-200 text-slate-500
