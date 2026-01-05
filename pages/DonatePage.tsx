@@ -12,7 +12,8 @@ import {
   Info,
   Check,
   Zap,
-  Receipt
+  Receipt,
+  Plus
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
@@ -31,7 +32,8 @@ const DonatePage: React.FC = () => {
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
   const [donationAmount, setDonationAmount] = useState<number>(5000);
-  const [tipPercentage, setTipPercentage] = useState<number>(10);
+  const [tipPercentage, setTipPercentage] = useState<number | 'custom'>(10);
+  const [customTipAmount, setCustomTipAmount] = useState<number>(0);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   
   const [donorName, setDonorName] = useState<string>('');
@@ -42,8 +44,11 @@ const DonatePage: React.FC = () => {
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
   const service = CampaignService.getInstance();
 
-  // Lógica de cálculos corregida: IVA solo sobre el aporte a Donia
-  const tipSubtotal = Math.round(donationAmount * (tipPercentage / 100));
+  // Lógica de cálculos: El aporte a Donia puede ser % o monto fijo
+  const tipSubtotal = tipPercentage === 'custom' 
+    ? customTipAmount 
+    : Math.round(donationAmount * (tipPercentage / 100));
+    
   const ivaAmount = Math.round(tipSubtotal * 0.19);
   const totalAmount = donationAmount + tipSubtotal + ivaAmount;
 
@@ -159,7 +164,7 @@ const DonatePage: React.FC = () => {
 
               {!showPaymentForm ? (
                 <div className="space-y-8">
-                  {/* Selección de Monto */}
+                  {/* Selección de Monto de Donación */}
                   <div>
                     <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto de tu donación base</label>
                     <div className="relative mb-4">
@@ -195,26 +200,45 @@ const DonatePage: React.FC = () => {
                          Apoyo a la plataforma Donia
                       </h3>
                       <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6 pr-10">
-                        Donia no cobra comisiones a los organizadores. Tu aporte voluntario nos permite seguir operando de forma gratuita para las causas.
+                        Donia no cobra comisiones a los organizadores. Tu aporte nos permite seguir manteniendo el sitio gratuito para las causas.
                       </p>
                       
-                      <div className="grid grid-cols-4 gap-2 mb-4">
+                      <div className="grid grid-cols-5 gap-2 mb-4">
                         {[10, 15, 20].map(pct => (
                           <button 
                             key={pct}
                             onClick={() => setTipPercentage(pct)}
-                            className={`py-2 rounded-xl text-[11px] font-black border transition-all ${tipPercentage === pct ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
+                            className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === pct ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
                           >
                             {pct}%
                           </button>
                         ))}
                         <button 
+                           onClick={() => setTipPercentage('custom')}
+                           className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === 'custom' ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
+                        >
+                           Otro
+                        </button>
+                        <button 
                            onClick={() => setTipPercentage(0)}
-                           className={`py-2 rounded-xl text-[11px] font-black border transition-all ${tipPercentage === 0 ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
+                           className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === 0 ? 'bg-white border-slate-200 text-slate-400 hover:border-rose-200 hover:text-rose-500 shadow-sm'}`}
                         >
                            0%
                         </button>
                       </div>
+
+                      {tipPercentage === 'custom' && (
+                        <div className="relative animate-in slide-in-from-top-2 duration-200">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-sm">$</span>
+                          <input 
+                            type="number"
+                            className="w-full pl-7 pr-4 py-3 bg-white border border-violet-100 rounded-xl outline-none font-bold text-slate-700 text-sm focus:border-violet-300 transition-all"
+                            placeholder="Monto de aporte"
+                            value={customTipAmount || ''}
+                            onChange={(e) => setCustomTipAmount(Number(e.target.value))}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -303,7 +327,7 @@ const DonatePage: React.FC = () => {
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
                       <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Donia</span>
-                      <span className="text-slate-600 text-sm font-bold">Aporte voluntario ({tipPercentage}%)</span>
+                      <span className="text-slate-600 text-sm font-bold">Aporte voluntario {tipPercentage !== 'custom' && `(${tipPercentage}%)`}</span>
                     </div>
                     <span className="font-black text-slate-900 text-lg">${tipSubtotal.toLocaleString('es-CL')}</span>
                   </div>
