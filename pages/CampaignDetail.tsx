@@ -1,27 +1,15 @@
 
+// Add missing React import to fix namespace error on line 8
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, MapPin, Users, Heart, Share2, ShieldCheck, User, MessageCircle, Check, AlertCircle, Calendar } from 'lucide-react';
+import { ChevronLeft, MapPin, Users, Heart, Share2, ShieldCheck, User, MessageCircle, AlertCircle, Calendar } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
-import { CampaignData } from '../types';
-
-// Fix: Removed 'extends any' as interfaces cannot extend primitives. Added 'id' property required for list keys.
-interface DonationExtended {
-  id: string;
-  nombre_donante: string;
-  comentario: string;
-  monto: number;
-  fecha: string;
-}
-
-interface CampaignExtended extends CampaignData {
-  donations?: DonationExtended[];
-}
+import { CampaignData, Donation } from '../types';
 
 const CampaignDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [campaign, setCampaign] = useState<CampaignExtended | null>(null);
+  const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
   const [donating, setDonating] = useState(false);
   const [donationAmount, setDonationAmount] = useState<number>(5000);
@@ -36,7 +24,7 @@ const CampaignDetail: React.FC = () => {
   const fetchDetail = async () => {
     if (id) {
       try {
-        const result: any = await service.getCampaignById(id);
+        const result = await service.getCampaignById(id);
         setCampaign(result);
       } catch (err) {
         console.error("Error cargando detalle:", err);
@@ -170,7 +158,7 @@ const CampaignDetail: React.FC = () => {
                 
                 <div className="space-y-6">
                   {campaign.donations && campaign.donations.length > 0 ? (
-                    campaign.donations.map((don: DonationExtended) => (
+                    campaign.donations.map((don: Donation) => (
                       <div key={don.id} className="bg-slate-50 p-6 rounded-[24px] border border-slate-100">
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex items-center gap-3">
@@ -178,7 +166,7 @@ const CampaignDetail: React.FC = () => {
                               <User size={18} />
                             </div>
                             <div>
-                              <p className="font-black text-slate-900 text-sm">{don.nombre_donante}</p>
+                              <p className="font-black text-slate-900 text-sm">{don.nombreDonante}</p>
                               <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                                 <Calendar size={10} />
                                 {new Date(don.fecha).toLocaleDateString('es-CL')}

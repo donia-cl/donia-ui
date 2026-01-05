@@ -11,6 +11,7 @@ export interface CampaignData {
   imagenUrl: string;
   estado: 'activa' | 'finalizada';
   donantesCount: number;
+  donations?: Donation[];
 }
 
 export interface Donation {
