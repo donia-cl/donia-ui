@@ -5,6 +5,7 @@ import { CampaignProvider } from './context/CampaignContext';
 import { Layout } from './components/Layout';
 import Landing from './pages/Landing';
 import Explore from './pages/Explore';
+import About from './pages/About';
 import CampaignDetail from './pages/CampaignDetail';
 import DonatePage from './pages/DonatePage';
 import CreateIntro from './pages/wizard/Intro';
@@ -23,6 +24,9 @@ const App: React.FC = () => {
             
             {/* Explore Campaigns */}
             <Route path="/explorar" element={<Explore />} />
+
+            {/* About Page */}
+            <Route path="/acerca" element={<About />} />
             
             {/* Campaign Detail */}
             <Route path="/campana/:id" element={<CampaignDetail />} />

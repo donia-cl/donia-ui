@@ -26,7 +26,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             
             {!isWizard && (
               <nav className="hidden md:flex items-center space-x-8">
-                <Link to="/explorar" className="text-slate-600 hover:text-violet-600 font-medium transition-colors">Explorar</Link>
+                <Link to="/explorar" className={`font-medium transition-colors ${location.pathname === '/explorar' ? 'text-violet-600' : 'text-slate-600 hover:text-violet-600'}`}>Explorar</Link>
+                <Link to="/acerca" className={`font-medium transition-colors ${location.pathname === '/acerca' ? 'text-violet-600' : 'text-slate-600 hover:text-violet-600'}`}>Cómo funciona</Link>
                 <Link to="/crear" className="bg-violet-600 text-white px-5 py-2.5 rounded-full font-semibold hover:bg-violet-700 transition-all shadow-md shadow-violet-100">
                   Comenzar campaña
                 </Link>
