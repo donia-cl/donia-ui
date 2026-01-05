@@ -32,7 +32,9 @@ const DonatePage: React.FC = () => {
   const [tipPercentage, setTipPercentage] = useState<number | 'custom'>(10);
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [mpPublicKey, setMpPublicKey] = useState<string>('');
+  
+  // Usar directamente la variable de entorno
+  const mpPublicKey = process.env.REACT_APP_MP_PUBLIC_KEY || '';
   
   const [donorName, setDonorName] = useState<string>('');
   const [donorComment, setDonorComment] = useState<string>('');
@@ -49,21 +51,15 @@ const DonatePage: React.FC = () => {
   const ivaAmount = Math.round(tipSubtotal * 0.19);
   const totalAmount = donationAmount + tipSubtotal + ivaAmount;
 
-  // Cargar campaña y configuración
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // 1. Cargar Campaña
         if (id) {
           const data = await service.getCampaignById(id);
           setCampaign(data);
         }
-        // 2. Cargar Configuración (Llaves)
-        const res = await fetch('/api/config');
-        const config = await res.json();
-        setMpPublicKey(config.mpPublicKey);
       } catch (e) {
-        console.error("Error cargando datos iniciales:", e);
+        console.error("Error cargando campaña:", e);
       } finally {
         setLoading(false);
       }

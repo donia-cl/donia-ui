@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { AuthService } from '../services/AuthService';
+import { CampaignService } from '../services/CampaignService';
 
 interface AuthContextType {
   user: User | null;
@@ -15,13 +16,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const authService = AuthService.getInstance();
+  const campaignService = CampaignService.getInstance();
 
   useEffect(() => {
     let mounted = true;
 
-    const initAuth = async () => {
-      // 1. Esperamos a que el servicio se configure (pida las llaves al API)
-      await authService.initialize();
+    const initApp = async () => {
+      // 1. Inicializamos ambos servicios (buscan llaves en env o API)
+      await Promise.all([
+        authService.initialize(),
+        campaignService.initialize()
+      ]);
       
       // 2. Verificamos si hay un usuario logueado
       const currentUser = await authService.getCurrentUser();
@@ -31,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       }
 
-      // 3. Suscribirse a cambios de estado
+      // 3. Suscribirse a cambios de estado de Supabase
       const client = authService.getSupabase();
       if (client && mounted) {
         const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
@@ -46,12 +51,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    const cleanupPromise = initAuth();
+    initApp();
 
     return () => {
       mounted = false;
-      // Nota: No podemos retornar la cleanup directamente de un async en useEffect, 
-      // pero el flag 'mounted' protegerá los estados internos.
     };
   }, []);
 

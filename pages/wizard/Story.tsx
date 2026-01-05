@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Wand2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Wand2, Loader2 } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
@@ -11,9 +11,14 @@ const CreateStory: React.FC = () => {
   const { campaign, updateCampaign } = useCampaign();
   const [localStory, setLocalStory] = useState(campaign.historia || '');
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [canUseAi, setCanUseAi] = useState(false);
   
   const service = CampaignService.getInstance();
-  const isAiAvailable = service.checkAiAvailability();
+
+  useEffect(() => {
+    // Verificamos disponibilidad de IA al montar
+    setCanUseAi(service.checkAiAvailability());
+  }, []);
 
   const handleNext = () => {
     updateCampaign({ historia: localStory });
@@ -21,13 +26,15 @@ const CreateStory: React.FC = () => {
   };
 
   const handleAiPolish = async () => {
-    if (!localStory || localStory.length < 20 || !isAiAvailable) return;
+    if (!localStory || localStory.length < 20) return;
     setIsAiProcessing(true);
     try {
       const polished = await service.polishStory(localStory);
-      setLocalStory(polished);
+      if (polished !== localStory) {
+        setLocalStory(polished);
+      }
     } catch (err) {
-      // Fail gracefully
+      console.error("Error en pulido de IA:", err);
     } finally {
       setIsAiProcessing(false);
     }
@@ -53,19 +60,24 @@ const CreateStory: React.FC = () => {
 
       <div className="space-y-8">
         <div className="bg-white rounded-[32px] border-2 border-slate-100 p-8 shadow-sm focus-within:border-violet-200 transition-all relative">
-          <label className="flex justify-between items-center mb-6">
+          <label className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Relato de la campaña</span>
-            {isAiAvailable && (
+            {canUseAi && (
               <button
                 onClick={handleAiPolish}
                 disabled={isAiProcessing || localStory.length < 20}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-black transition-all shadow-lg ${
                   isAiProcessing 
                   ? 'bg-slate-100 text-slate-400 cursor-wait' 
-                  : 'bg-gradient-to-r from-violet-600 to-sky-500 text-white hover:shadow-violet-200 hover:-translate-y-0.5'
+                  : 'bg-gradient-to-r from-violet-600 to-sky-500 text-white hover:shadow-violet-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0 disabled:shadow-none'
                 }`}
               >
-                {isAiProcessing ? 'Optimizando...' : (
+                {isAiProcessing ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Optimizando...
+                  </>
+                ) : (
                   <>
                     <Wand2 size={16} />
                     Perfeccionar con IA
@@ -77,8 +89,8 @@ const CreateStory: React.FC = () => {
 
           <textarea
             rows={12}
-            className={`w-full p-0 text-slate-700 text-lg leading-relaxed placeholder:text-slate-200 border-none outline-none resize-none bg-transparent ${
-              isAiProcessing ? 'opacity-30' : 'opacity-100'
+            className={`w-full p-0 text-slate-700 text-lg leading-relaxed placeholder:text-slate-200 border-none outline-none resize-none bg-transparent transition-opacity ${
+              isAiProcessing ? 'opacity-40' : 'opacity-100'
             }`}
             placeholder="Érase una vez..."
             value={localStory}

@@ -1,11 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ShieldCheck, Users, Zap, Heart, MapPin } from 'lucide-react';
+import { ArrowRight, ShieldCheck, Users, Zap, Heart, MapPin, Loader2 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
 
-// Added React.FC type to handle key prop correctly
 const CampaignCard: React.FC<{ campaign: CampaignData }> = ({ campaign }) => {
   const progress = Math.min((campaign.recaudado / campaign.monto) * 100, 100);
   
@@ -55,6 +54,7 @@ const FeatureCard = ({ icon: Icon, title, description }: { icon: any, title: str
 
 const Landing: React.FC = () => {
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
+  const [loading, setLoading] = useState(true);
   const service = CampaignService.getInstance();
 
   useEffect(() => {
@@ -63,7 +63,9 @@ const Landing: React.FC = () => {
         const allCampaigns = await service.getCampaigns();
         setCampaigns(allCampaigns.slice(0, 3));
       } catch (error) {
-        console.error("Failed to fetch campaigns:", error);
+        console.error("No se pudieron cargar las campañas iniciales:", error);
+      } finally {
+        setLoading(false);
       }
     };
     loadCampaigns();
@@ -100,32 +102,37 @@ const Landing: React.FC = () => {
             </Link>
           </div>
         </div>
-        
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full opacity-20 pointer-events-none">
-          <div className="absolute top-20 left-1/4 w-[500px] h-[500px] bg-violet-300 rounded-full blur-[120px]" />
-          <div className="absolute bottom-20 right-1/4 w-[500px] h-[500px] bg-sky-300 rounded-full blur-[120px]" />
-        </div>
       </section>
 
       {/* Featured Campaigns */}
-      {campaigns.length > 0 && (
-        <section className="py-28">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-6 mb-16 text-center md:text-left">
-              <div>
-                <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Causas destacadas</h2>
-                <p className="text-slate-500 font-medium text-lg">Apoya historias reales que necesitan de tu ayuda hoy.</p>
-              </div>
-              <Link to="/explorar" className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2">
-                Ver todas <ArrowRight size={18} />
-              </Link>
+      <section className="py-28">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row justify-between items-center md:items-end gap-6 mb-16 text-center md:text-left">
+            <div>
+              <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Causas destacadas</h2>
+              <p className="text-slate-500 font-medium text-lg">Apoya historias reales que necesitan de tu ayuda hoy.</p>
             </div>
+            <Link to="/explorar" className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold hover:bg-slate-800 transition-all flex items-center gap-2">
+              Ver todas <ArrowRight size={18} />
+            </Link>
+          </div>
+          
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <Loader2 className="animate-spin text-violet-600 w-12 h-12" />
+            </div>
+          ) : campaigns.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
               {campaigns.map(c => <CampaignCard key={c.id} campaign={c} />)}
             </div>
-          </div>
-        </section>
-      )}
+          ) : (
+            <div className="text-center py-20 bg-slate-50 rounded-[40px] border-2 border-dashed border-slate-200">
+               <Heart className="mx-auto text-slate-200 mb-4" size={48} />
+               <p className="text-slate-400 font-bold">No hay campañas activas en este momento.</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Features */}
       <section className="py-28 bg-white border-t border-slate-100">
