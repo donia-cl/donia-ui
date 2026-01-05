@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, DollarSign, Image as ImageIcon, UserCheck, ShieldCheck, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, DollarSign, Image as ImageIcon, UserCheck, ShieldCheck, Loader2, AlertCircle, RefreshCcw } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
@@ -21,27 +21,47 @@ const CreateDetails: React.FC = () => {
   });
 
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validación de cliente básica
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("La imagen es muy pesada (máx 5MB)");
+      return;
+    }
+
     setUploading(true);
-    try {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
+    setUploadError(null);
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onloadend = async () => {
+      try {
         const base64 = reader.result as string;
         const url = await service.uploadImage(base64, file.name);
         setFormData(prev => ({ ...prev, imagenUrl: url }));
+      } catch (err: any) {
+        console.error("Detalle del error de subida:", err);
+        // Intentamos extraer un mensaje amigable
+        let msg = "No pudimos subir la imagen. Inténtalo de nuevo.";
+        if (err.message.includes("permisos")) msg = "Error de configuración de seguridad en el servidor.";
+        if (err.message.includes("Large")) msg = "El archivo es demasiado grande para el servidor.";
+        
+        setUploadError(msg);
+      } finally {
         setUploading(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error("Upload error:", err);
-      alert("Error al subir la imagen");
+      }
+    };
+
+    reader.onerror = () => {
+      setUploadError("Error al leer el archivo desde tu dispositivo.");
       setUploading(false);
-    }
+    };
   };
 
   const handleNext = () => {
@@ -75,41 +95,60 @@ const CreateDetails: React.FC = () => {
         <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-sm">
           <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-6">Imagen de portada</label>
           <div 
-            onClick={() => fileInputRef.current?.click()}
-            className={`relative aspect-video rounded-3xl border-2 border-dashed border-slate-200 overflow-hidden flex flex-col items-center justify-center cursor-pointer hover:border-violet-300 transition-all ${formData.imagenUrl ? 'border-none' : 'bg-slate-50'}`}
+            onClick={() => !uploading && fileInputRef.current?.click()}
+            className={`relative aspect-video rounded-3xl border-2 border-dashed overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-all ${
+              formData.imagenUrl ? 'border-none shadow-inner' : 
+              uploadError ? 'border-rose-300 bg-rose-50' : 
+              'border-slate-200 bg-slate-50 hover:border-violet-300'
+            }`}
           >
             {formData.imagenUrl ? (
               <>
                 <img src={formData.imagenUrl} className="w-full h-full object-cover" alt="Preview" />
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                  <span className="text-white font-bold flex items-center gap-2"> <RefreshCcw size={18} /> Cambiar imagen</span>
+                  <span className="text-white font-bold flex items-center gap-2 bg-black/20 px-4 py-2 rounded-full backdrop-blur-sm"> 
+                    <RefreshCcw size={18} /> Cambiar imagen
+                  </span>
                 </div>
               </>
             ) : uploading ? (
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="text-violet-600 animate-spin" size={32} />
-                <span className="font-bold text-slate-400">Subiendo...</span>
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <Loader2 className="text-violet-600 animate-spin" size={48} />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-2 h-2 bg-violet-600 rounded-full animate-ping"></div>
+                  </div>
+                </div>
+                <span className="font-black text-slate-400 uppercase tracking-widest text-[10px]">Subiendo a la nube...</span>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-3 text-slate-400">
+              <div className="flex flex-col items-center gap-3 text-slate-400 px-10 text-center">
                 <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm">
                   <ImageIcon size={32} />
                 </div>
                 <p className="font-bold text-sm">Haz clic para subir una foto</p>
-                <p className="text-xs">Recomendado: 1200x675px</p>
+                <p className="text-[10px] uppercase tracking-wider font-black opacity-60">JPG o PNG (Máx 5MB)</p>
               </div>
             )}
             <input 
               type="file" 
               ref={fileInputRef} 
               className="hidden" 
-              accept="image/*" 
+              accept="image/jpeg,image/png" 
               onChange={handleImageChange}
             />
           </div>
+          {uploadError && (
+            <div className="mt-4 p-4 bg-rose-50 text-rose-600 rounded-2xl text-xs font-bold flex items-center gap-3 border border-rose-100 animate-in fade-in slide-in-from-top-1">
+              <div className="bg-white p-1.5 rounded-lg shadow-sm">
+                <AlertCircle size={16} />
+              </div>
+              {uploadError}
+            </div>
+          )}
         </div>
 
-        {/* Datos de la Causa */}
+        {/* El resto de los campos se mantienen igual... */}
         <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-sm">
           <div className="mb-8">
             <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Título de la campaña</label>
@@ -154,7 +193,6 @@ const CreateDetails: React.FC = () => {
           </div>
         </div>
 
-        {/* Beneficiario */}
         <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-sm border-l-8 border-l-sky-400">
           <div className="flex items-center gap-3 mb-8">
              <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-600">
@@ -209,14 +247,12 @@ const CreateDetails: React.FC = () => {
             : 'bg-slate-100 text-slate-300 cursor-not-allowed'
           }`}
         >
-          Siguiente: Revisar
+          {uploading ? 'Finalizando carga...' : 'Siguiente: Revisar'}
           <ChevronRight className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>
   );
 };
-
-const RefreshCcw = ({size}: {size: number}) => <ImageIcon size={size} />; // Fallback icon
 
 export default CreateDetails;

@@ -10,10 +10,11 @@ export default async function handler(req: any, res: any) {
 
   const { campaignId, monto, nombre, comentario } = req.body;
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  const supabaseKey = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+  // Usamos service_role_key para realizar operaciones críticas de actualización de saldos
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ success: false, error: 'Configuración de base de datos no encontrada.' });
+    return res.status(500).json({ success: false, error: 'Configuración de base de datos incompleta.' });
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
@@ -26,21 +27,16 @@ export default async function handler(req: any, res: any) {
       comentario: comentario || null
     };
 
-    // Intentamos la inserción (asumiendo que la columna existe tras el ALTER TABLE)
+    // 1. Insertar donación
     const { data: donation, error: dError } = await supabase
       .from('donations')
       .insert([donationData])
       .select()
       .single();
 
-    if (dError) {
-        if (dError.message.includes('comentario')) {
-            throw new Error("La columna 'comentario' no existe en la tabla 'donations'. Por favor, ejecuta el script SQL de configuración proporcionado.");
-        }
-        throw dError;
-    }
+    if (dError) throw dError;
 
-    // Actualizar los totales de la campaña
+    // 2. Actualizar totales usando privilegios de admin (Service Role)
     const { data: campaign, error: cError } = await supabase
       .from('campaigns')
       .select('recaudado, donantes_count')
