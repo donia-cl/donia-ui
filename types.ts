@@ -19,6 +19,7 @@ export interface Donation {
   monto: number;
   fecha: string;
   nombreDonante: string;
+  comentario?: string;
 }
 
 export type WizardStep = 'intro' | 'historia' | 'detalles' | 'revisar';

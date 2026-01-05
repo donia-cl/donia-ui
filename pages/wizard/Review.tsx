@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, CheckCircle, Edit, MapPin, Tag, HeartHandshake, AlertCircle } from 'lucide-react';
+import { ChevronLeft, CheckCircle, Edit, Tag, HeartHandshake, AlertCircle, RefreshCcw } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
 
+// Added missing React import to fix namespace error
 const ReviewItem = ({ icon: Icon, label, value, onEdit }: { icon: any, label: string, value: string | number, onEdit: () => void }) => (
   <div className="flex justify-between items-start py-6 border-b border-slate-50 last:border-0 group">
     <div className="flex gap-5">
@@ -35,41 +36,52 @@ const CreateReview: React.FC = () => {
   const service = CampaignService.getInstance();
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+    
     setIsSubmitting(true);
     setError(null);
+    
     try {
-      await service.createCampaign({
+      // Llamada al servicio
+      const result = await service.createCampaign({
         titulo: campaign.titulo || '',
         historia: campaign.historia || '',
         monto: campaign.monto || 0,
         categoria: campaign.categoria || 'Varios',
         ubicacion: campaign.ubicacion || 'Chile'
       });
-      setIsSubmitting(false);
-      setIsSuccess(true);
+      
+      // Validación crítica: Solo procedemos si el resultado tiene un ID válido
+      if (result && result.id) {
+        setIsSuccess(true);
+      } else {
+        throw new Error("El servidor no confirmó la creación de la campaña correctamente.");
+      }
     } catch (err: any) {
-      console.error("Error publishing:", err);
-      setError(err.message || "No se pudo conectar con el servidor.");
+      console.error("Error al publicar:", err);
+      // Extraemos un mensaje de error legible
+      setError(err.message || "No se pudo conectar con el servidor. Por favor, revisa tu conexión.");
+    } finally {
       setIsSubmitting(false);
     }
   };
 
   if (isSuccess) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-32 text-center">
-        <div className="w-24 h-24 bg-violet-100 text-violet-600 rounded-[32px] flex items-center justify-center mx-auto mb-10 animate-bounce">
+      <div className="max-w-2xl mx-auto px-4 py-32 text-center animate-in fade-in zoom-in duration-500">
+        <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-[32px] flex items-center justify-center mx-auto mb-10 shadow-lg shadow-emerald-100 animate-bounce">
           <CheckCircle size={56} />
         </div>
-        <h1 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">¡Misión cumplida!</h1>
+        <h1 className="text-5xl font-black text-slate-900 mb-6 tracking-tight">¡Campaña publicada!</h1>
         <p className="text-slate-500 text-xl mb-12 font-medium leading-relaxed">
-          Tu historia ya está en Donia lista para recibir apoyo.
+          Tu historia ha sido guardada exitosamente y ya está disponible en Donia para recibir apoyo.
         </p>
         <button 
           onClick={() => {
             resetCampaign();
             navigate('/explorar');
           }}
-          className="bg-violet-600 text-white px-10 py-5 rounded-[24px] font-black text-xl hover:bg-violet-700 shadow-2xl shadow-violet-100 transition-all"
+          className="bg-slate-900 text-white px-10 py-5 rounded-[24px] font-black text-xl hover:bg-slate-800 shadow-2xl transition-all active:scale-95"
         >
           Ir al explorador
         </button>
@@ -87,10 +99,17 @@ const CreateReview: React.FC = () => {
 
       <div className="text-center mb-16">
         <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Todo listo para el lanzamiento</h1>
-        <p className="text-slate-500 font-medium text-lg">Confirma los detalles de tu campaña solidaria.</p>
+        <p className="text-slate-500 font-medium text-lg">Revisa los detalles finales antes de publicar tu causa.</p>
       </div>
 
-      <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl p-10 mb-10">
+      <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl p-10 mb-10 relative overflow-hidden">
+        {isSubmitting && (
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
+            <div className="w-12 h-12 border-4 border-violet-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <span className="font-black text-violet-600 uppercase tracking-widest text-sm">Publicando tu historia...</span>
+          </div>
+        )}
+
         <ReviewItem 
           icon={Tag}
           label="Título"
@@ -112,26 +131,36 @@ const CreateReview: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-[28px] flex gap-4 items-center animate-shake">
-          <AlertCircle className="text-red-500 shrink-0" size={24} />
-          <p className="text-red-800 font-medium text-sm">
-            <strong className="block mb-1">Error de publicación:</strong>
-            {error}
-          </p>
+        <div className="mb-8 p-6 bg-rose-50 border-2 border-rose-100 rounded-[32px] flex flex-col md:flex-row gap-6 items-center animate-in slide-in-from-top-4">
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-rose-500 shadow-sm shrink-0">
+            <AlertCircle size={24} />
+          </div>
+          <div className="flex-grow text-center md:text-left">
+            <p className="text-rose-900 font-bold mb-1">¡Ups! Algo no salió como esperábamos</p>
+            <p className="text-rose-700/70 text-sm font-medium">{error}</p>
+          </div>
+          <button 
+            onClick={handleSubmit}
+            className="flex items-center gap-2 bg-rose-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-rose-600 transition-all shadow-md shadow-rose-200"
+          >
+            <RefreshCcw size={18} /> Reintentar
+          </button>
         </div>
       )}
 
-      <button 
-        onClick={handleSubmit}
-        disabled={isSubmitting}
-        className={`w-full py-6 rounded-[28px] font-black text-2xl transition-all flex items-center justify-center gap-3 shadow-2xl ${
-          isSubmitting 
-          ? 'bg-slate-100 text-slate-300 cursor-wait' 
-          : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95'
-        }`}
-      >
-        {isSubmitting ? 'Publicando...' : 'Lanzar campaña ahora'}
-      </button>
+      {!isSuccess && (
+        <button 
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className={`w-full py-6 rounded-[28px] font-black text-2xl transition-all flex items-center justify-center gap-3 shadow-2xl ${
+            isSubmitting 
+            ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
+            : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95'
+          }`}
+        >
+          {isSubmitting ? 'Procesando...' : 'Lanzar mi campaña'}
+        </button>
+      )}
     </div>
   );
 };
