@@ -11,12 +11,13 @@ import {
   AlertCircle,
   Info,
   Check,
-  Zap
+  Zap,
+  Receipt
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
 
-// Fix: Declare MercadoPago on the window object to avoid TypeScript property errors
+// Declare MercadoPago on the window object to avoid TypeScript property errors
 declare global {
   interface Window {
     MercadoPago: any;
@@ -41,8 +42,10 @@ const DonatePage: React.FC = () => {
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
   const service = CampaignService.getInstance();
 
-  const tipAmount = Math.round(donationAmount * (tipPercentage / 100));
-  const totalAmount = donationAmount + tipAmount;
+  // Lógica de cálculos corregida: IVA solo sobre el aporte a Donia
+  const tipSubtotal = Math.round(donationAmount * (tipPercentage / 100));
+  const ivaAmount = Math.round(tipSubtotal * 0.19);
+  const totalAmount = donationAmount + tipSubtotal + ivaAmount;
 
   useEffect(() => {
     const fetchCampaign = async () => {
@@ -56,7 +59,6 @@ const DonatePage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    // Fix: Accessing MercadoPago on window object after global declaration
     if (showPaymentForm && window.MercadoPago && paymentBrickContainerRef.current && campaign) {
       const mp = new window.MercadoPago(process.env.REACT_APP_MP_PUBLIC_KEY, {
         locale: 'es-CL'
@@ -79,7 +81,8 @@ const DonatePage: React.FC = () => {
                   const result = await service.processPayment(formData, campaign.id, { 
                     nombre: donorName, 
                     comentario: donorComment,
-                    tip: tipAmount 
+                    tip: tipSubtotal,
+                    iva: ivaAmount
                   });
                   if (result.status === 'approved') {
                     setPaymentStatus('success');
@@ -111,7 +114,7 @@ const DonatePage: React.FC = () => {
     </div>
   );
 
-  if (!campaign) return <div className="p-20 text-center">Causa no encontrada</div>;
+  if (!campaign) return <div className="p-20 text-center text-slate-500 font-bold">Causa no encontrada</div>;
 
   if (paymentStatus === 'success') {
     return (
@@ -135,14 +138,14 @@ const DonatePage: React.FC = () => {
 
   return (
     <div className="bg-slate-50 min-h-screen pb-20">
-      <div className="max-w-3xl mx-auto px-4 pt-10">
+      <div className="max-w-5xl mx-auto px-4 pt-10">
         <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-slate-400 hover:text-violet-600 font-bold mb-8 transition-colors group text-sm">
           <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> Volver a la campaña
         </button>
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Formulario Izquierda */}
-          <div className="md:col-span-8 space-y-8">
+          <div className="lg:col-span-7 space-y-8">
             <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-sm border border-slate-100">
               <div className="flex items-center gap-4 mb-8">
                 <div className="w-12 h-12 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-600 shadow-sm">
@@ -158,7 +161,7 @@ const DonatePage: React.FC = () => {
                 <div className="space-y-8">
                   {/* Selección de Monto */}
                   <div>
-                    <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto de tu donación</label>
+                    <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto de tu donación base</label>
                     <div className="relative mb-4">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-xl">$</span>
                       <input 
@@ -192,7 +195,7 @@ const DonatePage: React.FC = () => {
                          Apoyo a la plataforma Donia
                       </h3>
                       <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6 pr-10">
-                        Donia no cobra comisiones a los organizadores para que el 100% de lo recaudado llegue a su destino. Tu aporte voluntario nos permite seguir manteniendo el sitio seguro y gratuito para todos.
+                        Donia no cobra comisiones a los organizadores. Tu aporte voluntario nos permite seguir operando de forma gratuita para las causas.
                       </p>
                       
                       <div className="grid grid-cols-4 gap-2 mb-4">
@@ -209,30 +212,24 @@ const DonatePage: React.FC = () => {
                            onClick={() => setTipPercentage(0)}
                            className={`py-2 rounded-xl text-[11px] font-black border transition-all ${tipPercentage === 0 ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
                         >
-                           Otro
+                           0%
                         </button>
-                      </div>
-                      
-                      <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tu aporte para Donia:</span>
-                        <span className="font-black text-slate-900 text-sm">${tipAmount.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Campos adicionales */}
                   <div className="space-y-4">
                     <input 
                       type="text" 
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-700 transition-all text-sm"
-                      placeholder="Tu nombre (puedes dejarlo en blanco)"
+                      placeholder="Tu nombre (opcional)"
                       value={donorName}
                       onChange={(e) => setDonorName(e.target.value)}
                     />
                     <textarea 
                       rows={3}
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-medium text-slate-600 resize-none transition-all text-sm"
-                      placeholder="Deja un mensaje de apoyo..."
+                      placeholder="Mensaje de apoyo..."
                       value={donorComment}
                       onChange={(e) => setDonorComment(e.target.value)}
                     />
@@ -282,33 +279,66 @@ const DonatePage: React.FC = () => {
           </div>
 
           {/* Resumen Derecha */}
-          <div className="md:col-span-4 h-fit sticky top-24">
-            <div className="bg-slate-900 text-white rounded-[32px] p-8 shadow-xl">
-              <h2 className="text-lg font-black mb-6 flex items-center gap-2">
-                Resumen de donación
-              </h2>
+          <div className="lg:col-span-5 h-fit sticky top-24">
+            <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-violet-100 overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50/50 rounded-bl-[100px] -z-0 pointer-events-none"></div>
               
-              <div className="space-y-4 mb-8">
-                <div className="flex justify-between items-center text-slate-400 text-sm">
-                  <span>Tu donación</span>
-                  <span className="font-bold text-white">${donationAmount.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center text-slate-400 text-sm">
-                  <span>Aporte a Donia</span>
-                  <span className="font-bold text-white">${tipAmount.toLocaleString()}</span>
-                </div>
-              </div>
-              
-              <div className="pt-6 border-t border-slate-800 flex justify-between items-center mb-8">
-                <span className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Total a pagar</span>
-                <span className="text-3xl font-black">${totalAmount.toLocaleString()}</span>
-              </div>
+              <div className="relative z-10">
+                <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                  <Receipt className="text-violet-600" size={24} />
+                  Resumen de tu aporte
+                </h2>
+                
+                <div className="space-y-5 mb-10">
+                  {/* Donación Base */}
+                  <div className="flex justify-between items-center group">
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Aporte a la Causa</span>
+                      <span className="text-slate-600 text-sm font-bold">100% para el beneficiario</span>
+                    </div>
+                    <span className="font-black text-slate-900 text-lg">${donationAmount.toLocaleString('es-CL')}</span>
+                  </div>
+                  
+                  {/* Aporte Donia (Subtotal) */}
+                  <div className="flex justify-between items-center group">
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Donia</span>
+                      <span className="text-slate-600 text-sm font-bold">Aporte voluntario ({tipPercentage}%)</span>
+                    </div>
+                    <span className="font-black text-slate-900 text-lg">${tipSubtotal.toLocaleString('es-CL')}</span>
+                  </div>
 
-              <div className="bg-slate-800/50 p-4 rounded-2xl flex gap-3 items-start">
-                <Info size={16} className="text-violet-400 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-slate-300 leading-relaxed font-medium">
-                  Tu donación ayuda directamente a la causa. El aporte a la plataforma es opcional pero vital para mantenernos en línea.
-                </p>
+                  {/* IVA solo sobre el aporte Donia */}
+                  <div className="flex justify-between items-center group">
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Impuestos</span>
+                      <span className="text-slate-600 text-sm font-bold">IVA Aporte Donia (19%)</span>
+                    </div>
+                    <span className="font-black text-slate-900 text-lg">${ivaAmount.toLocaleString('es-CL')}</span>
+                  </div>
+                </div>
+                
+                <div className="pt-8 border-t-2 border-dashed border-slate-100 mb-8">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <span className="font-black text-slate-400 uppercase text-[11px] tracking-[0.2em] mb-1 block">Total a pagar</span>
+                      <span className="text-4xl font-black text-slate-900 tracking-tighter">${totalAmount.toLocaleString('es-CL')}</span>
+                    </div>
+                    <div className="bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-2">
+                       <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                       <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seguro</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-5 rounded-2xl flex gap-4 items-start border border-slate-100">
+                  <div className="bg-white p-2 rounded-lg shadow-sm text-violet-600">
+                    <Info size={16} />
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                    El monto base solicitado va íntegro a la campaña. El IVA aplicado corresponde únicamente al aporte voluntario realizado a la plataforma Donia para cubrir gastos de operación.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
