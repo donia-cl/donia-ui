@@ -9,27 +9,27 @@ export class CampaignService {
   private isLocalMode: boolean = false;
 
   private constructor() {
-    // Buscamos las llaves con todos los prefijos posibles para compatibilidad máxima con Vercel/React
-    const sUrl = process.env.SUPABASE_URL || 
-                 process.env.REACT_APP_SUPABASE_URL || 
+    // Siguiendo la documentación de React/Vercel que proporcionaste:
+    const sUrl = process.env.REACT_APP_SUPABASE_URL || 
+                 process.env.SUPABASE_URL || 
                  process.env.NEXT_PUBLIC_SUPABASE_URL;
                  
-    const sKey = process.env.SUPABASE_ANON_KEY || 
+    const sKey = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || 
                  process.env.REACT_APP_SUPABASE_ANON_KEY || 
-                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-                 process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+                 process.env.SUPABASE_ANON_KEY ||
+                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (sUrl && sKey) {
       try {
         this.supabase = createClient(sUrl, sKey);
         this.isLocalMode = false;
-        console.log("Donia: Integración de nube inicializada correctamente.");
+        console.log("Donia: Conexión con Supabase establecida.");
       } catch (err) {
-        console.warn("Donia: Fallo al conectar con Supabase, activando modo local.");
+        console.warn("Donia: Error al inicializar Supabase, activando modo local.");
         this.isLocalMode = true;
       }
     } else {
-      console.warn("Donia: Faltan llaves de configuración. Operando en modo local (LocalStorage).");
+      console.warn("Donia: No se detectaron llaves de API (Supabase). Operando en modo local.");
       this.isLocalMode = true;
     }
   }
@@ -42,7 +42,8 @@ export class CampaignService {
   }
 
   public checkAiAvailability(): boolean {
-    return !!process.env.API_KEY;
+    // La API Key de Gemini suele inyectarse como API_KEY o con prefijo en React
+    return !!(process.env.API_KEY || process.env.REACT_APP_API_KEY);
   }
 
   public getConnectionStatus(): 'cloud' | 'local' {
@@ -81,7 +82,6 @@ export class CampaignService {
             donantesCount: c.donantes_count
           }));
         }
-        if (error) throw error;
       } catch (e) {
         console.error("Donia Fetch Error:", e);
       }
@@ -224,16 +224,16 @@ export class CampaignService {
   }
 
   async polishStory(story: string): Promise<string> {
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.API_KEY || process.env.REACT_APP_API_KEY;
     if (!apiKey) return story;
 
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Optimiza este texto para una campaña de recaudación de fondos. Hazlo más profesional, humano y persuasivo. Mantén el idioma original: "${story}"`,
+        contents: `Mejora y humaniza este texto para una campaña solidaria en Chile: "${story}"`,
         config: {
-          systemInstruction: "Eres un redactor senior experto en recaudación de fondos y storytelling emocional.",
+          systemInstruction: "Eres un redactor experto en causas sociales. Tu objetivo es hacer que el relato sea más empático y profesional.",
           temperature: 0.7,
         },
       });
