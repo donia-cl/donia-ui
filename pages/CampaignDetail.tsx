@@ -17,7 +17,8 @@ import {
   ArrowRight,
   X,
   MessageSquare,
-  Heart
+  Heart,
+  UserCheck
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, Donation } from '../types';
@@ -100,21 +101,6 @@ const CampaignDetail: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-slate-100 mb-8">
-              <div className="flex flex-wrap gap-8 mb-10 pb-6 border-b border-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-violet-50 rounded-lg flex items-center justify-center text-violet-600">
-                    <MapPin size={18} />
-                  </div>
-                  <span className="font-bold text-slate-700 text-sm">{campaign.ubicacion}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                   <div className="w-9 h-9 bg-sky-50 rounded-lg flex items-center justify-center text-sky-600">
-                    <Users size={18} />
-                  </div>
-                  <span className="font-bold text-slate-700 text-sm">{campaign.donantesCount} donantes</span>
-                </div>
-              </div>
-
               <div className="mb-10">
                 <h2 className="text-xl font-black text-slate-900 mb-5 tracking-tight">La historia</h2>
                 <div className="text-slate-600 leading-relaxed text-base whitespace-pre-wrap font-medium">
@@ -122,13 +108,18 @@ const CampaignDetail: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-sky-50 rounded-2xl p-6 border border-sky-100 flex items-center gap-4">
-                <ShieldCheck size={32} className="text-sky-600 shrink-0" />
-                <div>
-                  <h3 className="font-black text-sky-900 uppercase text-xs tracking-widest mb-1">Causa Verificada</h3>
-                  <p className="text-sky-800 text-sm font-medium">
-                    Los fondos serán destinados a <span className="font-black underline">{campaign.beneficiarioNombre}</span> ({campaign.beneficiarioRelacion}).
-                  </p>
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck size={20} className="text-emerald-500" />
+                  <span className="text-slate-500 font-bold text-sm">Donación segura protegida por Donia</span>
+                </div>
+                <div className="flex -space-x-2">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-200" />
+                  ))}
+                  <div className="w-8 h-8 rounded-full border-2 border-white bg-violet-600 flex items-center justify-center text-[10px] text-white font-black">
+                    +{totalDonations}
+                  </div>
                 </div>
               </div>
             </div>
@@ -192,8 +183,8 @@ const CampaignDetail: React.FC = () => {
           </div>
 
           {/* Sidebar de Resumen y Donación */}
-          <div className="lg:sticky lg:top-24 h-fit">
-            <div className="bg-white rounded-3xl p-8 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100">
+          <div className="lg:sticky lg:top-24 h-fit space-y-6">
+            <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/50 border border-slate-100">
               <div className="mb-8">
                 <div className="flex justify-between items-end mb-4">
                   <div>
@@ -219,13 +210,49 @@ const CampaignDetail: React.FC = () => {
                   Contribuir ahora
                 </button>
 
-                <div className="pt-8 border-t border-slate-100">
-                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 block">Compartir causa</span>
-                  <div className="flex gap-3">
-                    <button onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(campaign.titulo + " " + window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={22} /></button>
-                    <button onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Facebook size={22} /></button>
-                    <button onClick={() => window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-slate-50 text-slate-900 rounded-xl flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all shadow-sm"><Twitter size={22} /></button>
-                    <button onClick={copyToClipboard} className={`flex-1 aspect-square rounded-xl flex items-center justify-center transition-all shadow-sm ${shareStatus === 'copied' ? 'bg-emerald-600 text-white' : 'bg-violet-50 text-violet-600 hover:bg-violet-600 hover:text-white'}`}>{shareStatus === 'copied' ? <Check size={22} /> : <LinkIcon size={22} />}</button>
+                {/* Bloque de Información de la Causa (NUEVO) */}
+                <div className="pt-8 border-t border-slate-100 space-y-6">
+                  <div className="bg-sky-50/50 rounded-2xl p-5 border border-sky-100">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center text-sky-600">
+                        <ShieldCheck size={18} />
+                      </div>
+                      <span className="text-[11px] font-black text-sky-900 uppercase tracking-widest">Causa Verificada</span>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex items-start gap-3">
+                        <UserCheck size={16} className="text-slate-400 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Beneficiario</p>
+                          <p className="text-sm font-bold text-slate-700">{campaign.beneficiarioNombre}</p>
+                          <p className="text-xs text-slate-500">Relación: {campaign.beneficiarioRelacion}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <MapPin size={16} className="text-slate-400 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Ubicación</p>
+                          <p className="text-sm font-bold text-slate-700">{campaign.ubicacion}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <Users size={16} className="text-slate-400 mt-0.5" />
+                        <div>
+                          <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Comunidad</p>
+                          <p className="text-sm font-bold text-slate-700">{campaign.donantesCount} personas han donado</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 block">Compartir causa</span>
+                    <div className="flex gap-3">
+                      <button onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(campaign.titulo + " " + window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all shadow-sm"><MessageCircle size={20} /></button>
+                      <button onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Facebook size={20} /></button>
+                      <button onClick={() => window.open(`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}`, '_blank')} className="flex-1 aspect-square bg-slate-50 text-slate-900 rounded-xl flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all shadow-sm"><Twitter size={20} /></button>
+                      <button onClick={copyToClipboard} className={`flex-1 aspect-square rounded-xl flex items-center justify-center transition-all shadow-sm ${shareStatus === 'copied' ? 'bg-emerald-600 text-white' : 'bg-violet-50 text-violet-600 hover:bg-violet-600 hover:text-white'}`}>{shareStatus === 'copied' ? <Check size={20} /> : <LinkIcon size={20} />}</button>
+                    </div>
                   </div>
                 </div>
               </div>
