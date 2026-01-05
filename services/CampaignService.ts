@@ -34,6 +34,8 @@ export class CampaignService {
       imagenUrl: c.imagen_url || c.imagenUrl || 'https://picsum.photos/800/600',
       estado: c.estado || 'activa',
       donantesCount: Number(c.donantes_count || c.donantesCount || 0),
+      beneficiarioNombre: c.beneficiario_nombre || c.beneficiarioNombre,
+      beneficiarioRelacion: c.beneficiario_relacion || c.beneficiarioRelacion,
       donations: c.donations ? c.donations.map((d: any) => ({
         id: d.id,
         campaignId: d.campaign_id,
@@ -48,15 +50,10 @@ export class CampaignService {
   private async safeFetch(url: string, options?: RequestInit): Promise<any> {
     try {
       const response = await fetch(url, options);
-      
       if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`El endpoint ${url} no fue encontrado. Asegúrate de que las funciones API estén desplegadas.`);
-        }
         const errorText = await response.text();
         throw new Error(errorText || `Error ${response.status}`);
       }
-
       const result = await response.json();
       if (result.success === false) throw new Error(result.error);
       return result;
@@ -64,6 +61,15 @@ export class CampaignService {
       console.error(`[CampaignService] Error en ${url}:`, e.message);
       throw e;
     }
+  }
+
+  async uploadImage(base64: string, fileName: string): Promise<string> {
+    const result = await this.safeFetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64, name: fileName }),
+    });
+    return result.url;
   }
 
   async getCampaigns(): Promise<CampaignData[]> {

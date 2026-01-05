@@ -15,7 +15,8 @@ import {
   Facebook,
   Twitter,
   Link as LinkIcon,
-  Check
+  Check,
+  UserCheck
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, Donation } from '../types';
@@ -80,7 +81,6 @@ const CampaignDetail: React.FC = () => {
     }
   };
 
-  // Funciones de Compartir
   const shareUrl = window.location.href;
   const shareText = campaign ? `Apoya esta causa en Donia: ${campaign.titulo}` : 'Apoya esta causa en Donia';
 
@@ -148,6 +148,23 @@ const CampaignDetail: React.FC = () => {
               </div>
             </div>
 
+            {/* Tarjeta de Transparencia (Desktop) */}
+            <div className="bg-sky-50 rounded-3xl p-6 border-2 border-sky-100 mb-10 flex flex-col md:flex-row items-center gap-6">
+              <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-sky-600 shadow-sm shrink-0">
+                <ShieldCheck size={32} />
+              </div>
+              <div className="text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start gap-2 mb-1">
+                  <h3 className="font-black text-sky-900 uppercase text-xs tracking-widest">Causa Verificada</h3>
+                  <Check size={14} className="text-emerald-500" />
+                </div>
+                <p className="text-sky-800 text-sm font-medium">
+                  Fondos destinados a: <span className="font-black underline">{campaign.beneficiarioNombre}</span>
+                  <span className="text-sky-600/70 ml-2 font-bold text-xs uppercase">({campaign.beneficiarioRelacion})</span>
+                </p>
+              </div>
+            </div>
+
             <div className="bg-white rounded-[32px] p-8 md:p-12 shadow-sm border border-slate-100 mb-10">
               <div className="flex flex-wrap gap-8 mb-10 pb-8 border-b border-slate-50">
                 <div className="flex items-center gap-3">
@@ -171,7 +188,6 @@ const CampaignDetail: React.FC = () => {
                 </div>
               </div>
 
-              {/* Sección de Mensajes de Apoyo */}
               <div className="pt-10 border-t border-slate-100">
                 <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight flex items-center gap-3">
                   <MessageCircle className="text-violet-600" />
@@ -286,7 +302,6 @@ const CampaignDetail: React.FC = () => {
                   {donating ? 'Donando...' : <><Heart size={24} className="fill-current" /> Donar ahora</>}
                 </button>
 
-                {/* Nueva Sección de Compartir */}
                 <div className="pt-6 border-t border-slate-100">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <Share2 size={12} /> Compartir esta causa
@@ -295,35 +310,28 @@ const CampaignDetail: React.FC = () => {
                     <button 
                       onClick={shareOnWhatsApp}
                       className="aspect-square bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all group"
-                      title="Compartir en WhatsApp"
                     >
-                      <MessageCircle className="group-hover:scale-110 transition-transform" size={24} />
+                      <MessageCircle size={24} />
                     </button>
                     <button 
                       onClick={shareOnFacebook}
                       className="aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all group"
-                      title="Compartir en Facebook"
                     >
-                      <Facebook className="group-hover:scale-110 transition-transform" size={24} />
+                      <Facebook size={24} />
                     </button>
                     <button 
                       onClick={shareOnX}
                       className="aspect-square bg-slate-50 text-slate-900 rounded-2xl flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all group"
-                      title="Compartir en X"
                     >
-                      <Twitter className="group-hover:scale-110 transition-transform" size={24} />
+                      <Twitter size={24} />
                     </button>
                     <button 
                       onClick={copyToClipboard}
                       className={`aspect-square rounded-2xl flex items-center justify-center transition-all group ${shareStatus === 'copied' ? 'bg-emerald-600 text-white' : 'bg-violet-50 text-violet-600 hover:bg-violet-600 hover:text-white'}`}
-                      title="Copiar enlace"
                     >
-                      {shareStatus === 'copied' ? <Check size={24} /> : <LinkIcon className="group-hover:scale-110 transition-transform" size={24} />}
+                      {shareStatus === 'copied' ? <Check size={24} /> : <LinkIcon size={24} />}
                     </button>
                   </div>
-                  {shareStatus === 'copied' && (
-                    <p className="text-[10px] font-bold text-emerald-600 mt-2 text-center animate-pulse">¡Enlace copiado al portapapeles!</p>
-                  )}
                 </div>
               </div>
 
