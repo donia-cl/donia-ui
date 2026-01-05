@@ -1,8 +1,22 @@
 
-// Add missing React import to fix namespace error on line 8
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, MapPin, Users, Heart, Share2, ShieldCheck, User, MessageCircle, AlertCircle, Calendar } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  MapPin, 
+  Users, 
+  Heart, 
+  Share2, 
+  ShieldCheck, 
+  User, 
+  MessageCircle, 
+  AlertCircle, 
+  Calendar,
+  Facebook,
+  Twitter,
+  Link as LinkIcon,
+  Check
+} from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, Donation } from '../types';
 
@@ -16,7 +30,7 @@ const CampaignDetail: React.FC = () => {
   
   const [donorName, setDonorName] = useState<string>('');
   const [donorComment, setDonorComment] = useState<string>('');
-  const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'shared'>('idle');
+  const [shareStatus, setShareStatus] = useState<'idle' | 'copied'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const service = CampaignService.getInstance();
@@ -53,8 +67,7 @@ const CampaignDetail: React.FC = () => {
         donorComment.trim()
       );
       
-      await fetchDetail(); // Recargar datos para ver la nueva donación
-      
+      await fetchDetail(); 
       alert("¡Tu donación ha sido recibida! Muchas gracias por apoyar esta causa.");
       
       setDonorName('');
@@ -67,23 +80,32 @@ const CampaignDetail: React.FC = () => {
     }
   };
 
-  const handleShare = async () => {
-    if (!campaign) return;
+  // Funciones de Compartir
+  const shareUrl = window.location.href;
+  const shareText = campaign ? `Apoya esta causa en Donia: ${campaign.titulo}` : 'Apoya esta causa en Donia';
+
+  const shareOnWhatsApp = () => {
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText + " " + shareUrl)}`;
+    window.open(url, '_blank');
+  };
+
+  const shareOnFacebook = () => {
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    window.open(url, '_blank');
+  };
+
+  const shareOnX = () => {
+    const url = `https://twitter.com/intent/tweet?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`;
+    window.open(url, '_blank');
+  };
+
+  const copyToClipboard = async () => {
     try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `Donia: ${campaign.titulo}`,
-          text: `Apoya esta causa: ${campaign.titulo}`,
-          url: window.location.href,
-        });
-        setShareStatus('shared');
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        setShareStatus('copied');
-      }
-      setTimeout(() => setShareStatus('idle'), 3000);
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatus('copied');
+      setTimeout(() => setShareStatus('idle'), 2000);
     } catch (err) {
-      console.warn("Error sharing:", err);
+      console.error("Error al copiar:", err);
     }
   };
 
@@ -264,12 +286,45 @@ const CampaignDetail: React.FC = () => {
                   {donating ? 'Donando...' : <><Heart size={24} className="fill-current" /> Donar ahora</>}
                 </button>
 
-                <button 
-                  onClick={handleShare}
-                  className="w-full py-4 font-bold rounded-2xl border-2 flex items-center justify-center gap-2 border-slate-100 text-slate-600 hover:bg-slate-50"
-                >
-                  {shareStatus === 'copied' ? '¡Enlace copiado!' : shareStatus === 'shared' ? '¡Compartido!' : <><Share2 size={18} /> Compartir causa</>}
-                </button>
+                {/* Nueva Sección de Compartir */}
+                <div className="pt-6 border-t border-slate-100">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <Share2 size={12} /> Compartir esta causa
+                  </p>
+                  <div className="grid grid-cols-4 gap-3">
+                    <button 
+                      onClick={shareOnWhatsApp}
+                      className="aspect-square bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center hover:bg-emerald-600 hover:text-white transition-all group"
+                      title="Compartir en WhatsApp"
+                    >
+                      <MessageCircle className="group-hover:scale-110 transition-transform" size={24} />
+                    </button>
+                    <button 
+                      onClick={shareOnFacebook}
+                      className="aspect-square bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all group"
+                      title="Compartir en Facebook"
+                    >
+                      <Facebook className="group-hover:scale-110 transition-transform" size={24} />
+                    </button>
+                    <button 
+                      onClick={shareOnX}
+                      className="aspect-square bg-slate-50 text-slate-900 rounded-2xl flex items-center justify-center hover:bg-slate-900 hover:text-white transition-all group"
+                      title="Compartir en X"
+                    >
+                      <Twitter className="group-hover:scale-110 transition-transform" size={24} />
+                    </button>
+                    <button 
+                      onClick={copyToClipboard}
+                      className={`aspect-square rounded-2xl flex items-center justify-center transition-all group ${shareStatus === 'copied' ? 'bg-emerald-600 text-white' : 'bg-violet-50 text-violet-600 hover:bg-violet-600 hover:text-white'}`}
+                      title="Copiar enlace"
+                    >
+                      {shareStatus === 'copied' ? <Check size={24} /> : <LinkIcon className="group-hover:scale-110 transition-transform" size={24} />}
+                    </button>
+                  </div>
+                  {shareStatus === 'copied' && (
+                    <p className="text-[10px] font-bold text-emerald-600 mt-2 text-center animate-pulse">¡Enlace copiado al portapapeles!</p>
+                  )}
+                </div>
               </div>
 
               <div className="mt-8 p-6 bg-sky-50 rounded-3xl border border-sky-100 flex gap-4">
