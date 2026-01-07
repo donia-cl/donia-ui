@@ -24,10 +24,6 @@ export class CampaignService {
     return CampaignService.instance;
   }
 
-  /**
-   * Garantiza que la configuración se cargue una sola vez y 
-   * permite que otros métodos esperen a que termine.
-   */
   public async initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
@@ -41,7 +37,6 @@ export class CampaignService {
 
           if (url && key) {
             this.supabase = createClient(url, key);
-            console.log("[CampaignService] Conectado a Supabase.");
           }
           this.aiEnabled = !!config.aiEnabled;
         }
@@ -89,55 +84,50 @@ export class CampaignService {
 
   async uploadImage(base64: string, fileName: string): Promise<string> {
     await this.initialize();
-    if (!this.supabase) throw new Error("Base de datos no disponible.");
-    const base64Data = base64.split(',')[1];
-    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    const fileExt = fileName.split('.').pop() || 'jpg';
-    const path = `campaigns/${Date.now()}.${fileExt}`;
-
-    const { data, error } = await this.supabase.storage
-      .from('campaign-images')
-      .upload(path, binaryData, { contentType: 'image/jpeg', upsert: true });
-
-    if (error) throw error;
-    const { data: { publicUrl } } = this.supabase.storage.from('campaign-images').getPublicUrl(path);
-    return publicUrl;
+    try {
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64, name: fileName })
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error);
+      return data.url;
+    } catch (e) {
+      console.error("Error subiendo imagen:", e);
+      throw e;
+    }
   }
 
   async getCampaigns(): Promise<CampaignData[]> {
     await this.initialize();
-    if (!this.supabase) return [];
     try {
-      const { data, error } = await this.supabase
-        .from('campaigns')
-        .select('*')
-        .order('fecha_creacion', { ascending: false });
-      if (error) throw error;
-      return (data || []).map(c => this.mapCampaign(c));
+      const resp = await fetch('/api/campaigns');
+      const json = await resp.json();
+      return (json.data || []).map((c: any) => this.mapCampaign(c));
     } catch (e) {
-      console.error("Error obteniendo campañas:", e);
+      return [];
+    }
+  }
+
+  async getUserCampaigns(userId: string): Promise<CampaignData[]> {
+    await this.initialize();
+    try {
+      const resp = await fetch(`/api/user-campaigns?userId=${userId}`);
+      const json = await resp.json();
+      return (json.data || []).map((c: any) => this.mapCampaign(c));
+    } catch (e) {
       return [];
     }
   }
 
   async getCampaignById(id: string): Promise<CampaignData | null> {
     await this.initialize();
-    if (!this.supabase) return null;
     try {
-      const { data: campaign, error: cError } = await this.supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', id)
-        .single();
-      if (cError) throw cError;
-
-      const { data: donations } = await this.supabase
-        .from('donations')
-        .select('*')
-        .eq('campaign_id', id)
-        .order('fecha', { ascending: false });
-
-      return this.mapCampaign({ ...campaign, donations: donations || [] });
+      const resp = await fetch(`/api/campaign-detail?id=${id}`);
+      const json = await resp.json();
+      if (!json.success) return null;
+      return this.mapCampaign(json.data);
     } catch (e) {
       return null;
     }
@@ -145,61 +135,64 @@ export class CampaignService {
 
   async createCampaign(payload: any): Promise<CampaignData> {
     await this.initialize();
-    if (!this.supabase) throw new Error("Base de datos no disponible.");
-    const { data, error } = await this.supabase
-      .from('campaigns')
-      .insert([{
-        titulo: payload.titulo,
-        historia: payload.historia,
-        monto: Number(payload.monto),
-        categoria: payload.categoria,
-        ubicacion: payload.ubicacion,
-        imagen_url: payload.imagenUrl,
-        beneficiario_nombre: payload.beneficiarioNombre,
-        beneficiario_relacion: payload.beneficiarioRelacion,
-        recaudado: 0,
-        donantes_count: 0,
-        estado: 'activa'
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return this.mapCampaign(data);
+    const response = await fetch('/api/campaigns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error);
+    return this.mapCampaign(json.data);
   }
 
-  async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
-    try {
-      const response = await fetch('/api/process-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentData, campaignId, metadata }),
-      });
-      if (!response.ok) throw new Error("Error en API de pago");
-      return await response.json();
-    } catch (e) {
-       console.warn("Simulando aprobación de pago.");
-       return { status: 'approved' };
-    }
+  async updateCampaign(id: string, userId: string, updates: any): Promise<CampaignData> {
+    await this.initialize();
+    const response = await fetch('/api/update-campaign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, userId, updates })
+    });
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error);
+    return this.mapCampaign(json.data);
+  }
+
+  async deleteCampaign(id: string, userId: string): Promise<boolean> {
+    await this.initialize();
+    const response = await fetch('/api/delete-campaign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, userId })
+    });
+    const json = await response.json();
+    return json.success;
   }
 
   async polishStory(story: string): Promise<string> {
     if (!this.aiEnabled) return story;
-    
     try {
       const response = await fetch('/api/polish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ story }),
       });
-      
-      if (!response.ok) throw new Error("Error en el servidor de pulido");
-      
       const data = await response.json();
       return data.text || story;
     } catch (e) {
-      console.error("[CampaignService] Error al pulir historia via API:", e);
       return story;
     }
+  }
+
+  // Fix: Added processPayment method to handle Mercado Pago payment processing
+  async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
+    await this.initialize();
+    const response = await fetch('/api/process-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentData, campaignId, metadata })
+    });
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error || 'Error procesando el pago');
+    return json;
   }
 }

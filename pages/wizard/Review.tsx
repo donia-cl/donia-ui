@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, CheckCircle, Edit, Tag, HeartHandshake, AlertCircle, RefreshCcw, ShieldCheck, UserCheck } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
+import { useAuth } from '../../context/AuthContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
 
@@ -29,6 +30,7 @@ const ReviewItem = ({ icon: Icon, label, value, onEdit }: { icon: any, label: st
 const CreateReview: React.FC = () => {
   const navigate = useNavigate();
   const { campaign, resetCampaign } = useCampaign();
+  const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,12 +38,15 @@ const CreateReview: React.FC = () => {
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
+    if (!user) {
+      setError("Debes estar autenticado para publicar una campaña.");
+      return;
+    }
     
     setIsSubmitting(true);
     setError(null);
     
     try {
-      // Llamada al servicio con TODOS los campos necesarios
       const result = await service.createCampaign({
         titulo: campaign.titulo || '',
         historia: campaign.historia || '',
@@ -50,7 +55,8 @@ const CreateReview: React.FC = () => {
         ubicacion: campaign.ubicacion || 'Chile',
         imagenUrl: campaign.imagenUrl || '',
         beneficiarioNombre: campaign.beneficiarioNombre || '',
-        beneficiarioRelacion: campaign.beneficiarioRelacion || 'Yo mismo'
+        beneficiarioRelacion: campaign.beneficiarioRelacion || 'Yo mismo',
+        user_id: user.id // Vinculamos la campaña al usuario
       });
       
       if (result && result.id) {
@@ -79,11 +85,11 @@ const CreateReview: React.FC = () => {
         <button 
           onClick={() => {
             resetCampaign();
-            navigate('/explorar');
+            navigate('/dashboard'); // Al Dashboard después de crear
           }}
           className="bg-slate-900 text-white px-10 py-5 rounded-[24px] font-black text-xl hover:bg-slate-800 shadow-2xl transition-all active:scale-95"
         >
-          Ir al explorador
+          Ir a mi panel
         </button>
       </div>
     );

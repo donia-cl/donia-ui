@@ -3,13 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  // Preferimos usar la service_role_key para operaciones de backend
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
@@ -30,7 +29,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'POST') {
-      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion } = req.body;
+      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id } = req.body;
       
       const { data, error } = await supabase
         .from('campaigns')
@@ -43,6 +42,7 @@ export default async function handler(req: any, res: any) {
           imagen_url: imagenUrl,
           beneficiario_nombre: beneficiarioNombre,
           beneficiario_relacion: beneficiarioRelacion,
+          user_id: user_id, // Guardamos quien la creó
           recaudado: 0,
           donantes_count: 0,
           estado: 'activa'

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Heart, Database, Cpu, Activity, User, LogOut, ChevronDown } from 'lucide-react';
+import { Heart, Database, Cpu, Activity, User, LogOut, ChevronDown, LayoutDashboard } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { useAuth } from '../context/AuthContext';
 
@@ -61,7 +61,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     {showUserMenu && (
                       <>
                         <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)}></div>
-                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-20 animate-in fade-in zoom-in-95 duration-100">
+                        <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-20 animate-in fade-in zoom-in-95 duration-100">
+                          <Link 
+                            to="/dashboard" 
+                            onClick={() => setShowUserMenu(false)}
+                            className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-violet-50 hover:text-violet-600 transition-colors"
+                          >
+                            <LayoutDashboard size={16} /> Mi Panel de Control
+                          </Link>
                           <Link 
                             to="/crear" 
                             onClick={() => setShowUserMenu(false)}
@@ -69,6 +76,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                           >
                             <Heart size={16} /> Crear campaña
                           </Link>
+                          <div className="h-px bg-slate-50 my-1"></div>
                           <button 
                             onClick={handleLogout}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 transition-colors"
