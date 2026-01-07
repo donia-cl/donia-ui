@@ -72,9 +72,12 @@ export class AuthService {
   async signInWithGoogle() {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
+    // Usamos el origen actual para la redirección
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin }
+      options: { 
+        redirectTo: window.location.origin 
+      }
     });
     if (error) throw error;
     return data;
