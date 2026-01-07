@@ -13,7 +13,8 @@ import {
   UserCheck, 
   Database,
   Lock,
-  Loader2
+  Loader2,
+  Check
 } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useAuth } from '../../context/AuthContext';
@@ -40,20 +41,20 @@ const ReviewItem = ({ icon: Icon, label, value, onEdit }: { icon: any, label: st
   </div>
 );
 
-const ClassicCheckbox = ({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) => (
-  <label className="flex items-start gap-3 cursor-pointer group py-1">
-    <div className="relative mt-0.5 shrink-0">
+const VistoBuenoCheckbox = ({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) => (
+  <label className="flex items-center gap-4 cursor-pointer group py-3 px-6 bg-white border border-slate-100 rounded-2xl hover:border-violet-200 hover:bg-violet-50/30 transition-all shadow-sm">
+    <div className="relative shrink-0">
       <input
         type="checkbox"
         className="peer hidden"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <div className="w-5 h-5 border-2 border-slate-300 rounded-md bg-white peer-checked:bg-violet-600 peer-checked:border-violet-600 transition-all flex items-center justify-center">
-        <svg className="w-3 h-3 text-white scale-0 peer-checked:scale-100 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      <div className="w-7 h-7 border-2 border-slate-200 rounded-full bg-white peer-checked:bg-violet-600 peer-checked:border-violet-600 transition-all flex items-center justify-center shadow-inner">
+        <Check className="w-4 h-4 text-white scale-0 peer-checked:scale-100 transition-transform duration-300" strokeWidth={4} />
       </div>
     </div>
-    <span className="text-xs font-bold text-slate-600 leading-tight group-hover:text-slate-900 transition-colors select-none">
+    <span className={`text-sm font-bold transition-colors select-none ${checked ? 'text-slate-900' : 'text-slate-500'}`}>
       {label}
     </span>
   </label>
@@ -68,7 +69,6 @@ const CreateReview: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // States para checkboxes de cumplimiento
   const [declarations, setDeclarations] = useState({
     veraz: false,
     verificacion: false,
@@ -153,19 +153,13 @@ const CreateReview: React.FC = () => {
       </button>
 
       <div className="text-center mb-16">
-        <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Revisa y publica</h1>
-        <p className="text-slate-500 font-medium text-lg">Confirma los detalles finales y lanza tu campaña a la comunidad.</p>
+        <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">Casi hemos terminado</h1>
+        <p className="text-slate-500 font-medium text-lg">Confirma que toda la información es correcta y firma tu compromiso.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+        {/* Columna Izquierda: Datos */}
         <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl p-10 relative overflow-hidden h-fit">
-          {isSubmitting && (
-            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
-              <Loader2 className="w-12 h-12 text-violet-600 animate-spin mb-4" />
-              <span className="font-black text-violet-600 uppercase tracking-widest text-sm">Publicando tu historia...</span>
-            </div>
-          )}
-
           <ReviewItem 
             icon={Tag}
             label="Título de la causa"
@@ -180,106 +174,112 @@ const CreateReview: React.FC = () => {
           />
           <ReviewItem 
             icon={UserCheck}
-            label="Beneficiario Final"
+            label="Beneficiario"
             value={`${campaign.beneficiarioNombre} (${campaign.beneficiarioRelacion})`}
             onEdit={() => navigate('/crear/detalles')}
           />
-          
-          <div className="py-8 border-t border-slate-50 mt-4">
-             <span className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Vista previa del relato</span>
-             <div className="bg-slate-50 p-6 rounded-3xl text-slate-600 leading-relaxed text-sm italic font-medium">
-               "{campaign.historia?.substring(0, 400)}..."
-             </div>
-          </div>
         </div>
 
-        <div className="space-y-8 flex flex-col">
-          <div className="bg-white rounded-[40px] border border-slate-100 shadow-lg overflow-hidden">
+        {/* Columna Derecha: Imagen y Preview Historia */}
+        <div className="space-y-6">
+          <div className="bg-white rounded-[40px] border border-slate-100 shadow-lg overflow-hidden h-fit">
              <div className="aspect-video relative">
                 <img src={campaign.imagenUrl} className="w-full h-full object-cover" alt="Portada" />
                 <div className="absolute top-4 left-4">
-                   <span className="bg-violet-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg">
+                   <span className="bg-violet-600 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">
                      {campaign.categoria}
                    </span>
                 </div>
              </div>
-             <div className="p-8">
-                <h3 className="font-black text-slate-900 mb-2">Imagen de portada</h3>
-                <p className="text-slate-400 text-xs font-bold leading-relaxed">Esta es la primera impresión que tendrán tus futuros donantes.</p>
+             <div className="p-6">
+                <span className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Relato (Fragmento)</span>
+                <p className="text-slate-600 text-sm leading-relaxed italic line-clamp-3">"{campaign.historia}"</p>
              </div>
-          </div>
-
-          <div className="mt-auto space-y-8">
-            {/* Declaraciones Juradas Clásicas */}
-            <div className="bg-slate-50 rounded-[32px] p-8 border border-slate-200">
-               <div className="flex items-center gap-3 mb-6">
-                  <ShieldCheck size={20} className="text-sky-600" />
-                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900">Compromiso con la Verdad</h3>
-               </div>
-               
-               <div className="space-y-4">
-                  <ClassicCheckbox 
-                    checked={declarations.veraz}
-                    onChange={(val) => setDeclarations({...declarations, veraz: val})}
-                    label="Declaro que la información es veraz"
-                  />
-                  <ClassicCheckbox 
-                    checked={declarations.verificacion}
-                    onChange={(val) => setDeclarations({...declarations, verificacion: val})}
-                    label="Acepto que Donia puede solicitar verificación"
-                  />
-                  <ClassicCheckbox 
-                    checked={declarations.pausar}
-                    onChange={(val) => setDeclarations({...declarations, pausar: val})}
-                    label="Acepto que Donia puede pausar la campaña ante irregularidades"
-                  />
-               </div>
-            </div>
-
-            {error && (
-              <div className={`p-6 ${isSchemaError ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-rose-50 border-rose-100 text-rose-900'} border-2 rounded-[32px] flex flex-col md:flex-row gap-6 items-center animate-in slide-in-from-top-4 shadow-sm`}>
-                <div className={`w-10 h-10 bg-white rounded-xl flex items-center justify-center ${isSchemaError ? 'text-amber-500' : 'text-rose-500'} shadow-sm shrink-0`}>
-                  {isSchemaError ? <Database size={20} /> : <AlertCircle size={20} />}
-                </div>
-                <div className="flex-grow text-center md:text-left">
-                  <p className="font-black text-[10px] uppercase tracking-widest mb-1">{isSchemaError ? 'Error de Base de Datos' : 'Error de validación'}</p>
-                  <p className="text-xs font-bold opacity-80">{error}</p>
-                </div>
-                <button 
-                  onClick={handleSubmit}
-                  className={`flex items-center gap-2 ${isSchemaError ? 'bg-amber-500' : 'bg-rose-500'} text-white px-5 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-md`}
-                >
-                  <RefreshCcw size={14} /> Reintentar
-                </button>
-              </div>
-            )}
-
-            {!isSuccess && (
-              <button 
-                onClick={handleSubmit}
-                disabled={isSubmitting || !allChecked}
-                className={`w-full py-6 rounded-[28px] font-black text-2xl transition-all flex items-center justify-center gap-3 shadow-2xl ${
-                  isSubmitting || !allChecked
-                  ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' 
-                  : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95'
-                }`}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="animate-spin" size={28} />
-                    Publicando...
-                  </>
-                ) : (
-                  <>
-                    <Lock size={24} className={allChecked ? 'text-violet-200' : 'text-slate-300'} />
-                    Lanzar mi campaña
-                  </>
-                )}
-              </button>
-            )}
           </div>
         </div>
       </div>
+
+      {/* SECCIÓN COMPROMISO: Ancho Completo */}
+      <div className="mb-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <div className="bg-slate-50 border border-slate-200 rounded-[40px] p-8 md:p-12 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-100/50 rounded-bl-full opacity-50"></div>
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-4 mb-8">
+              <div className="w-12 h-12 bg-violet-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-violet-100">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Compromiso de Transparencia</h2>
+                <p className="text-slate-500 font-medium text-sm">Para publicar, debes validar estos tres puntos finales.</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <VistoBuenoCheckbox 
+                checked={declarations.veraz}
+                onChange={(val) => setDeclarations({...declarations, veraz: val})}
+                label="Declaro que la información es veraz"
+              />
+              <VistoBuenoCheckbox 
+                checked={declarations.verificacion}
+                onChange={(val) => setDeclarations({...declarations, verificacion: val})}
+                label="Acepto verificación de Donia"
+              />
+              <VistoBuenoCheckbox 
+                checked={declarations.pausar}
+                onChange={(val) => setDeclarations({...declarations, pausar: val})}
+                label="Acepto pausa por irregularidades"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Errores de API */}
+      {error && (
+        <div className={`mb-8 p-6 ${isSchemaError ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-rose-50 border-rose-100 text-rose-900'} border-2 rounded-[32px] flex flex-col md:flex-row gap-6 items-center animate-in slide-in-from-top-4 shadow-sm`}>
+          <div className={`w-10 h-10 bg-white rounded-xl flex items-center justify-center ${isSchemaError ? 'text-amber-500' : 'text-rose-500'} shadow-sm shrink-0`}>
+            {isSchemaError ? <Database size={20} /> : <AlertCircle size={20} />}
+          </div>
+          <div className="flex-grow text-center md:text-left">
+            <p className="font-black text-[10px] uppercase tracking-widest mb-1">{isSchemaError ? 'Error de Base de Datos' : 'Error de validación'}</p>
+            <p className="text-xs font-bold opacity-80">{error}</p>
+          </div>
+          <button 
+            onClick={handleSubmit}
+            className={`flex items-center gap-2 ${isSchemaError ? 'bg-amber-500' : 'bg-rose-500'} text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:opacity-90 transition-all shadow-md`}
+          >
+            <RefreshCcw size={14} /> Reintentar
+          </button>
+        </div>
+      )}
+
+      {/* Botón de Lanzamiento: Ancho Completo */}
+      {!isSuccess && (
+        <button 
+          onClick={handleSubmit}
+          disabled={isSubmitting || !allChecked}
+          className={`w-full py-8 rounded-[32px] font-black text-3xl transition-all flex items-center justify-center gap-4 shadow-2xl relative overflow-hidden group ${
+            isSubmitting || !allChecked
+            ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' 
+            : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95'
+          }`}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin" size={32} />
+              Publicando...
+            </>
+          ) : (
+            <>
+              <div className={`absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500`}></div>
+              <Lock size={28} className={allChecked ? 'text-violet-200' : 'text-slate-300'} />
+              <span>Lanzar mi campaña</span>
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 };
