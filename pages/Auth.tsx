@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 
@@ -9,6 +9,7 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const authService = AuthService.getInstance();
@@ -21,10 +22,15 @@ const Auth: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isLogin && !acceptTerms) {
+      setError("Debes aceptar los Términos y Condiciones para continuar.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    // Validación básica antes de enviar
     if (formData.password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres.");
       setLoading(false);
@@ -36,15 +42,12 @@ const Auth: React.FC = () => {
         await authService.signIn(formData.email, formData.password);
       } else {
         await authService.signUp(formData.email, formData.password, formData.fullName);
-        // Si el registro es exitoso pero requiere confirmación, Supabase devuelve un objeto sin sesión activa.
-        // Podríamos mostrar un mensaje de "revisa tu email".
       }
       
       const from = (location.state as any)?.from?.pathname || '/';
       navigate(from, { replace: true });
     } catch (err: any) {
       console.error("Auth error catch:", err);
-      // Mapeo de errores comunes de Supabase a español amigable
       let msg = err.message || "Ocurrió un error inesperado.";
       if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
@@ -167,12 +170,33 @@ const Auth: React.FC = () => {
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
                 />
               </div>
-              <p className="text-[10px] text-slate-400 mt-2 ml-1 italic">* Mínimo 6 caracteres</p>
             </div>
+
+            {!isLogin && (
+              <div className="pt-2">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div className="relative mt-0.5">
+                    <input
+                      type="checkbox"
+                      className="peer hidden"
+                      checked={acceptTerms}
+                      onChange={(e) => setAcceptTerms(e.target.checked)}
+                    />
+                    <div className="w-5 h-5 border-2 border-slate-200 rounded-lg bg-white peer-checked:bg-violet-600 peer-checked:border-violet-600 transition-all"></div>
+                    <div className="absolute inset-0 flex items-center justify-center text-white scale-0 peer-checked:scale-100 transition-transform">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-slate-500 leading-tight">
+                    Acepto los <Link to="/terminos" target="_blank" className="text-violet-600 font-bold hover:underline">Términos y Condiciones</Link> de Donia.
+                  </span>
+                </label>
+              </div>
+            )}
 
             <button
               type="submit"
-              disabled={loading || googleLoading}
+              disabled={loading || googleLoading || (!isLogin && !acceptTerms)}
               className="w-full py-4 bg-violet-600 text-white rounded-2xl font-black text-lg hover:bg-violet-700 shadow-xl shadow-violet-100 transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
             >
               {loading ? (

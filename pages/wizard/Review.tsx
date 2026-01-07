@@ -1,7 +1,22 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, CheckCircle, Edit, Tag, HeartHandshake, AlertCircle, RefreshCcw, ShieldCheck, UserCheck } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  CheckCircle, 
+  Edit, 
+  Tag, 
+  HeartHandshake, 
+  AlertCircle, 
+  RefreshCcw, 
+  ShieldCheck, 
+  UserCheck, 
+  Database,
+  Lock,
+  Search,
+  // Fix: Added missing Loader2 import to fix reference error on line 270
+  Loader2
+} from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useAuth } from '../../context/AuthContext';
 import { ProgressBar } from '../../components/ProgressBar';
@@ -27,19 +42,50 @@ const ReviewItem = ({ icon: Icon, label, value, onEdit }: { icon: any, label: st
   </div>
 );
 
+const DeclarationCheckbox = ({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) => (
+  <label className="flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors cursor-pointer group">
+    <div className="relative mt-0.5">
+      <input
+        type="checkbox"
+        className="peer hidden"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <div className="w-6 h-6 border-2 border-slate-200 rounded-lg bg-white peer-checked:bg-violet-600 peer-checked:border-violet-600 transition-all flex items-center justify-center shadow-sm">
+        <svg className="w-3.5 h-3.5 text-white scale-0 peer-checked:scale-100 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </div>
+    </div>
+    <span className="text-sm font-bold text-slate-700 leading-tight select-none">{label}</span>
+  </label>
+);
+
 const CreateReview: React.FC = () => {
   const navigate = useNavigate();
   const { campaign, resetCampaign } = useCampaign();
   const { user } = useAuth();
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // States para checkboxes de cumplimiento
+  const [declarations, setDeclarations] = useState({
+    veraz: false,
+    verificacion: false,
+    pausar: false
+  });
+
   const service = CampaignService.getInstance();
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
     if (!user) {
       setError("Debes estar autenticado para publicar una campaña.");
+      return;
+    }
+
+    if (!declarations.veraz || !declarations.verificacion || !declarations.pausar) {
+      setError("Debes aceptar todas las declaraciones de compromiso para continuar.");
       return;
     }
     
@@ -56,7 +102,7 @@ const CreateReview: React.FC = () => {
         imagenUrl: campaign.imagenUrl || '',
         beneficiarioNombre: campaign.beneficiarioNombre || '',
         beneficiarioRelacion: campaign.beneficiarioRelacion || 'Yo mismo',
-        user_id: user.id // Vinculamos la campaña al usuario
+        user_id: user.id
       });
       
       if (result && result.id) {
@@ -85,7 +131,7 @@ const CreateReview: React.FC = () => {
         <button 
           onClick={() => {
             resetCampaign();
-            navigate('/dashboard'); // Al Dashboard después de crear
+            navigate('/dashboard');
           }}
           className="bg-slate-900 text-white px-10 py-5 rounded-[24px] font-black text-xl hover:bg-slate-800 shadow-2xl transition-all active:scale-95"
         >
@@ -94,6 +140,9 @@ const CreateReview: React.FC = () => {
       </div>
     );
   }
+
+  const isSchemaError = error?.includes("user_id") || error?.includes("schema cache");
+  const allChecked = declarations.veraz && declarations.verificacion && declarations.pausar;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-16">
@@ -108,7 +157,7 @@ const CreateReview: React.FC = () => {
         <p className="text-slate-500 font-medium text-lg">Revisa los detalles finales antes de publicar tu causa.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-12">
         <div className="bg-white rounded-[40px] border border-slate-100 shadow-xl p-10 relative overflow-hidden">
           {isSubmitting && (
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center">
@@ -157,36 +206,51 @@ const CreateReview: React.FC = () => {
              <div className="p-8">
                 <h3 className="font-black text-slate-900 mb-2">Imagen de portada</h3>
                 <p className="text-slate-400 text-xs font-bold leading-relaxed">Esta es la imagen que los donantes verán primero al explorar las causas.</p>
-                <button 
-                  onClick={() => navigate('/crear/detalles')}
-                  className="mt-4 text-violet-600 font-black text-xs uppercase tracking-widest hover:underline"
-                >
-                  Cambiar foto
-                </button>
              </div>
           </div>
 
-          <div className="bg-sky-50 rounded-3xl p-6 border-2 border-sky-100 flex gap-4">
-            <ShieldCheck size={24} className="text-sky-600 shrink-0" />
-            <p className="text-[10px] font-bold text-sky-800 uppercase tracking-widest leading-relaxed">
-              Al publicar, confirmas que toda la información es verdadera y que los fondos serán utilizados para el fin declarado.
-            </p>
+          {/* Nueva Sección: Compromiso y Transparencia */}
+          <div className="bg-white rounded-[40px] border border-slate-100 shadow-lg p-8">
+             <div className="flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-sky-100 text-sky-600 rounded-lg flex items-center justify-center">
+                   <ShieldCheck size={18} />
+                </div>
+                <h3 className="text-xs font-black uppercase tracking-widest text-slate-900">Compromiso de Transparencia</h3>
+             </div>
+             
+             <div className="space-y-2">
+                <DeclarationCheckbox 
+                  checked={declarations.veraz}
+                  onChange={(val) => setDeclarations({...declarations, veraz: val})}
+                  label="Declaro que la información es veraz"
+                />
+                <DeclarationCheckbox 
+                  checked={declarations.verificacion}
+                  onChange={(val) => setDeclarations({...declarations, verificacion: val})}
+                  label="Acepto que Donia puede solicitar verificación"
+                />
+                <DeclarationCheckbox 
+                  checked={declarations.pausar}
+                  onChange={(val) => setDeclarations({...declarations, pausar: val})}
+                  label="Acepto que Donia puede pausar la campaña ante irregularidades"
+                />
+             </div>
           </div>
         </div>
       </div>
 
       {error && (
-        <div className="mt-8 mb-8 p-6 bg-rose-50 border-2 border-rose-100 rounded-[32px] flex flex-col md:flex-row gap-6 items-center animate-in slide-in-from-top-4">
-          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-rose-500 shadow-sm shrink-0">
-            <AlertCircle size={24} />
+        <div className={`mb-8 p-6 ${isSchemaError ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-rose-50 border-rose-100 text-rose-900'} border-2 rounded-[32px] flex flex-col md:flex-row gap-6 items-center animate-in slide-in-from-top-4 shadow-sm`}>
+          <div className={`w-12 h-12 bg-white rounded-2xl flex items-center justify-center ${isSchemaError ? 'text-amber-500' : 'text-rose-500'} shadow-sm shrink-0`}>
+            {isSchemaError ? <Database size={24} /> : <AlertCircle size={24} />}
           </div>
           <div className="flex-grow text-center md:text-left">
-            <p className="text-rose-900 font-bold mb-1">¡Ups! Algo no salió como esperábamos</p>
-            <p className="text-rose-700/70 text-sm font-medium">{error}</p>
+            <p className="font-black text-sm uppercase tracking-widest mb-1">{isSchemaError ? 'Configuración de Base de Datos' : 'Error de validación'}</p>
+            <p className="text-sm font-medium opacity-80">{error}</p>
           </div>
           <button 
             onClick={handleSubmit}
-            className="flex items-center gap-2 bg-rose-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-rose-600 transition-all shadow-md shadow-rose-200"
+            className={`flex items-center gap-2 ${isSchemaError ? 'bg-amber-500' : 'bg-rose-500'} text-white px-6 py-3 rounded-2xl font-bold hover:opacity-90 transition-all shadow-md`}
           >
             <RefreshCcw size={18} /> Reintentar
           </button>
@@ -196,14 +260,24 @@ const CreateReview: React.FC = () => {
       {!isSuccess && (
         <button 
           onClick={handleSubmit}
-          disabled={isSubmitting}
-          className={`w-full mt-10 py-6 rounded-[28px] font-black text-2xl transition-all flex items-center justify-center gap-3 shadow-2xl ${
-            isSubmitting 
-            ? 'bg-slate-100 text-slate-300 cursor-not-allowed' 
+          disabled={isSubmitting || !allChecked}
+          className={`w-full py-6 rounded-[28px] font-black text-2xl transition-all flex items-center justify-center gap-3 shadow-2xl ${
+            isSubmitting || !allChecked
+            ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' 
             : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95'
           }`}
         >
-          {isSubmitting ? 'Procesando...' : 'Lanzar mi campaña'}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="animate-spin" size={28} />
+              Procesando...
+            </>
+          ) : (
+            <>
+              <Lock size={24} className={allChecked ? 'text-violet-200' : 'text-slate-300'} />
+              Lanzar mi campaña
+            </>
+          )}
         </button>
       )}
     </div>

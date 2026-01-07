@@ -1,6 +1,12 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+/**
+ * NOTA PARA EL DESARROLLADOR:
+ * Si recibes el error "column user_id does not exist", ejecuta esto en Supabase SQL Editor:
+ * ALTER TABLE campaigns ADD COLUMN user_id UUID REFERENCES auth.users(id);
+ */
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -29,7 +35,21 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'POST') {
-      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id } = req.body;
+      const { 
+        titulo, 
+        historia, 
+        monto, 
+        categoria, 
+        ubicacion, 
+        imagenUrl, 
+        beneficiarioNombre, 
+        beneficiarioRelacion, 
+        user_id 
+      } = req.body;
+
+      if (!user_id) {
+        return res.status(400).json({ success: false, error: 'El ID de usuario es obligatorio para crear una campaña.' });
+      }
       
       const { data, error } = await supabase
         .from('campaigns')
@@ -42,17 +62,25 @@ export default async function handler(req: any, res: any) {
           imagen_url: imagenUrl,
           beneficiario_nombre: beneficiarioNombre,
           beneficiario_relacion: beneficiarioRelacion,
-          user_id: user_id, // Guardamos quien la creó
+          user_id, 
           recaudado: 0,
           donantes_count: 0,
           estado: 'activa'
         }])
         .select();
 
-      if (error) throw error;
+      if (error) {
+        // Manejo específico para error de columna faltante
+        if (error.code === '42703') {
+          throw new Error("Error de Base de Datos: Falta la columna 'user_id' en la tabla 'campaigns'. Por favor, añádela en Supabase.");
+        }
+        throw error;
+      }
+      
       return res.status(201).json({ success: true, data: data[0] });
     }
   } catch (error: any) {
+    console.error("[API/campaigns] Error:", error.message);
     return res.status(500).json({ success: false, error: error.message });
   }
 }
