@@ -72,8 +72,11 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
     
-    // Obtenemos el origen actual (www.donia.cl o localhost:3000)
-    const currentOrigin = window.location.origin;
+    // Forzamos HTTPS en producción para evitar el error de "Insecure redirect" de Google
+    let currentOrigin = window.location.origin;
+    if (currentOrigin.includes('donia.cl') && !currentOrigin.startsWith('https://')) {
+      currentOrigin = currentOrigin.replace('http://', 'https://');
+    }
 
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
