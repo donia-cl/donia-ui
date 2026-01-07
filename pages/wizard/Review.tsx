@@ -44,7 +44,7 @@ const ReviewItem = ({ icon: Icon, label, value, onEdit }: { icon: any, label: st
 );
 
 const VistoBuenoCheckbox = ({ checked, onChange, label }: { checked: boolean, onChange: (val: boolean) => void, label: string }) => (
-  <label className="flex items-center gap-3 cursor-pointer group py-3 px-5 bg-white border border-slate-100 rounded-xl hover:border-violet-200 hover:bg-violet-50/20 transition-all shadow-sm">
+  <label className="flex items-center gap-4 cursor-pointer group py-4 px-6 bg-white border border-slate-100 rounded-2xl hover:border-violet-200 hover:bg-violet-50/30 transition-all shadow-sm w-full">
     <div className="relative shrink-0">
       <input
         type="checkbox"
@@ -52,11 +52,11 @@ const VistoBuenoCheckbox = ({ checked, onChange, label }: { checked: boolean, on
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
       />
-      <div className="w-6 h-6 border-2 border-slate-200 rounded-full bg-white peer-checked:bg-violet-600 peer-checked:border-violet-600 transition-all flex items-center justify-center">
-        <Check className="w-3 h-3 text-white scale-0 peer-checked:scale-100 transition-transform duration-200" strokeWidth={4} />
+      <div className="w-6 h-6 border-2 border-slate-200 rounded-full bg-white peer-checked:bg-violet-600 peer-checked:border-violet-600 transition-all flex items-center justify-center shadow-inner">
+        <Check className="w-3.5 h-3.5 text-white scale-0 peer-checked:scale-100 transition-transform duration-200" strokeWidth={4} />
       </div>
     </div>
-    <span className={`text-[11px] font-bold transition-colors select-none ${checked ? 'text-slate-900' : 'text-slate-500'}`}>
+    <span className={`text-xs font-bold transition-colors select-none ${checked ? 'text-slate-900' : 'text-slate-500'}`}>
       {label}
     </span>
   </label>
@@ -156,14 +156,14 @@ const CreateReview: React.FC = () => {
 
       <div className="text-center mb-10">
         <h1 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">Revisa tu campaña</h1>
-        <p className="text-slate-500 font-medium text-sm">Esta es la vista previa final antes de que tu historia llegue a la comunidad.</p>
+        <p className="text-slate-500 font-medium text-sm">Confirma que todo esté correcto antes de lanzar tu historia.</p>
       </div>
 
       <div className="space-y-6">
-        {/* FILA SUPERIOR: 2 COLUMNAS (Detalles e Imagen) */}
+        {/* SECCIÓN SUPERIOR: 2 COLUMNAS (Detalles e Imagen) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Detalles de la campaña */}
-          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 md:p-8 flex flex-col justify-center">
+          {/* Columna Izquierda: Detalles */}
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 flex flex-col justify-center">
             <div className="flex items-center gap-2 mb-4">
                <Tag size={16} className="text-violet-600" />
                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Detalles principales</h3>
@@ -190,8 +190,8 @@ const CreateReview: React.FC = () => {
             </div>
           </div>
 
-          {/* Imagen de portada */}
-          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden group relative aspect-video lg:aspect-auto lg:h-full">
+          {/* Columna Derecha: Imagen */}
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden group relative aspect-video lg:aspect-auto">
             <img src={campaign.imagenUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Portada" />
             <div className="absolute top-4 left-4">
                <span className="bg-violet-600/90 backdrop-blur-sm text-white text-[9px] font-black px-3 py-1.5 rounded-full uppercase tracking-widest shadow-lg">
@@ -207,8 +207,8 @@ const CreateReview: React.FC = () => {
           </div>
         </div>
 
-        {/* FILA MEDIA: RELATO (Ancho completo) */}
-        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-6 md:p-8">
+        {/* SECCIÓN MEDIA: RELATO (Ancho completo) */}
+        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8">
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-2">
               <FileText size={16} className="text-violet-600" />
@@ -228,36 +228,36 @@ const CreateReview: React.FC = () => {
           </div>
         </div>
 
-        {/* FILA INFERIOR: COMPROMISOS (Ancho completo) */}
-        <div className="bg-slate-50 border border-slate-200 rounded-[32px] p-6 md:p-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-violet-100/30 rounded-bl-full pointer-events-none"></div>
+        {/* SECCIÓN COMPROMISO: Ancho completo, vertical */}
+        <div className="bg-slate-50 border border-slate-200 rounded-[32px] p-8 md:p-10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-24 h-24 bg-violet-100/30 rounded-bl-full pointer-events-none"></div>
           
           <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-8">
               <div className="w-8 h-8 bg-violet-600 text-white rounded-lg flex items-center justify-center shadow-lg">
                 <ShieldCheck size={18} />
               </div>
               <div>
                 <h2 className="text-lg font-black text-slate-900 tracking-tight">Compromiso de Transparencia</h2>
-                <p className="text-slate-500 font-medium text-[11px]">Valida estos puntos para publicar tu campaña.</p>
+                <p className="text-slate-500 font-medium text-[11px]">Por favor, firma tu compromiso para poder publicar.</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="space-y-3">
               <VistoBuenoCheckbox 
                 checked={declarations.veraz}
                 onChange={(val) => setDeclarations({...declarations, veraz: val})}
-                label="Información veraz"
+                label="Declaro que la información es veraz"
               />
               <VistoBuenoCheckbox 
                 checked={declarations.verificacion}
                 onChange={(val) => setDeclarations({...declarations, verificacion: val})}
-                label="Acepto verificación"
+                label="Acepto que Donia puede solicitar verificación"
               />
               <VistoBuenoCheckbox 
                 checked={declarations.pausar}
                 onChange={(val) => setDeclarations({...declarations, pausar: val})}
-                label="Acepto pausa"
+                label="Acepto que Donia puede pausar la campaña ante irregularidades"
               />
             </div>
           </div>
@@ -287,7 +287,7 @@ const CreateReview: React.FC = () => {
           <button 
             onClick={handleSubmit}
             disabled={isSubmitting || !allChecked}
-            className={`w-full py-5 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-2xl relative overflow-hidden group ${
+            className={`w-full py-6 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-2xl relative overflow-hidden group ${
               isSubmitting || !allChecked
               ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' 
               : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95'
