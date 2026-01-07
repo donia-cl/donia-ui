@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
@@ -19,6 +19,25 @@ const Auth: React.FC = () => {
     password: '',
     fullName: ''
   });
+
+  // Resetear estados de carga al entrar o volver a la página (soluciona el bloqueo por bfcache)
+  useEffect(() => {
+    const resetLoading = (event?: PageTransitionEvent) => {
+      // Si event existe y es persistente, significa que viene del cache del navegador (botón atrás)
+      setLoading(false);
+      setGoogleLoading(false);
+    };
+
+    // Reset inmediato al montar
+    resetLoading();
+
+    // Escuchar el evento pageshow para detectar navegaciones de retroceso
+    window.addEventListener('pageshow', resetLoading);
+    
+    return () => {
+      window.removeEventListener('pageshow', resetLoading);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +73,6 @@ const Auth: React.FC = () => {
       if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
       
       setError(msg);
-    } finally {
       setLoading(false);
     }
   };
@@ -64,7 +82,9 @@ const Auth: React.FC = () => {
     setError(null);
     try {
       await authService.signInWithGoogle();
+      // La redirección ocurre aquí. Si el usuario vuelve atrás, el useEffect de arriba reseteará el estado.
     } catch (err: any) {
+      console.error("Google Auth error:", err);
       setError(err.message || "No pudimos conectar con Google.");
       setGoogleLoading(false);
     }
