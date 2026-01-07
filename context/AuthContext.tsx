@@ -22,26 +22,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initApp = async () => {
-      // 1. Inicializamos ambos servicios (buscan llaves en env o API)
+      // 1. Inicializamos servicios
       await Promise.all([
         authService.initialize(),
         campaignService.initialize()
       ]);
       
-      // 2. Verificamos si hay un usuario logueado
-      const currentUser = await authService.getCurrentUser();
+      // 2. Recuperar sesión actual
+      const session = await authService.getSession();
       
       if (mounted) {
-        setUser(currentUser);
+        setUser(session?.user ?? null);
         setLoading(false);
+
+        // 3. Limpieza de URL (Elimina el #access_token de la barra de direcciones)
+        if (window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('type=recovery'))) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
       }
 
-      // 3. Suscribirse a cambios de estado de Supabase
+      // 4. Suscribirse a cambios reales (Login, Logout, Token Refreshed)
       const client = authService.getSupabase();
       if (client && mounted) {
-        const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
           if (mounted) {
+            console.log("[AuthContext] Auth Event:", event);
             setUser(session?.user ?? null);
+            
+            // Limpiar hash en cualquier evento exitoso si persiste
+            if (session && window.location.hash.includes('access_token=')) {
+              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
           }
         });
 

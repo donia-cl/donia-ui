@@ -1,5 +1,5 @@
 
-import { createClient, User, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, User, SupabaseClient, Session } from '@supabase/supabase-js';
 
 export class AuthService {
   private static instance: AuthService;
@@ -22,7 +22,6 @@ export class AuthService {
   }
 
   public async initialize(): Promise<void> {
-    if (this.client) return;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
@@ -33,7 +32,7 @@ export class AuthService {
           const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
           const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
           
-          if (url && key) {
+          if (url && key && (!this.client || this.client.auth === undefined)) {
             this.client = createClient(url, key);
           }
         }
@@ -72,11 +71,18 @@ export class AuthService {
   async signInWithGoogle() {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
-    // Usamos el origen actual para la redirección
+    
+    // Obtenemos el origen actual (www.donia.cl o localhost:3000)
+    const currentOrigin = window.location.origin;
+
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
       options: { 
-        redirectTo: window.location.origin 
+        redirectTo: currentOrigin,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        }
       }
     });
     if (error) throw error;
@@ -97,6 +103,13 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  async getSession(): Promise<Session | null> {
+    await this.initialize();
+    if (!this.client) return null;
+    const { data: { session } } = await this.client.auth.getSession();
+    return session;
   }
 }
 
