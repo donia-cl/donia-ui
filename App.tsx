@@ -2,7 +2,7 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CampaignProvider } from './context/CampaignContext';
-import { AuthProvider } from './context/AuthProvider';
+import { AuthProvider } from './context/AuthContext';
 import { Layout } from './components/Layout';
 import Landing from './pages/Landing';
 import Explore from './pages/Explore';

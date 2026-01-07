@@ -364,4 +364,25 @@ const EditCampaign: React.FC = () => {
              className={`flex-[2] py-5 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-2xl ${
                isFormValid && !saving && !uploading
                ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95' 
-               : 'bg-slate-100 text-
+               : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+             }`}
+           >
+             {saving ? (
+               <>
+                 <Loader2 size={24} className="animate-spin" />
+                 Guardando...
+               </>
+             ) : (
+               <>
+                 <Save size={24} />
+                 Guardar cambios
+               </>
+             )}
+           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default EditCampaign;
