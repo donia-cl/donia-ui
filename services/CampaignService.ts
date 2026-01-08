@@ -1,6 +1,6 @@
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { CampaignData, Donation } from '../types';
+import { CampaignData, Donation, FinancialSummary, Withdrawal, CampaignStatus } from '../types';
 
 export class CampaignService {
   private static instance: CampaignService;
@@ -11,7 +11,6 @@ export class CampaignService {
   private constructor() {
     const url = process.env.REACT_APP_SUPABASE_URL;
     const key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-
     if (url && key) {
       this.supabase = createClient(url, key);
     }
@@ -26,7 +25,6 @@ export class CampaignService {
 
   public async initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
-
     this.initPromise = (async () => {
       try {
         const resp = await fetch('/api/config');
@@ -34,17 +32,15 @@ export class CampaignService {
           const config = await resp.json();
           const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
           const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-
           if (url && key) {
             this.supabase = createClient(url, key);
           }
           this.aiEnabled = !!config.aiEnabled;
         }
       } catch (e) {
-        console.error("[CampaignService] Error en inicialización:", e);
+        console.error("[CampaignService] Error:", e);
       }
     })();
-
     return this.initPromise;
   }
 
@@ -67,10 +63,11 @@ export class CampaignService {
       ubicacion: c.ubicacion || 'Chile',
       fechaCreacion: c.fecha_creacion || c.fechaCreacion || new Date().toISOString(),
       imagenUrl: c.imagen_url || c.imagenUrl || 'https://picsum.photos/800/600',
-      estado: c.estado || 'activa',
+      estado: c.estado as CampaignStatus || 'activa',
       donantesCount: Number(c.donantes_count || c.donantesCount || 0),
       beneficiarioNombre: c.beneficiario_nombre || c.beneficiarioNombre,
       beneficiarioRelacion: c.beneficiario_relacion || c.beneficiarioRelacion,
+      user_id: c.user_id,
       donations: c.donations ? c.donations.map((d: any) => ({
         id: d.id,
         campaignId: d.campaign_id,
@@ -82,32 +79,13 @@ export class CampaignService {
     };
   }
 
-  async uploadImage(base64: string, fileName: string): Promise<string> {
-    await this.initialize();
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: base64, name: fileName })
-      });
-      const data = await response.json();
-      if (!data.success) throw new Error(data.error);
-      return data.url;
-    } catch (e) {
-      console.error("Error subiendo imagen:", e);
-      throw e;
-    }
-  }
-
   async getCampaigns(): Promise<CampaignData[]> {
     await this.initialize();
     try {
       const resp = await fetch('/api/campaigns');
       const json = await resp.json();
       return (json.data || []).map((c: any) => this.mapCampaign(c));
-    } catch (e) {
-      return [];
-    }
+    } catch (e) { return []; }
   }
 
   async getUserCampaigns(userId: string): Promise<CampaignData[]> {
@@ -116,21 +94,48 @@ export class CampaignService {
       const resp = await fetch(`/api/user-campaigns?userId=${userId}`);
       const json = await resp.json();
       return (json.data || []).map((c: any) => this.mapCampaign(c));
+    } catch (e) { return []; }
+  }
+
+  async updateCampaignStatus(id: string, userId: string, estado: CampaignStatus): Promise<boolean> {
+    await this.initialize();
+    const response = await fetch('/api/update-campaign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, userId, updates: { estado } })
+    });
+    const json = await response.json();
+    return json.success;
+  }
+
+  async getFinancialSummary(userId: string): Promise<FinancialSummary> {
+    await this.initialize();
+    try {
+      const resp = await fetch(`/api/financial-summary?userId=${userId}`);
+      const json = await resp.json();
+      return json.data || { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 };
     } catch (e) {
-      return [];
+      return { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 };
     }
   }
 
+  async getWithdrawals(userId: string): Promise<Withdrawal[]> {
+    await this.initialize();
+    try {
+      const resp = await fetch(`/api/withdrawals?userId=${userId}`);
+      const json = await resp.json();
+      return json.data || [];
+    } catch (e) { return []; }
+  }
+
+  // Métodos anteriores existentes
   async getCampaignById(id: string): Promise<CampaignData | null> {
     await this.initialize();
     try {
       const resp = await fetch(`/api/campaign-detail?id=${id}`);
       const json = await resp.json();
-      if (!json.success) return null;
-      return this.mapCampaign(json.data);
-    } catch (e) {
-      return null;
-    }
+      return json.success ? this.mapCampaign(json.data) : null;
+    } catch (e) { return null; }
   }
 
   async createCampaign(payload: any): Promise<CampaignData> {
@@ -178,12 +183,9 @@ export class CampaignService {
       });
       const data = await response.json();
       return data.text || story;
-    } catch (e) {
-      return story;
-    }
+    } catch (e) { return story; }
   }
 
-  // Fix: Added processPayment method to handle Mercado Pago payment processing
   async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
     await this.initialize();
     const response = await fetch('/api/process-payment', {
@@ -194,5 +196,17 @@ export class CampaignService {
     const json = await response.json();
     if (!json.success) throw new Error(json.error || 'Error procesando el pago');
     return json;
+  }
+
+  async uploadImage(base64: string, fileName: string): Promise<string> {
+    await this.initialize();
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: base64, name: fileName })
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error);
+    return data.url;
   }
 }

@@ -6,29 +6,35 @@ import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
 
 const CampaignCard: React.FC<{ campaign: CampaignData }> = ({ campaign }) => {
-  const progress = Math.min((campaign.recaudado / campaign.monto) * 100, 100);
+  const monto = campaign.monto || 1;
+  const recaudado = campaign.recaudado || 0;
+  const progress = Math.min((recaudado / monto) * 100, 100);
   
   return (
     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all group flex flex-col h-full">
       <div className="relative h-52 overflow-hidden">
-        <img src={campaign.imagenUrl} alt={campaign.titulo} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+        <img 
+          src={campaign.imagenUrl || 'https://picsum.photos/800/600'} 
+          alt={campaign.titulo} 
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+        />
         <div className="absolute top-4 left-4">
           <span className="bg-sky-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest shadow-lg">
-            {campaign.categoria}
+            {campaign.categoria || 'General'}
           </span>
         </div>
       </div>
       <div className="p-6 flex-grow flex flex-col">
         <div className="flex items-center gap-1 text-slate-400 text-xs mb-3 font-medium">
           <MapPin size={12} className="text-violet-400" />
-          <span>{campaign.ubicacion}</span>
+          <span>{campaign.ubicacion || 'Chile'}</span>
         </div>
-        <h3 className="text-xl font-bold text-slate-900 mb-4 line-clamp-2 min-h-[3.5rem] group-hover:text-violet-600 transition-colors">{campaign.titulo}</h3>
+        <h3 className="text-xl font-bold text-slate-900 mb-4 line-clamp-2 min-h-[3.5rem] group-hover:text-violet-600 transition-colors">{campaign.titulo || 'Sin Título'}</h3>
         
         <div className="mt-auto">
           <div className="flex justify-between text-sm mb-2">
-            <span className="font-bold text-violet-600">${campaign.recaudado.toLocaleString('es-CL')}</span>
-            <span className="text-slate-400 font-medium">meta: ${campaign.monto.toLocaleString('es-CL')}</span>
+            <span className="font-bold text-violet-600">${recaudado.toLocaleString('es-CL')}</span>
+            <span className="text-slate-400 font-medium">meta: ${monto.toLocaleString('es-CL')}</span>
           </div>
           <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-5">
             <div className="h-full bg-gradient-to-r from-violet-500 to-violet-700 rounded-full" style={{ width: `${progress}%` }} />
@@ -61,11 +67,10 @@ const Landing: React.FC = () => {
     const loadCampaigns = async () => {
       setLoading(true);
       try {
-        // Al ejecutar getCampaigns, internamente se espera a que el servicio esté listo.
         const allCampaigns = await service.getCampaigns();
-        setCampaigns(allCampaigns.slice(0, 3));
+        setCampaigns(allCampaigns ? allCampaigns.slice(0, 3) : []);
       } catch (error) {
-        console.error("No se pudieron cargar las campañas iniciales:", error);
+        console.error("No se pudieron cargar las campañas:", error);
       } finally {
         setLoading(false);
       }

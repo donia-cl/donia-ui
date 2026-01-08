@@ -35,22 +35,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // 3. Limpieza de URL (Elimina el #access_token de la barra de direcciones)
-        if (window.location.hash && (window.location.hash.includes('access_token=') || window.location.hash.includes('type=recovery'))) {
+        // 3. Limpieza de fragmentos de Supabase (OAuth tokens)
+        // Al usar HashRouter, debemos ser cuidadosos: solo limpiamos si el hash NO comienza con #/ (que es una ruta)
+        const hash = window.location.hash;
+        if (hash && (hash.includes('access_token=') || hash.includes('type=recovery'))) {
+          // Si estamos usando HashRouter, el hash podría tener tokens. 
+          // Supabase usualmente los pone al principio.
           window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }
       }
 
-      // 4. Suscribirse a cambios reales (Login, Logout, Token Refreshed)
+      // 4. Suscribirse a cambios reales
       const client = authService.getSupabase();
       if (client && mounted) {
         const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
           if (mounted) {
-            console.log("[AuthContext] Auth Event:", event);
             setUser(session?.user ?? null);
             
-            // Limpiar hash en cualquier evento exitoso si persiste
-            if (session && window.location.hash.includes('access_token=')) {
+            // Limpiar hash si hay tokens después del evento de login
+            const hash = window.location.hash;
+            if (session && (hash.includes('access_token=') || hash.includes('type=recovery'))) {
               window.history.replaceState(null, '', window.location.pathname + window.location.search);
             }
           }
