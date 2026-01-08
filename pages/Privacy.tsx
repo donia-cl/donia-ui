@@ -19,7 +19,7 @@ const Privacy: React.FC = () => {
             Volver
           </button>
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 bg-sky-500 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-sky-100">
+            <div className="w-12 h-12 bg-violet-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-violet-100">
               <Lock size={24} />
             </div>
             <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Privacidad</h1>
@@ -43,7 +43,7 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">1.</span> ¿Quién es responsable de tus datos?
+                <span className="text-violet-600">1.</span> ¿Quién es responsable de tus datos?
               </h2>
               <p><strong>Donia SpA</strong><br/>
               RUT: 76.653.829-9<br/>
@@ -54,11 +54,11 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">2.</span> ¿Qué datos personales recopilamos?
+                <span className="text-violet-600">2.</span> ¿Qué datos personales recopilamos?
               </h2>
               <p>Recopilamos únicamente los datos necesarios para el correcto funcionamiento de la plataforma:</p>
               
-              <div className="mt-4 pl-4 border-l-4 border-sky-100 space-y-4">
+              <div className="mt-4 pl-4 border-l-4 border-violet-100 space-y-4">
                 <div>
                   <h4 className="font-bold text-slate-900">a) Datos de usuarios y creadores de campañas</h4>
                   <ul className="list-disc pl-5 mt-1 space-y-1">
@@ -100,7 +100,7 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">3.</span> ¿Para qué usamos tus datos?
+                <span className="text-violet-600">3.</span> ¿Para qué usamos tus datos?
               </h2>
               <p>Usamos tus datos personales para:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -117,7 +117,7 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">4.</span> Donaciones, fondos y rol de Donia
+                <span className="text-violet-600">4.</span> Donaciones, fondos y rol de Donia
               </h2>
               <p>Donia actúa como una plataforma tecnológica intermediaria.</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -135,7 +135,7 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">5.</span> ¿Con quién compartimos tus datos?
+                <span className="text-violet-600">5.</span> ¿Con quién compartimos tus datos?
               </h2>
               <p>Solo compartimos datos cuando es estrictamente necesario:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -148,7 +148,7 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">6.</span> Seguridad de la información
+                <span className="text-violet-600">6.</span> Seguridad de la información
               </h2>
               <p>Aplicamos medidas técnicas y organizativas razonables para proteger tus datos personales, incluyendo:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -161,7 +161,7 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">7.</span> Derechos de los usuarios
+                <span className="text-violet-600">7.</span> Derechos de los usuarios
               </h2>
               <p>De acuerdo con la Ley N°19.628, tienes derecho a:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -171,14 +171,14 @@ const Privacy: React.FC = () => {
                 <li>Oponerte a ciertos usos de tus datos</li>
               </ul>
               <div className="mt-4 p-4 bg-slate-50 rounded-xl flex items-center gap-3">
-                <Mail className="text-sky-500" size={20} />
-                <p>Para ejercer estos derechos, puedes escribir a: <a href="mailto:privacidad@donia.cl" className="text-sky-600 font-bold hover:underline">privacidad@donia.cl</a></p>
+                <Mail className="text-violet-600" size={20} />
+                <p>Para ejercer estos derechos, puedes escribir a: <a href="mailto:privacidad@donia.cl" className="text-violet-600 font-bold hover:underline">privacidad@donia.cl</a></p>
               </div>
             </section>
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">8.</span> Cookies
+                <span className="text-violet-600">8.</span> Cookies
               </h2>
               <p>Donia utiliza cookies y tecnologías similares para:</p>
               <ul className="list-disc pl-5 mt-2 space-y-1">
@@ -191,23 +191,23 @@ const Privacy: React.FC = () => {
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">9.</span> Cambios a esta Política de Privacidad
+                <span className="text-violet-600">9.</span> Cambios a esta Política de Privacidad
               </h2>
               <p>Donia puede actualizar esta Política de Privacidad cuando sea necesario. Los cambios serán publicados en el sitio y entrarán en vigencia desde su publicación.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-                <span className="text-sky-500">10.</span> Contacto
+                <span className="text-violet-600">10.</span> Contacto
               </h2>
               <p>Si tienes dudas sobre esta Política de Privacidad o sobre el uso de tus datos, puedes contactarnos en:</p>
-              <a href="mailto:privacidad@donia.cl" className="block mt-2 text-xl font-bold text-sky-600 hover:underline">privacidad@donia.cl</a>
+              <a href="mailto:privacidad@donia.cl" className="block mt-2 text-xl font-bold text-violet-600 hover:underline">privacidad@donia.cl</a>
             </section>
           </div>
         </div>
 
-        <div className="mt-20 p-8 bg-sky-50 rounded-[32px] border border-sky-100 flex flex-col items-center text-center">
-          <Shield className="text-sky-500 mb-4" size={40} />
+        <div className="mt-20 p-8 bg-violet-50 rounded-[32px] border border-violet-100 flex flex-col items-center text-center">
+          <Shield className="text-violet-600 mb-4" size={40} />
           <h3 className="text-lg font-black text-slate-900 mb-2 tracking-tight">Transparencia Total</h3>
           <p className="text-sm text-slate-500 font-medium max-w-lg">Tus datos están seguros y solo se utilizan para conectar corazones y causas.</p>
         </div>
