@@ -68,9 +68,15 @@ const Auth: React.FC = () => {
     } catch (err: any) {
       console.error("Auth error catch:", err);
       let msg = err.message || "Ocurrió un error inesperado.";
+      
+      // Traducción de errores comunes de Supabase
       if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
       if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
+      if (msg.includes("Database error saving new user")) {
+        msg = "Error de configuración del sistema (Trigger DB). Contacta a soporte.";
+        console.error("IMPORTANTE: Ejecuta el script SQL con SECURITY DEFINER en Supabase para arreglar esto.");
+      }
       
       setError(msg);
       setLoading(false);
