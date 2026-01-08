@@ -28,17 +28,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const client = authService.getSupabase();
     if (!client) return null;
     
-    const { data, error } = await client
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-      
-    if (error) {
-      console.error("Error fetching profile:", error);
+    try {
+      const { data, error } = await client
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (error) {
+        // No logueamos error ruidoso si es solo que no existe (PGRST116)
+        if (error.code !== 'PGRST116') {
+           console.error("Error fetching profile:", error);
+        }
+        return null;
+      }
+      return data as Profile;
+    } catch (e) {
       return null;
     }
-    return data as Profile;
   };
 
   useEffect(() => {
@@ -71,9 +78,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const currentUser = session?.user ?? null;
               setUser(currentUser);
               
-              if (currentUser && !profile) {
+              if (currentUser) {
                  const userProfile = await fetchProfile(currentUser.id);
                  setProfile(userProfile);
+              } else {
+                 setProfile(null);
               }
 
               if (event === 'SIGNED_IN') {
