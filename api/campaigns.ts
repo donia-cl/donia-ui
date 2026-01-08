@@ -17,18 +17,15 @@ export default async function handler(req: any, res: any) {
 
     if (req.method === 'GET') {
       if (id) {
-        // Detalle de campaña con sus donaciones
         const { data: campaign, error: cError } = await supabase.from('campaigns').select('*').eq('id', id).single();
         if (cError) throw cError;
         const { data: donations } = await supabase.from('donations').select('*').eq('campaign_id', id).order('fecha', { ascending: false }).limit(50);
         return res.status(200).json({ success: true, data: { ...campaign, donations: donations || [] } });
       } else if (userId) {
-        // Campañas de un usuario específico
         const { data, error } = await supabase.from('campaigns').select('*').eq('user_id', userId).order('fecha_creacion', { ascending: false });
         if (error) throw error;
         return res.status(200).json({ success: true, data: data || [] });
       } else {
-        // Todas las campañas activas
         const { data, error } = await supabase.from('campaigns').select('*').order('fecha_creacion', { ascending: false });
         if (error) throw error;
         return res.status(200).json({ success: true, data: data || [] });
@@ -49,7 +46,7 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'PUT') {
       const { id: bodyId, userId: bodyUserId, updates } = req.body;
       const { data: campaign } = await supabase.from('campaigns').select('user_id').eq('id', bodyId).single();
-      if (!campaign || campaign.user_id !== bodyUserId) return res.status(403).json({ error: 'No autorizado para editar esta campaña' });
+      if (!campaign || campaign.user_id !== bodyUserId) return res.status(403).json({ error: 'Unauthorized' });
       const { data, error } = await supabase.from('campaigns').update(updates).eq('id', bodyId).select();
       if (error) throw error;
       return res.status(200).json({ success: true, data: data[0] });
@@ -58,8 +55,8 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'DELETE') {
       const { id: queryId, userId: queryUserId } = req.query;
       const { data: campaign } = await supabase.from('campaigns').select('user_id, recaudado').eq('id', queryId).single();
-      if (!campaign || campaign.user_id !== queryUserId) return res.status(403).json({ error: 'No autorizado' });
-      if (campaign.recaudado > 0) return res.status(400).json({ error: 'No se puede eliminar una campaña que ya tiene donaciones por trazabilidad' });
+      if (!campaign || campaign.user_id !== queryUserId) return res.status(403).json({ error: 'Unauthorized' });
+      if (campaign.recaudado > 0) return res.status(400).json({ error: 'Cannot delete campaign with donations' });
       const { error } = await supabase.from('campaigns').delete().eq('id', queryId);
       if (error) throw error;
       return res.status(200).json({ success: true });

@@ -13,7 +13,6 @@ export default async function handler(req: any, res: any) {
 
   try {
     if (type === 'summary') {
-      // Cálculo de saldos
       const { data: campaigns } = await supabase.from('campaigns').select('recaudado').eq('user_id', userId);
       const { data: withdrawals } = await supabase.from('withdrawals').select('monto, estado').eq('user_id', userId);
 
@@ -27,7 +26,6 @@ export default async function handler(req: any, res: any) {
         data: { totalRecaudado, disponibleRetiro, enProceso, totalRetirado } 
       });
     } else if (type === 'withdrawals') {
-      // Listado de retiros
       const { data, error } = await supabase
         .from('withdrawals')
         .select('id, monto, fecha, estado, campaign_id, campaigns(titulo)')
