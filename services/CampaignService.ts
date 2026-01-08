@@ -44,13 +44,8 @@ export class CampaignService {
     return this.initPromise;
   }
 
-  public checkAiAvailability(): boolean {
-    return this.aiEnabled;
-  }
-
-  public getConnectionStatus(): 'cloud' | 'local' {
-    return this.supabase ? 'cloud' : 'local';
-  }
+  public checkAiAvailability(): boolean { return this.aiEnabled; }
+  public getConnectionStatus(): 'cloud' | 'local' { return this.supabase ? 'cloud' : 'local'; }
 
   private mapCampaign(c: any): CampaignData {
     return {
@@ -91,48 +86,16 @@ export class CampaignService {
   async getUserCampaigns(userId: string): Promise<CampaignData[]> {
     await this.initialize();
     try {
-      const resp = await fetch(`/api/user-campaigns?userId=${userId}`);
+      const resp = await fetch(`/api/campaigns?userId=${userId}`);
       const json = await resp.json();
       return (json.data || []).map((c: any) => this.mapCampaign(c));
     } catch (e) { return []; }
   }
 
-  async updateCampaignStatus(id: string, userId: string, estado: CampaignStatus): Promise<boolean> {
-    await this.initialize();
-    const response = await fetch('/api/update-campaign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, userId, updates: { estado } })
-    });
-    const json = await response.json();
-    return json.success;
-  }
-
-  async getFinancialSummary(userId: string): Promise<FinancialSummary> {
-    await this.initialize();
-    try {
-      const resp = await fetch(`/api/financial-summary?userId=${userId}`);
-      const json = await resp.json();
-      return json.data || { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 };
-    } catch (e) {
-      return { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 };
-    }
-  }
-
-  async getWithdrawals(userId: string): Promise<Withdrawal[]> {
-    await this.initialize();
-    try {
-      const resp = await fetch(`/api/withdrawals?userId=${userId}`);
-      const json = await resp.json();
-      return json.data || [];
-    } catch (e) { return []; }
-  }
-
-  // Métodos anteriores existentes
   async getCampaignById(id: string): Promise<CampaignData | null> {
     await this.initialize();
     try {
-      const resp = await fetch(`/api/campaign-detail?id=${id}`);
+      const resp = await fetch(`/api/campaigns?id=${id}`);
       const json = await resp.json();
       return json.success ? this.mapCampaign(json.data) : null;
     } catch (e) { return null; }
@@ -152,8 +115,8 @@ export class CampaignService {
 
   async updateCampaign(id: string, userId: string, updates: any): Promise<CampaignData> {
     await this.initialize();
-    const response = await fetch('/api/update-campaign', {
-      method: 'POST',
+    const response = await fetch('/api/campaigns', {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, userId, updates })
     });
@@ -162,15 +125,33 @@ export class CampaignService {
     return this.mapCampaign(json.data);
   }
 
+  async updateCampaignStatus(id: string, userId: string, estado: CampaignStatus): Promise<boolean> {
+    return !!(await this.updateCampaign(id, userId, { estado }));
+  }
+
   async deleteCampaign(id: string, userId: string): Promise<boolean> {
     await this.initialize();
-    const response = await fetch('/api/delete-campaign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, userId })
-    });
+    const response = await fetch(`/api/campaigns?id=${id}&userId=${userId}`, { method: 'DELETE' });
     const json = await response.json();
     return json.success;
+  }
+
+  async getFinancialSummary(userId: string): Promise<FinancialSummary> {
+    await this.initialize();
+    try {
+      const resp = await fetch(`/api/financial-summary?userId=${userId}&type=summary`);
+      const json = await resp.json();
+      return json.data || { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 };
+    } catch (e) { return { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 }; }
+  }
+
+  async getWithdrawals(userId: string): Promise<Withdrawal[]> {
+    await this.initialize();
+    try {
+      const resp = await fetch(`/api/financial-summary?userId=${userId}&type=withdrawals`);
+      const json = await resp.json();
+      return json.data || [];
+    } catch (e) { return []; }
   }
 
   async polishStory(story: string): Promise<string> {
@@ -188,7 +169,7 @@ export class CampaignService {
 
   async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
     await this.initialize();
-    const response = await fetch('/api/process-payment', {
+    const response = await fetch('/api/preference?action=process', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paymentData, campaignId, metadata })

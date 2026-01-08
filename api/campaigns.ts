@@ -1,86 +1,74 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-/**
- * NOTA PARA EL DESARROLLADOR:
- * Si recibes el error "column user_id does not exist", ejecuta esto en Supabase SQL Editor:
- * ALTER TABLE campaigns ADD COLUMN user_id UUID REFERENCES auth.users(id);
- */
-
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ success: false, error: 'Database configuration missing.' });
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabase = createClient(supabaseUrl!, serviceRoleKey!);
 
   try {
-    if (req.method === 'GET') {
-      const { data, error } = await supabase
-        .from('campaigns')
-        .select('*')
-        .order('fecha_creacion', { ascending: false });
+    const { id, userId } = req.query;
 
-      if (error) throw error;
-      return res.status(200).json({ success: true, data: data || [] });
+    if (req.method === 'GET') {
+      if (id) {
+        // Detalle de campaña con sus donaciones (Antes en api/campaign-detail.ts)
+        const { data: campaign, error: cError } = await supabase.from('campaigns').select('*').eq('id', id).single();
+        if (cError) throw cError;
+        const { data: donations } = await supabase.from('donations').select('*').eq('campaign_id', id).order('fecha', { ascending: false }).limit(50);
+        return res.status(200).json({ success: true, data: { ...campaign, donations: donations || [] } });
+      } else if (userId) {
+        // Campañas de un usuario (Antes en api/user-campaigns.ts)
+        const { data, error } = await supabase.from('campaigns').select('*').eq('user_id', userId).order('fecha_creacion', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ success: true, data: data || [] });
+      } else {
+        // Todas las campañas
+        const { data, error } = await supabase.from('campaigns').select('*').order('fecha_creacion', { ascending: false });
+        if (error) throw error;
+        return res.status(200).json({ success: true, data: data || [] });
+      }
     }
 
     if (req.method === 'POST') {
-      const { 
-        titulo, 
-        historia, 
-        monto, 
-        categoria, 
-        ubicacion, 
-        imagenUrl, 
-        beneficiarioNombre, 
-        beneficiarioRelacion, 
-        user_id 
-      } = req.body;
-
-      if (!user_id) {
-        return res.status(400).json({ success: false, error: 'El ID de usuario es obligatorio para crear una campaña.' });
-      }
-      
-      const { data, error } = await supabase
-        .from('campaigns')
-        .insert([{ 
-          titulo, 
-          historia, 
-          monto: Number(monto), 
-          categoria, 
-          ubicacion, 
-          imagen_url: imagenUrl,
-          beneficiario_nombre: beneficiarioNombre,
-          beneficiario_relacion: beneficiarioRelacion,
-          user_id, 
-          recaudado: 0,
-          donantes_count: 0,
-          estado: 'activa'
-        }])
-        .select();
-
-      if (error) {
-        // Manejo específico para error de columna faltante
-        if (error.code === '42703') {
-          throw new Error("Error de Base de Datos: Falta la columna 'user_id' en la tabla 'campaigns'. Por favor, añádela en Supabase.");
-        }
-        throw error;
-      }
-      
+      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id } = req.body;
+      const { data, error } = await supabase.from('campaigns').insert([{ 
+        titulo, historia, monto: Number(monto), categoria, ubicacion, imagen_url: imagenUrl,
+        beneficiario_nombre: beneficiarioNombre, beneficiario_relacion: beneficiarioRelacion,
+        user_id, recaudado: 0, donantes_count: 0, estado: 'activa'
+      }]).select();
+      if (error) throw error;
       return res.status(201).json({ success: true, data: data[0] });
     }
+
+    if (req.method === 'PUT') {
+      // Actualizar campaña (Antes en api/update-campaign.ts)
+      const { id: bodyId, userId: bodyUserId, updates } = req.body;
+      const { data: campaign } = await supabase.from('campaigns').select('user_id').eq('id', bodyId).single();
+      if (!campaign || campaign.user_id !== bodyUserId) return res.status(403).json({ error: 'Unauthorized' });
+      const { data, error } = await supabase.from('campaigns').update(updates).eq('id', bodyId).select();
+      if (error) throw error;
+      return res.status(200).json({ success: true, data: data[0] });
+    }
+
+    if (req.method === 'DELETE') {
+      // Eliminar campaña (Antes en api/delete-campaign.ts)
+      const { id: queryId, userId: queryUserId } = req.query;
+      const { data: campaign } = await supabase.from('campaigns').select('user_id, recaudado').eq('id', queryId).single();
+      if (!campaign || campaign.user_id !== queryUserId) return res.status(403).json({ error: 'Unauthorized' });
+      if (campaign.recaudado > 0) return res.status(400).json({ error: 'Cannot delete campaign with donations' });
+      const { error } = await supabase.from('campaigns').delete().eq('id', queryId);
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    }
+
+    return res.status(405).end();
   } catch (error: any) {
-    console.error("[API/campaigns] Error:", error.message);
     return res.status(500).json({ success: false, error: error.message });
   }
 }
