@@ -35,6 +35,7 @@ const Auth: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[AuthPage] Submit iniciado. Modo:", isLogin ? "Login" : "Registro");
     
     if (!isLogin && !acceptTerms) {
       setError("Debes aceptar los Términos y Condiciones para continuar.");
@@ -54,13 +55,18 @@ const Auth: React.FC = () => {
       if (isLogin) {
         await authService.signIn(formData.email, formData.password);
       } else {
+        console.log("[AuthPage] Llamando a authService.signUp...");
         await authService.signUp(formData.email, formData.password, formData.fullName);
+        console.log("[AuthPage] authService.signUp completado.");
       }
       
       const from = (location.state as any)?.from?.pathname || '/';
+      console.log("[AuthPage] Navegando a:", from);
       navigate(from, { replace: true });
     } catch (err: any) {
-      console.error("Auth error catch:", err);
+      console.error("[AuthPage] Error capturado en handleSubmit:", err);
+      console.log("[AuthPage] Estructura del error:", JSON.stringify(err, null, 2));
+
       let msg = err.message || "Ocurrió un error inesperado.";
       const errorCode = err.status || 0;
       

@@ -47,6 +47,7 @@ export class AuthService {
         }
           
         if (url && key) {
+          console.log("[AuthService] Inicializando Supabase Client...");
           this.client = createClient(url, key, {
             auth: {
               persistSession: true,
@@ -72,9 +73,15 @@ export class AuthService {
   }
 
   async signUp(email: string, pass: string, fullName: string) {
+    console.log("[DEBUG] Inicio signUp en AuthService", { email });
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
+    if (!this.client) {
+        console.error("[DEBUG] Cliente Supabase no inicializado");
+        throw new Error("Servicio de autenticación no disponible.");
+    }
+    
+    console.log("[DEBUG] Llamando a supabase.auth.signUp...");
     // 1. Crear usuario en Auth
     const { data, error } = await this.client.auth.signUp({
       email,
@@ -82,22 +89,31 @@ export class AuthService {
       options: { data: { full_name: fullName } }
     });
 
-    if (error) throw error;
+    console.log("[DEBUG] Respuesta de supabase.auth.signUp:", { data, error });
+
+    if (error) {
+        console.error("[DEBUG] Error en signUp:", error);
+        throw error;
+    }
 
     // 2. Crear perfil manualmente si el registro fue exitoso y tenemos un usuario
     // Esto reemplaza al Trigger SQL que causaba error 504
     if (data.user) {
+      console.log("[DEBUG] Usuario creado con ID:", data.user.id, ". Intentando crear perfil manual...");
       try {
-        await this.client.from('profiles').insert([{
+        const profileResult = await this.client.from('profiles').insert([{
           id: data.user.id,
           full_name: fullName,
           role: 'user',
           is_verified: false
         }]);
+        console.log("[DEBUG] Resultado creación perfil:", profileResult);
       } catch (profileError) {
-        console.warn("El perfil no se pudo crear inmediatamente (posiblemente por confirmación de email pendiente), se creará en el primer login.", profileError);
+        console.warn("[DEBUG] El perfil no se pudo crear inmediatamente (posiblemente por confirmación de email pendiente), se creará en el primer login.", profileError);
         // No lanzamos error aquí para no interrumpir el flujo de éxito del registro
       }
+    } else {
+        console.warn("[DEBUG] SignUp exitoso pero no retornó objeto 'user' (Posible confirmación de email requerida)");
     }
 
     return data;
