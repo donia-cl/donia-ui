@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
@@ -29,8 +28,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!client) return null;
     
     try {
-      // Usamos maybeSingle() en lugar de single() para evitar error 406 (Not Acceptable)
-      // si el perfil aún no se ha creado en la DB.
       const { data, error } = await client
         .from('profiles')
         .select('*')
@@ -45,6 +42,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       return null;
     }
+  };
+
+  const ensureProfileExists = async (currentUser: User) => {
+    let userProfile = await fetchProfile(currentUser.id);
+    
+    // Si no existe perfil (común en Google Login por primera vez), lo creamos
+    if (!userProfile) {
+      console.log("Detectado usuario sin perfil. Intentando crear perfil automáticamente...");
+      try {
+          const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Usuario';
+          await fetch('/api/create-profile', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  id: currentUser.id,
+                  fullName: fullName
+              })
+          });
+          // Reintentamos buscar el perfil recién creado
+          userProfile = await fetchProfile(currentUser.id);
+      } catch (err) {
+          console.error("Error en auto-creación de perfil:", err);
+      }
+    }
+    return userProfile;
   };
 
   useEffect(() => {
@@ -63,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(currentUser);
           
           if (currentUser) {
-            const userProfile = await fetchProfile(currentUser.id);
+            const userProfile = await ensureProfileExists(currentUser);
             setProfile(userProfile);
           }
           
@@ -77,7 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(currentUser);
               
               if (currentUser) {
-                 const userProfile = await fetchProfile(currentUser.id);
+                 const userProfile = await ensureProfileExists(currentUser);
                  setProfile(userProfile);
               } else {
                  setProfile(null);
