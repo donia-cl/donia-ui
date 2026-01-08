@@ -191,7 +191,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   : 'bg-amber-50 border-amber-200 text-amber-700'
                 }`}>
                   <Database size={14} className={dbStatus === 'cloud' ? 'animate-pulse' : ''} />
-                  {dbStatus === 'cloud' ? 'Supabase Nube' : 'Local (Faltan Llaves)'}
+                  {dbStatus === 'cloud' ? 'Back-end Services' : 'Back-end Local'}
                 </div>
 
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[11px] font-bold border transition-all ${
@@ -200,7 +200,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   : 'bg-slate-100 border-slate-200 text-slate-500'
                 }`}>
                   <Cpu size={14} />
-                  {aiActive ? 'Motor IA Activo' : 'IA Desactivada'}
+                  {aiActive ? 'AI Services' : 'AI Services Off'}
                 </div>
               </div>
             </div>
