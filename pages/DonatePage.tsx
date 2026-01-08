@@ -49,7 +49,7 @@ const DonatePage: React.FC = () => {
 
   // --- CÁLCULO FINANCIERO (IVA INCLUIDO) ---
   
-  // 1. Calculamos el monto bruto de la propina (Lo que el usuario selecciona pagar)
+  // 1. Calculamos el monto bruto de la propina
   const tipGrossAmount = tipPercentage === 'custom' 
     ? customTipAmount 
     : Math.round(donationAmount * (Number(tipPercentage) / 100));
@@ -60,8 +60,21 @@ const DonatePage: React.FC = () => {
   // 3. Obtenemos el monto del IVA por diferencia
   const ivaAmount = tipGrossAmount - tipNetAmount;
 
-  // 4. El total a pagar es la donación + la propina bruta (que ya incluye el IVA)
+  // 4. El total a pagar es la donación + la propina bruta
   const totalAmount = donationAmount + tipGrossAmount;
+
+  // --- FUNCIÓN HELPER PARA STEP DINÁMICO ---
+  const getDynamicStep = (val: number) => {
+    if (!val || val === 0) return 500;
+    // El step es el 10% del valor actual, con un mínimo de 100 pesos
+    return Math.max(100, Math.floor(val / 10));
+  };
+
+  // Manejo manual de la propina
+  const handleManualTipChange = (val: number) => {
+    setCustomTipAmount(val);
+    setTipPercentage('custom');
+  };
 
   // Pre-llenar datos si el usuario está logueado
   useEffect(() => {
@@ -217,6 +230,7 @@ const DonatePage: React.FC = () => {
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-xl">$</span>
                       <input 
                         type="number" 
+                        step={getDynamicStep(donationAmount)}
                         className="w-full pl-9 pr-4 py-5 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-black text-slate-900 transition-all text-xl"
                         placeholder="0"
                         value={donationAmount || ''}
@@ -236,6 +250,7 @@ const DonatePage: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* SECCIÓN DE PROPINA MODIFICADA */}
                   <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                       <Zap size={80} className="text-violet-600" />
@@ -245,45 +260,45 @@ const DonatePage: React.FC = () => {
                          Apoyo a la plataforma Donia
                       </h3>
                       <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6 pr-10">
-                        Donia no cobra comisiones a los organizadores. Tu aporte (IVA incluido) nos permite seguir manteniendo el sitio gratuito.
+                        Donia no cobra comisiones a los organizadores. Tu aporte voluntario (IVA incluido) permite mantener el sitio gratuito.
                       </p>
                       
-                      <div className="grid grid-cols-5 gap-2 mb-4">
+                      {/* Botones de Porcentaje */}
+                      <div className="grid grid-cols-3 gap-2 mb-4">
                         {[10, 15, 20].map(pct => (
                           <button 
                             key={pct}
                             onClick={() => setTipPercentage(pct)}
-                            className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === pct ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
+                            className={`py-3 rounded-xl text-xs font-black border transition-all ${tipPercentage === pct ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
                           >
                             {pct}%
                           </button>
                         ))}
-                        <button 
-                           onClick={() => setTipPercentage('custom')}
-                           className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === 'custom' ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
-                        >
-                           Otro
-                        </button>
-                        <button 
-                           onClick={() => setTipPercentage(0)}
-                           className={`py-2 rounded-xl text-[10px] font-black border transition-all ${tipPercentage === 0 ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
-                        >
-                           0%
-                        </button>
                       </div>
 
-                      {tipPercentage === 'custom' && (
-                        <div className="relative animate-in slide-in-from-top-2 duration-200">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-sm">$</span>
+                      {/* Input Manual siempre visible */}
+                      <div>
+                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Monto del aporte</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-sm">$</span>
                           <input 
                             type="number"
-                            className="w-full pl-7 pr-4 py-3 bg-white border border-violet-100 rounded-xl outline-none font-bold text-slate-700 text-sm focus:border-violet-300 transition-all"
+                            step={getDynamicStep(tipGrossAmount)}
+                            className={`w-full pl-8 pr-4 py-3 border rounded-xl outline-none font-bold text-slate-700 text-sm focus:border-violet-300 transition-all ${
+                              tipPercentage === 'custom' ? 'bg-white border-violet-200' : 'bg-slate-100 border-transparent text-slate-500'
+                            }`}
                             placeholder="Monto de aporte (IVA incluido)"
-                            value={customTipAmount || ''}
-                            onChange={(e) => setCustomTipAmount(Number(e.target.value))}
+                            value={tipGrossAmount || ''}
+                            onChange={(e) => handleManualTipChange(Number(e.target.value))}
                           />
                         </div>
-                      )}
+                        {tipPercentage !== 'custom' && tipGrossAmount > 0 && (
+                          <p className="text-[10px] text-slate-400 mt-1.5 ml-1 italic">
+                            Calculado automáticamente ({tipPercentage}%). Escribe para cambiarlo.
+                          </p>
+                        )}
+                      </div>
+
                     </div>
                   </div>
 
