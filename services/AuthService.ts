@@ -16,7 +16,7 @@ export class AuthService {
   }
 
   public async initialize(): Promise<void> {
-    if (this.client) return; // Si ya existe cliente, no hacer nada
+    if (this.client) return;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
@@ -24,7 +24,6 @@ export class AuthService {
         let url = '';
         let key = '';
 
-        // 1. Intentar cargar variables de entorno (Build time injection)
         try {
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -44,7 +43,6 @@ export class AuthService {
           } catch (e) { /* ignore */ }
         }
 
-        // 2. Intentar cargar configuración del servidor (Runtime injection)
         if (!url || !key) {
            try {
              const resp = await fetch('/api/config');
@@ -69,7 +67,7 @@ export class AuthService {
             }
           });
         } else {
-          console.error("[AuthService] Error Crítico: No se encontraron llaves de Supabase (URL o KEY faltantes).");
+          console.error("[AuthService] Error Crítico: No se encontraron llaves de Supabase.");
         }
       } catch (e) {
         console.error("[AuthService] Initialization failed:", e);
@@ -87,17 +85,15 @@ export class AuthService {
     await this.initialize();
     
     if (!this.client) {
-        throw new Error("Servicio de autenticación no disponible (Faltan credenciales).");
+        throw new Error("Servicio de autenticación no disponible.");
     }
     
     // 1. Crear usuario en Auth
-    // Nota: Si esto da 504, es probable que sea por el servicio de envío de emails de Supabase.
     const { data, error } = await this.client.auth.signUp({
       email,
       password: pass,
       options: { 
-        data: { full_name: fullName },
-        // Intencionalmente no redirigimos para minimizar puntos de fallo en el flujo
+        data: { full_name: fullName }
       }
     });
 
@@ -106,18 +102,19 @@ export class AuthService {
         throw error;
     }
 
-    // 2. Crear perfil manualmente si el registro fue exitoso
+    // 2. Crear perfil vía API Backend (para saltar RLS policy que da error 403)
     if (data.user) {
       try {
-        await this.client.from('profiles').insert([{
-          id: data.user.id,
-          full_name: fullName,
-          role: 'user',
-          is_verified: false
-        }]);
+        await fetch('/api/create-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: data.user.id,
+                fullName: fullName
+            })
+        });
       } catch (profileError) {
-        // No bloqueamos el flujo si falla el perfil, se puede crear después
-        console.warn("[AuthService] El perfil se creará en el próximo login.", profileError);
+        console.warn("[AuthService] Error conectando con api/create-profile", profileError);
       }
     }
 
@@ -126,7 +123,7 @@ export class AuthService {
 
   async signIn(email: string, pass: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible (Faltan credenciales).");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     const { data, error } = await this.client.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     return data;
@@ -134,7 +131,7 @@ export class AuthService {
 
   async signInWithGoogle() {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible (Faltan credenciales).");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
     const redirectTo = window.location.origin;
     

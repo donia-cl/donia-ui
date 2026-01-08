@@ -29,18 +29,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!client) return null;
     
     try {
+      // Usamos maybeSingle() en lugar de single() para evitar error 406 (Not Acceptable)
+      // si el perfil aún no se ha creado en la DB.
       const { data, error } = await client
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
         
       if (error) {
-        // Ignoramos error PGRST116 (JSON nulo/no encontrado) para no ensuciar la consola
-        // Esto pasa si el usuario existe en Auth pero no tiene perfil aún (antes de la migración)
-        if (error.code !== 'PGRST116') {
-           console.error("Error fetching profile:", error);
-        }
+        console.error("Error fetching profile:", error);
         return null;
       }
       return data as Profile;
@@ -79,7 +77,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(currentUser);
               
               if (currentUser) {
-                 // Si nos logueamos, buscamos el perfil actualizado
                  const userProfile = await fetchProfile(currentUser.id);
                  setProfile(userProfile);
               } else {
