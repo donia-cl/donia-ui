@@ -23,17 +23,11 @@ const Auth: React.FC = () => {
   // Resetear estados de carga al entrar o volver a la página (soluciona el bloqueo por bfcache)
   useEffect(() => {
     const resetLoading = (event?: PageTransitionEvent) => {
-      // Si event existe y es persistente, significa que viene del cache del navegador (botón atrás)
       setLoading(false);
       setGoogleLoading(false);
     };
-
-    // Reset inmediato al montar
     resetLoading();
-
-    // Escuchar el evento pageshow para detectar navegaciones de retroceso
     window.addEventListener('pageshow', resetLoading);
-    
     return () => {
       window.removeEventListener('pageshow', resetLoading);
     };
@@ -68,15 +62,14 @@ const Auth: React.FC = () => {
     } catch (err: any) {
       console.error("Auth error catch:", err);
       let msg = err.message || "Ocurrió un error inesperado.";
+      const errorCode = err.status || 0;
       
       // Traducción de errores comunes de Supabase
       if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
       if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
-      if (msg.includes("Database error saving new user")) {
-        msg = "Error de configuración del sistema (Trigger DB). Revisa la consola.";
-        console.error("IMPORTANTE: El trigger handle_new_user falló. Asegúrate de que la función tenga 'SECURITY DEFINER' para saltar las políticas RLS.");
-      }
+      if (errorCode === 504 || msg.includes("Timeout")) msg = "El servidor tardó en responder. Por favor intenta nuevamente.";
+      if (msg.includes("Database error saving new user")) msg = "Error de sistema. Por favor contacta a soporte.";
       
       setError(msg);
       setLoading(false);
@@ -89,7 +82,6 @@ const Auth: React.FC = () => {
     try {
       await authService.signInWithGoogle();
       // NO reseteamos googleLoading a false aquí porque la redirección ocurrirá
-      // y queremos evitar que el usuario haga clic de nuevo.
     } catch (err: any) {
       console.error("Google Auth error:", err);
       setError(err.message || "No pudimos conectar con Google. Verifica la configuración en Supabase.");

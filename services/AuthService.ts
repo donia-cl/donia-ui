@@ -25,13 +25,11 @@ export class AuthService {
         let key = '';
 
         // 1. Intentar cargar variables de entorno (Build time injection)
-        // Usamos try/catch para permitir que el bundler reemplace las variables si existen,
-        // pero evitando que la app crashee si 'process' no está definido en el navegador.
         try {
           url = process.env.REACT_APP_SUPABASE_URL || '';
           key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
         } catch (e) {
-          // Ignoramos error si process no está definido, url/key seguirán vacíos
+          // Ignoramos error si process no está definido
         }
 
         // 2. Intentar cargar configuración del servidor (Runtime injection) si no hay env vars
@@ -76,12 +74,32 @@ export class AuthService {
   async signUp(email: string, pass: string, fullName: string) {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
+    
+    // 1. Crear usuario en Auth
     const { data, error } = await this.client.auth.signUp({
       email,
       password: pass,
       options: { data: { full_name: fullName } }
     });
+
     if (error) throw error;
+
+    // 2. Crear perfil manualmente si el registro fue exitoso y tenemos un usuario
+    // Esto reemplaza al Trigger SQL que causaba error 504
+    if (data.user) {
+      try {
+        await this.client.from('profiles').insert([{
+          id: data.user.id,
+          full_name: fullName,
+          role: 'user',
+          is_verified: false
+        }]);
+      } catch (profileError) {
+        console.warn("El perfil no se pudo crear inmediatamente (posiblemente por confirmación de email pendiente), se creará en el primer login.", profileError);
+        // No lanzamos error aquí para no interrumpir el flujo de éxito del registro
+      }
+    }
+
     return data;
   }
 
@@ -97,7 +115,6 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
-    // Usamos origin limpio. Supabase añadirá el hash.
     const redirectTo = window.location.origin;
     
     const { data, error } = await this.client.auth.signInWithOAuth({
