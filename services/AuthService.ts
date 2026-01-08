@@ -6,13 +6,7 @@ export class AuthService {
   private client: SupabaseClient | null = null;
   private initPromise: Promise<void> | null = null;
 
-  private constructor() {
-    const url = process.env.REACT_APP_SUPABASE_URL;
-    const key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-    if (url && key) {
-      this.client = createClient(url, key);
-    }
-  }
+  private constructor() {}
 
   public static getInstance(): AuthService {
     if (!AuthService.instance) {
@@ -32,8 +26,14 @@ export class AuthService {
           const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
           const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
           
-          if (url && key && (!this.client || this.client.auth === undefined)) {
-            this.client = createClient(url, key);
+          if (url && key && !this.client) {
+            this.client = createClient(url, key, {
+              auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+              }
+            });
           }
         }
       } catch (e) {
@@ -72,20 +72,13 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
     
-    // Forzamos HTTPS en producción para evitar el error de "Insecure redirect" de Google
-    let currentOrigin = window.location.origin;
-    if (currentOrigin.includes('donia.cl') && !currentOrigin.startsWith('https://')) {
-      currentOrigin = currentOrigin.replace('http://', 'https://');
-    }
-
+    let currentOrigin = window.location.origin + window.location.pathname;
+    // En HashRouter, redirigimos al origen y dejamos que Supabase maneje el fragmento
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
       options: { 
         redirectTo: currentOrigin,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        }
+        queryParams: { access_type: 'offline', prompt: 'consent' }
       }
     });
     if (error) throw error;

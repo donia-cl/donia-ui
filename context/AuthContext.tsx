@@ -22,40 +22,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initApp = async () => {
-      // 1. Inicializamos servicios
       await Promise.all([
         authService.initialize(),
         campaignService.initialize()
       ]);
       
-      // 2. Recuperar sesión actual
       const session = await authService.getSession();
       
       if (mounted) {
         setUser(session?.user ?? null);
         setLoading(false);
-
-        // 3. Limpieza de fragmentos de Supabase (OAuth tokens)
-        // Al usar HashRouter, debemos ser cuidadosos: solo limpiamos si el hash NO comienza con #/ (que es una ruta)
-        const hash = window.location.hash;
-        if (hash && (hash.includes('access_token=') || hash.includes('type=recovery'))) {
-          // Si estamos usando HashRouter, el hash podría tener tokens. 
-          // Supabase usualmente los pone al principio.
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        }
       }
 
-      // 4. Suscribirse a cambios reales
       const client = authService.getSupabase();
       if (client && mounted) {
         const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
           if (mounted) {
             setUser(session?.user ?? null);
             
-            // Limpiar hash si hay tokens después del evento de login
-            const hash = window.location.hash;
-            if (session && (hash.includes('access_token=') || hash.includes('type=recovery'))) {
-              window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            // Si el evento es SIGNED_IN y hay tokens en la URL, los limpiamos con cuidado
+            if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+              const hash = window.location.hash;
+              if (hash.includes('access_token=')) {
+                // Solo eliminamos la parte de los parámetros de Supabase del hash
+                // para no romper la ruta de HashRouter (e.g. #/dashboard)
+                const cleanHash = hash.split('#')[0] || hash.split('&')[0];
+                if (cleanHash !== hash) {
+                   window.history.replaceState(null, '', window.location.pathname + window.location.search + cleanHash);
+                }
+              }
             }
           }
         });
@@ -67,10 +62,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initApp();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
 
   const signOut = async () => {
