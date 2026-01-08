@@ -20,6 +20,8 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, supabaseKey);
 
   try {
+    // NOTA: Se ha eliminado 'status' del objeto para evitar errores si la columna no existe en la BD.
+    // Si la columna 'payment_provider' tampoco existe, podrías necesitar eliminar esa línea también.
     const donationData: any = { 
       campaign_id: campaignId, 
       monto: Number(monto), 
@@ -27,8 +29,7 @@ export default async function handler(req: any, res: any) {
       donor_email: email, // Guardamos el email
       donor_user_id: donorUserId || null, // Linkeamos al usuario si existe
       comentario: comentario || null,
-      payment_provider: 'simulated', // Marcamos como simulación/directo
-      status: 'completed'
+      payment_provider: 'simulated' // Marcamos como simulación/directo
     };
 
     // 1. Insertar donación

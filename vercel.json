@@ -15,7 +15,7 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { 
           "key": "Content-Security-Policy", 
-          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' https://cdn.tailwindcss.com https://sdk.mercadopago.com https://esm.sh https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; connect-src 'self' https://*.supabase.co https://*.mercadopago.com https://generativelanguage.googleapis.com https://esm.sh; frame-src 'self' https://*.mercadopago.com https://accounts.google.com; object-src 'none'; base-uri 'self';" 
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://sdk.mercadopago.com https://esm.sh https://apis.google.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' https: data: blob:; connect-src 'self' https://*.supabase.co https://*.mercadopago.com https://generativelanguage.googleapis.com https://esm.sh; frame-src 'self' https://*.mercadopago.com https://accounts.google.com; object-src 'none'; base-uri 'self';" 
         }
       ]
     }
