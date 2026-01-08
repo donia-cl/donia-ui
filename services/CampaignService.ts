@@ -83,6 +83,15 @@ export class CampaignService {
     } catch (e) { return []; }
   }
 
+  async getUserDonations(userId: string): Promise<Donation[]> {
+    await this.initialize();
+    try {
+      const resp = await fetch(`/api/user-donations?userId=${userId}`);
+      const json = await resp.json();
+      return json.data || [];
+    } catch (e) { return []; }
+  }
+
   async getCampaignById(id: string): Promise<CampaignData | null> {
     await this.initialize();
     try {

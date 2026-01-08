@@ -25,7 +25,7 @@ export interface CampaignData {
   beneficiarioNombre?: string;
   beneficiarioRelacion?: string;
   donations?: Donation[];
-  owner_id?: string; // Reemplaza conceptualmente a user_id
+  owner_id?: string;
 }
 
 export interface Donation {
@@ -34,9 +34,15 @@ export interface Donation {
   monto: number;
   fecha: string;
   nombreDonante: string;
-  emailDonante: string; // Nuevo campo obligatorio
+  emailDonante: string;
   comentario?: string;
-  donorUserId?: string; // Opcional, vincula con Profile si existe
+  donorUserId?: string;
+  status?: 'completed' | 'refunded' | 'pending'; // Nuevo campo para control de devoluciones
+  paymentId?: string;
+  campaign?: { // Datos expandidos para el dashboard del donante
+    titulo: string;
+    imagenUrl: string;
+  };
 }
 
 export interface Withdrawal {

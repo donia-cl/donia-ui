@@ -25,21 +25,28 @@ import {
   Lock,
   ArrowRight,
   ArrowUpRight,
-  ExternalLink
+  HeartHandshake,
+  Download,
+  HelpCircle,
+  AlertOctagon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CampaignService } from '../services/CampaignService';
-import { CampaignData, FinancialSummary, Withdrawal, CampaignStatus } from '../types';
+import { CampaignData, FinancialSummary, Withdrawal, Donation } from '../types';
 
-type TabType = 'resumen' | 'finanzas' | 'seguridad' | 'perfil';
+type TabType = 'resumen' | 'donaciones' | 'finanzas' | 'seguridad' | 'perfil';
 
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('resumen');
+  
+  // Estados de datos
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]); // Mis donaciones realizadas
   const [financials, setFinancials] = useState<FinancialSummary | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  
   const [loading, setLoading] = useState(true);
   
   const service = CampaignService.getInstance();
@@ -57,12 +64,15 @@ const Dashboard: React.FC = () => {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [cData, fData, wData] = await Promise.all([
+      // Cargamos todo en paralelo para optimizar
+      const [cData, dData, fData, wData] = await Promise.all([
         service.getUserCampaigns(user!.id),
+        service.getUserDonations(user!.id),
         service.getFinancialSummary(user!.id),
         service.getWithdrawals(user!.id)
       ]);
       setCampaigns(cData);
+      setDonations(dData);
       setFinancials(fData);
       setWithdrawals(wData);
     } catch (e) {
@@ -93,6 +103,11 @@ const Dashboard: React.FC = () => {
     const url = `${window.location.origin}/#/campana/${id}`;
     navigator.clipboard.writeText(url);
     alert("¡Enlace copiado!");
+  };
+
+  const downloadReceipt = (donation: Donation) => {
+    // Aquí iría la lógica real de generación de PDF. Por ahora un alert.
+    alert(`Descargando comprobante para donación #${donation.id.slice(0,8)}...`);
   };
 
   if (authLoading || loading) {
@@ -130,8 +145,9 @@ const Dashboard: React.FC = () => {
 
           <nav className="flex gap-8 mt-10 overflow-x-auto no-scrollbar">
             {[
-              { id: 'resumen', label: 'Resumen y Campañas', icon: BarChart3 },
-              { id: 'finanzas', label: 'Mis Finanzas', icon: Wallet },
+              { id: 'resumen', label: 'Mis Campañas', icon: BarChart3 },
+              { id: 'donaciones', label: 'Mis Donaciones', icon: HeartHandshake },
+              { id: 'finanzas', label: 'Finanzas', icon: Wallet },
               { id: 'seguridad', label: 'Seguridad', icon: ShieldCheck },
               { id: 'perfil', label: 'Perfil', icon: UserIcon }
             ].map(tab => (
@@ -154,6 +170,7 @@ const Dashboard: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
+        {/* TAB: MIS CAMPAÑAS (RESUMEN) */}
         {activeTab === 'resumen' && (
           <div className="space-y-10 animate-in fade-in duration-500">
             {/* GRID DE ESTADÍSTICAS BENTO */}
@@ -188,7 +205,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* LISTA DE CAMPAÑAS INTEGRADA */}
+            {/* LISTA DE CAMPAÑAS */}
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-black text-slate-900 tracking-tight">Tus Historias</h2>
@@ -236,6 +253,107 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {/* TAB: MIS DONACIONES (NUEVO) */}
+        {activeTab === 'donaciones' && (
+          <div className="animate-in slide-in-from-right-4 duration-500 space-y-6">
+             <div className="bg-sky-50 p-8 rounded-[40px] border border-sky-100 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-black text-sky-900 tracking-tight mb-2">Mi Impacto</h2>
+                  <p className="text-sky-700 font-medium text-sm">Gracias por ser parte del cambio. Aquí está el historial de tu generosidad.</p>
+                </div>
+                <div className="text-right hidden md:block">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-sky-600 mb-1">Total Donado</p>
+                  <p className="text-4xl font-black text-sky-900">${donations.reduce((acc, d) => acc + (d.status !== 'refunded' ? d.monto : 0), 0).toLocaleString('es-CL')}</p>
+                </div>
+             </div>
+
+             <div className="space-y-4">
+               {donations.length > 0 ? donations.map(d => (
+                 <div key={d.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-6 group hover:border-violet-100 transition-all">
+                    {/* Imagen Campaña */}
+                    <div className="w-full md:w-20 h-20 rounded-2xl overflow-hidden shrink-0 bg-slate-100 relative">
+                       {d.campaign?.imagenUrl ? (
+                         <img src={d.campaign.imagenUrl} className="w-full h-full object-cover" alt="" />
+                       ) : (
+                         <div className="w-full h-full flex items-center justify-center text-slate-300"><Heart size={24} /></div>
+                       )}
+                    </div>
+                    
+                    {/* Info Central */}
+                    <div className="flex-grow w-full">
+                       <div className="flex justify-between items-start mb-1">
+                          <Link to={`/campana/${d.campaignId}`} className="font-black text-slate-900 text-lg hover:text-violet-600 transition-colors line-clamp-1">
+                            {d.campaign?.titulo || 'Campaña no disponible'}
+                          </Link>
+                          {d.status === 'completed' && (
+                            <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100">
+                              Confirmada
+                            </span>
+                          )}
+                          {d.status === 'refunded' && (
+                            <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-slate-200">
+                              Reembolsada
+                            </span>
+                          )}
+                          {d.status === 'pending' && (
+                            <span className="bg-amber-50 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-100">
+                              Procesando
+                            </span>
+                          )}
+                       </div>
+                       <div className="flex items-center gap-4 text-xs font-medium text-slate-500">
+                          <span>{new Date(d.fecha).toLocaleDateString('es-CL', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                          <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                          <span>ID: {d.id.slice(0, 8)}</span>
+                       </div>
+                    </div>
+
+                    {/* Monto y Acciones */}
+                    <div className="flex flex-row md:flex-col items-center md:items-end justify-between w-full md:w-auto gap-4 md:gap-2 border-t md:border-t-0 border-slate-50 pt-4 md:pt-0">
+                       <p className={`text-xl font-black ${d.status === 'refunded' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                         ${d.monto.toLocaleString('es-CL')}
+                       </p>
+                       
+                       <div className="flex gap-2">
+                          <button 
+                            onClick={() => downloadReceipt(d)}
+                            className="p-2 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all" 
+                            title="Descargar Comprobante"
+                          >
+                             <Download size={18} />
+                          </button>
+                          <a 
+                            href="mailto:soporte@donia.cl"
+                            className="p-2 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-xl transition-all" 
+                            title="Ayuda con esta donación"
+                          >
+                             <HelpCircle size={18} />
+                          </a>
+                       </div>
+                    </div>
+                 </div>
+               )) : (
+                 <div className="text-center py-20 bg-white rounded-[40px] border-2 border-dashed border-slate-200">
+                    <HeartHandshake size={48} className="mx-auto text-slate-200 mb-4" />
+                    <p className="text-slate-400 font-bold mb-6">Aún no has realizado donaciones con esta cuenta.</p>
+                    <Link to="/explorar" className="text-violet-600 font-black hover:underline">Explorar causas para apoyar</Link>
+                 </div>
+               )}
+             </div>
+
+             <div className="bg-amber-50 p-6 rounded-3xl border border-amber-100 flex gap-4 items-start">
+                <AlertOctagon className="text-amber-500 shrink-0 mt-1" size={20} />
+                <div>
+                   <h4 className="font-black text-amber-800 text-sm mb-1">Política de Devoluciones</h4>
+                   <p className="text-xs text-amber-700/80 leading-relaxed font-medium">
+                     Si detectas una irregularidad en una campaña apoyada, contáctanos inmediatamente. Donia puede congelar fondos y procesar reembolsos directamente a tu medio de pago original si la campaña infringe nuestros términos de servicio.
+                   </p>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {/* TAB: FINANZAS */}
         {activeTab === 'finanzas' && (
           <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-8">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -297,6 +415,7 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {/* TAB: SEGURIDAD */}
         {activeTab === 'seguridad' && (
           <div className="animate-in slide-in-from-right-4 duration-500 max-w-2xl">
             <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm p-10">
@@ -339,6 +458,7 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {/* TAB: PERFIL */}
         {activeTab === 'perfil' && (
           <div className="animate-in fade-in duration-500 max-w-xl">
             <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm">
