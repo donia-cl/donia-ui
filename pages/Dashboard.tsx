@@ -28,28 +28,42 @@ import {
   HeartHandshake,
   Download,
   HelpCircle,
-  AlertOctagon
+  AlertOctagon,
+  AlertTriangle,
+  Save,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { AuthService } from '../services/AuthService';
 import { CampaignService } from '../services/CampaignService';
-import { CampaignData, FinancialSummary, Withdrawal, Donation } from '../types';
+import { CampaignData, FinancialSummary, Withdrawal, Donation, Profile } from '../types';
 
 type TabType = 'resumen' | 'donaciones' | 'finanzas' | 'seguridad' | 'perfil';
 
 const Dashboard: React.FC = () => {
-  const { user, loading: authLoading, signOut } = useAuth();
+  const { user, profile, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('resumen');
   
   // Estados de datos
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
-  const [donations, setDonations] = useState<Donation[]>([]); // Mis donaciones realizadas
+  const [donations, setDonations] = useState<Donation[]>([]);
   const [financials, setFinancials] = useState<FinancialSummary | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  
+  // Estado para edición de perfil
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    full_name: '',
+    rut: '',
+    phone: ''
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
   
   const [loading, setLoading] = useState(true);
   
   const service = CampaignService.getInstance();
+  const authService = AuthService.getInstance();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -58,13 +72,20 @@ const Dashboard: React.FC = () => {
     }
     if (user) {
       loadAllData();
+      // Inicializar formulario de perfil
+      if (profile) {
+        setProfileForm({
+          full_name: profile.full_name || '',
+          rut: profile.rut || '',
+          phone: profile.phone || ''
+        });
+      }
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, profile]);
 
   const loadAllData = async () => {
     setLoading(true);
     try {
-      // Cargamos todo en paralelo para optimizar
       const [cData, dData, fData, wData] = await Promise.all([
         service.getUserCampaigns(user!.id),
         service.getUserDonations(user!.id),
@@ -79,6 +100,26 @@ const Dashboard: React.FC = () => {
       console.error("Error loading dashboard data:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateProfile = async () => {
+    if (!user) return;
+    setProfileSaving(true);
+    try {
+      await authService.updateProfile(user.id, {
+        full_name: profileForm.full_name,
+        rut: profileForm.rut,
+        phone: profileForm.phone
+      });
+      setIsEditingProfile(false);
+      // Recargar página para actualizar contexto (solución simple, idealmente actualizar contexto)
+      window.location.reload(); 
+    } catch (e) {
+      console.error("Error updating profile:", e);
+      alert("Error actualizando perfil. Intenta nuevamente.");
+    } finally {
+      setProfileSaving(false);
     }
   };
 
@@ -106,9 +147,11 @@ const Dashboard: React.FC = () => {
   };
 
   const downloadReceipt = (donation: Donation) => {
-    // Aquí iría la lógica real de generación de PDF. Por ahora un alert.
     alert(`Descargando comprobante para donación #${donation.id.slice(0,8)}...`);
   };
+
+  // Check de perfil incompleto
+  const isProfileIncomplete = !profile?.rut || !profile?.phone;
 
   if (authLoading || loading) {
     return (
@@ -132,7 +175,7 @@ const Dashboard: React.FC = () => {
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mi Panel de Control</p>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                  Hola, {user?.user_metadata?.full_name?.split(' ')[0] || 'Usuario'}
+                  Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}
                 </h1>
               </div>
             </div>
@@ -154,7 +197,7 @@ const Dashboard: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as TabType)}
-                className={`flex items-center gap-2 pb-4 text-xs font-black transition-all border-b-2 uppercase tracking-widest whitespace-nowrap ${
+                className={`flex items-center gap-2 pb-4 text-xs font-black transition-all border-b-2 uppercase tracking-widest whitespace-nowrap relative ${
                   activeTab === tab.id 
                   ? 'border-violet-600 text-violet-600' 
                   : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -162,6 +205,9 @@ const Dashboard: React.FC = () => {
               >
                 <tab.icon size={14} />
                 {tab.label}
+                {tab.id === 'perfil' && isProfileIncomplete && (
+                   <span className="absolute -top-1 -right-2 w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                )}
               </button>
             ))}
           </nav>
@@ -173,8 +219,8 @@ const Dashboard: React.FC = () => {
         {/* TAB: MIS CAMPAÑAS (RESUMEN) */}
         {activeTab === 'resumen' && (
           <div className="space-y-10 animate-in fade-in duration-500">
-            {/* GRID DE ESTADÍSTICAS BENTO */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+             {/* ... contenido existente ... */}
+             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="md:col-span-2 bg-gradient-to-br from-violet-600 to-indigo-700 p-8 rounded-[40px] text-white shadow-xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
                   <Banknote size={120} />
@@ -253,9 +299,10 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: MIS DONACIONES (NUEVO) */}
+        {/* TAB: MIS DONACIONES */}
         {activeTab === 'donaciones' && (
           <div className="animate-in slide-in-from-right-4 duration-500 space-y-6">
+             {/* ... contenido existente ... */}
              <div className="bg-sky-50 p-8 rounded-[40px] border border-sky-100 flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-sky-900 tracking-tight mb-2">Mi Impacto</h2>
@@ -356,6 +403,7 @@ const Dashboard: React.FC = () => {
         {/* TAB: FINANZAS */}
         {activeTab === 'finanzas' && (
           <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-8">
+             {/* ... contenido existente ... */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-emerald-50 p-10 rounded-[40px] border border-emerald-100 relative overflow-hidden group">
                    <div className="absolute top-0 right-0 p-6 text-emerald-200/50 group-hover:scale-110 transition-transform">
@@ -418,7 +466,8 @@ const Dashboard: React.FC = () => {
         {/* TAB: SEGURIDAD */}
         {activeTab === 'seguridad' && (
           <div className="animate-in slide-in-from-right-4 duration-500 max-w-2xl">
-            <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm p-10">
+             {/* ... contenido existente ... */}
+             <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm p-10">
               <div className="flex items-center gap-4 mb-10">
                 <div className="w-14 h-14 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center">
                   <ShieldCheck size={28} />
@@ -458,26 +507,158 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: PERFIL */}
+        {/* TAB: PERFIL (MODIFICADO) */}
         {activeTab === 'perfil' && (
           <div className="animate-in fade-in duration-500 max-w-xl">
-            <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm">
-              <h3 className="text-2xl font-black text-slate-900 mb-10 tracking-tight">Tu Perfil</h3>
-              <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre registrado</label>
-                  <p className="font-black text-slate-900 p-4 bg-slate-50 rounded-2xl border border-slate-100">{user?.user_metadata?.full_name || 'Usuario'}</p>
+             {/* Alerta de Perfil Incompleto */}
+             {isProfileIncomplete && !isEditingProfile && (
+                <div className="mb-6 bg-amber-50 border border-amber-200 rounded-[32px] p-6 flex items-start gap-4">
+                   <div className="bg-amber-100 p-2.5 rounded-xl text-amber-600 shrink-0">
+                      <AlertTriangle size={24} />
+                   </div>
+                   <div>
+                      <h4 className="text-amber-900 font-black text-sm mb-1">Perfil Incompleto</h4>
+                      <p className="text-amber-800/80 text-xs font-medium leading-relaxed mb-3">
+                         Para crear campañas de manera segura y gestionar retiros, necesitamos completar tu RUT y teléfono de contacto.
+                      </p>
+                      <button 
+                         onClick={() => setIsEditingProfile(true)}
+                         className="bg-amber-500 text-white px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-colors shadow-md shadow-amber-200"
+                      >
+                         Completar ahora
+                      </button>
+                   </div>
                 </div>
-                <div>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Email de contacto</label>
-                  <p className="font-black text-slate-900 p-4 bg-slate-50 rounded-2xl border border-slate-100">{user?.email}</p>
-                </div>
-                <div className="pt-6">
-                  <button onClick={() => signOut()} className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-black hover:bg-rose-100 transition-all flex items-center justify-center gap-2">
-                    Cerrar Sesión
-                  </button>
-                </div>
-              </div>
+             )}
+
+            <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm relative overflow-hidden">
+               {/* Modo Visualización */}
+               {!isEditingProfile ? (
+                  <>
+                     <div className="flex justify-between items-start mb-10">
+                        <h3 className="text-2xl font-black text-slate-900 tracking-tight">Tu Perfil</h3>
+                        <button 
+                           onClick={() => setIsEditingProfile(true)}
+                           className="flex items-center gap-2 px-4 py-2 bg-slate-50 text-slate-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl font-bold text-xs transition-all"
+                        >
+                           <Edit3 size={16} /> Editar
+                        </button>
+                     </div>
+
+                     <div className="space-y-6">
+                        <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre registrado</label>
+                           <p className="font-black text-slate-900 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                              {profile?.full_name || 'Sin nombre'}
+                           </p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                           <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">RUT / DNI</label>
+                              <div className="font-black text-slate-900 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                 {profile?.rut || <span className="text-slate-400 italic font-medium text-xs">Pendiente</span>}
+                                 {!profile?.rut && <AlertTriangle size={14} className="text-amber-500" />}
+                              </div>
+                           </div>
+                           <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Teléfono</label>
+                              <div className="font-black text-slate-900 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                 {profile?.phone || <span className="text-slate-400 italic font-medium text-xs">Pendiente</span>}
+                                 {!profile?.phone && <AlertTriangle size={14} className="text-amber-500" />}
+                              </div>
+                           </div>
+                        </div>
+
+                        <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Email de contacto</label>
+                           <p className="font-bold text-slate-500 p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                              {user?.email}
+                              <Lock size={14} className="text-slate-300" />
+                           </p>
+                        </div>
+
+                        <div className="pt-6 border-t border-slate-50">
+                           <button onClick={() => signOut()} className="w-full py-4 bg-rose-50 text-rose-600 rounded-2xl font-black hover:bg-rose-100 transition-all flex items-center justify-center gap-2">
+                              Cerrar Sesión
+                           </button>
+                        </div>
+                     </div>
+                  </>
+               ) : (
+                  // Modo Edición
+                  <div className="animate-in fade-in zoom-in-95 duration-300">
+                     <div className="flex justify-between items-center mb-8">
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight">Editando Información</h3>
+                        <button 
+                           onClick={() => setIsEditingProfile(false)}
+                           className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all"
+                        >
+                           <X size={20} />
+                        </button>
+                     </div>
+
+                     <div className="space-y-5">
+                        <div>
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Nombre Completo</label>
+                           <input
+                              type="text"
+                              className="w-full p-4 bg-white border-2 border-slate-100 focus:border-violet-200 focus:bg-slate-50 rounded-2xl outline-none font-bold text-slate-900 transition-all"
+                              value={profileForm.full_name}
+                              onChange={(e) => setProfileForm({...profileForm, full_name: e.target.value})}
+                              placeholder="Tu nombre legal"
+                           />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                           <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">RUT / DNI</label>
+                              <input
+                                 type="text"
+                                 className="w-full p-4 bg-white border-2 border-slate-100 focus:border-violet-200 focus:bg-slate-50 rounded-2xl outline-none font-bold text-slate-900 transition-all"
+                                 value={profileForm.rut}
+                                 onChange={(e) => setProfileForm({...profileForm, rut: e.target.value})}
+                                 placeholder="12.345.678-9"
+                              />
+                           </div>
+                           <div>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Teléfono</label>
+                              <input
+                                 type="text"
+                                 className="w-full p-4 bg-white border-2 border-slate-100 focus:border-violet-200 focus:bg-slate-50 rounded-2xl outline-none font-bold text-slate-900 transition-all"
+                                 value={profileForm.phone}
+                                 onChange={(e) => setProfileForm({...profileForm, phone: e.target.value})}
+                                 placeholder="+56 9..."
+                              />
+                           </div>
+                        </div>
+
+                        <div className="bg-sky-50 p-4 rounded-2xl border border-sky-100 flex gap-3 mt-4">
+                           <Info size={20} className="text-sky-600 shrink-0 mt-0.5" />
+                           <p className="text-xs text-sky-800 font-medium leading-relaxed">
+                              La información proporcionada será utilizada para verificar tu identidad al momento de solicitar retiros. Asegúrate de que coincida con tu cuenta bancaria.
+                           </p>
+                        </div>
+
+                        <div className="pt-4 flex gap-3">
+                           <button 
+                              onClick={() => setIsEditingProfile(false)}
+                              className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black hover:bg-slate-200 transition-all"
+                           >
+                              Cancelar
+                           </button>
+                           <button 
+                              onClick={handleUpdateProfile}
+                              disabled={profileSaving}
+                              className="flex-[2] py-4 bg-violet-600 text-white rounded-2xl font-black hover:bg-violet-700 transition-all shadow-xl shadow-violet-100 flex items-center justify-center gap-2 disabled:opacity-70"
+                           >
+                              {profileSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                              Guardar Cambios
+                           </button>
+                        </div>
+                     </div>
+                  </div>
+               )}
             </div>
           </div>
         )}

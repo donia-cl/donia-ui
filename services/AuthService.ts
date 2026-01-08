@@ -1,5 +1,6 @@
 
 import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
+import { Profile } from '../types';
 
 export class AuthService {
   private static instance: AuthService;
@@ -161,5 +162,16 @@ export class AuthService {
       console.error("Error getting session:", e);
       return null;
     }
+  }
+
+  async updateProfile(userId: string, updates: Partial<Profile>): Promise<Profile> {
+    const response = await fetch('/api/update-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: userId, updates })
+    });
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error || "Error updating profile");
+    return json.data;
   }
 }
