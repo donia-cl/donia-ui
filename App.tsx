@@ -8,6 +8,7 @@ import Landing from './pages/Landing';
 import Explore from './pages/Explore';
 import About from './pages/About';
 import Terms from './pages/Terms';
+import Privacy from './pages/Privacy';
 import Auth from './pages/Auth';
 import CampaignDetail from './pages/CampaignDetail';
 import DonatePage from './pages/DonatePage';
@@ -45,6 +46,9 @@ const App: React.FC = () => {
 
               {/* Terms and Conditions */}
               <Route path="/terminos" element={<Terms />} />
+
+              {/* Privacy Policy */}
+              <Route path="/privacidad" element={<Privacy />} />
               
               {/* Campaign Detail */}
               <Route path="/campana/:id" element={<CampaignDetail />} />

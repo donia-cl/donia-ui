@@ -172,7 +172,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Legal</h4>
               <ul className="space-y-4">
                 <li><Link to="/terminos" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Términos y Condiciones</Link></li>
-                <li><span className="text-slate-400 font-bold opacity-50 cursor-not-allowed">Privacidad (Próximamente)</span></li>
+                <li><Link to="/privacidad" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Política de Privacidad</Link></li>
               </ul>
             </div>
           </div>
