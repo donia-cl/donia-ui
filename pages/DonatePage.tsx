@@ -47,12 +47,21 @@ const DonatePage: React.FC = () => {
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
   const service = CampaignService.getInstance();
 
-  const tipSubtotal = tipPercentage === 'custom' 
+  // --- CÁLCULO FINANCIERO (IVA INCLUIDO) ---
+  
+  // 1. Calculamos el monto bruto de la propina (Lo que el usuario selecciona pagar)
+  const tipGrossAmount = tipPercentage === 'custom' 
     ? customTipAmount 
     : Math.round(donationAmount * (Number(tipPercentage) / 100));
     
-  const ivaAmount = Math.round(tipSubtotal * 0.19);
-  const totalAmount = donationAmount + tipSubtotal + ivaAmount;
+  // 2. Desglosamos el IVA desde el bruto (Neto = Bruto / 1.19)
+  const tipNetAmount = Math.round(tipGrossAmount / 1.19);
+  
+  // 3. Obtenemos el monto del IVA por diferencia
+  const ivaAmount = tipGrossAmount - tipNetAmount;
+
+  // 4. El total a pagar es la donación + la propina bruta (que ya incluye el IVA)
+  const totalAmount = donationAmount + tipGrossAmount;
 
   // Pre-llenar datos si el usuario está logueado
   useEffect(() => {
@@ -107,9 +116,9 @@ const DonatePage: React.FC = () => {
                     nombre: donorName,
                     email: donorEmail, // OBLIGATORIO
                     comentario: donorComment,
-                    tip: tipSubtotal,
-                    iva: ivaAmount,
-                    donorUserId: user?.id || null // Enviamos ID si está logueado
+                    tip: tipNetAmount, // Enviamos el Neto para registro contable
+                    iva: ivaAmount,    // Enviamos el IVA para registro contable
+                    donorUserId: user?.id || null 
                   });
                   if (result.status === 'approved') {
                     setPaymentStatus('success');
@@ -236,7 +245,7 @@ const DonatePage: React.FC = () => {
                          Apoyo a la plataforma Donia
                       </h3>
                       <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6 pr-10">
-                        Donia no cobra comisiones a los organizadores. Tu aporte nos permite seguir manteniendo el sitio gratuito para las causas.
+                        Donia no cobra comisiones a los organizadores. Tu aporte (IVA incluido) nos permite seguir manteniendo el sitio gratuito.
                       </p>
                       
                       <div className="grid grid-cols-5 gap-2 mb-4">
@@ -269,7 +278,7 @@ const DonatePage: React.FC = () => {
                           <input 
                             type="number"
                             className="w-full pl-7 pr-4 py-3 bg-white border border-violet-100 rounded-xl outline-none font-bold text-slate-700 text-sm focus:border-violet-300 transition-all"
-                            placeholder="Monto de aporte"
+                            placeholder="Monto de aporte (IVA incluido)"
                             value={customTipAmount || ''}
                             onChange={(e) => setCustomTipAmount(Number(e.target.value))}
                           />
@@ -379,16 +388,16 @@ const DonatePage: React.FC = () => {
                   
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
-                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Donia</span>
-                      <span className="text-slate-600 text-sm font-bold">Aporte voluntario {tipPercentage !== 'custom' && tipPercentage !== 0 && `(${tipPercentage}%)`}</span>
+                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Aporte Donia</span>
+                      <span className="text-slate-600 text-sm font-bold">Neto {tipPercentage !== 'custom' && tipPercentage !== 0 && `(${tipPercentage}%)`}</span>
                     </div>
-                    <span className="font-black text-slate-900 text-lg">${tipSubtotal.toLocaleString('es-CL')}</span>
+                    <span className="font-black text-slate-900 text-lg">${tipNetAmount.toLocaleString('es-CL')}</span>
                   </div>
 
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
                       <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Impuestos</span>
-                      <span className="text-slate-600 text-sm font-bold">IVA Aporte Donia (19%)</span>
+                      <span className="text-slate-600 text-sm font-bold">IVA Incluido (19%)</span>
                     </div>
                     <span className="font-black text-slate-900 text-lg">${ivaAmount.toLocaleString('es-CL')}</span>
                   </div>
@@ -412,7 +421,7 @@ const DonatePage: React.FC = () => {
                     <Info size={16} />
                   </div>
                   <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                    El monto base solicitado va íntegro a la campaña. El IVA aplicado corresponde únicamente al aporte voluntario realizado a la plataforma Donia para cubrir gastos de operación.
+                    El IVA ya está incluido dentro del aporte voluntario seleccionado. No se agregarán cargos adicionales al total mostrado.
                   </p>
                 </div>
               </div>
