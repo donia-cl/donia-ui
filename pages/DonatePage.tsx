@@ -12,7 +12,8 @@ import {
   Check,
   Zap,
   Receipt,
-  Mail
+  Mail,
+  CreditCard
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
@@ -31,6 +32,7 @@ const DonatePage: React.FC = () => {
   
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [processingPayment, setProcessingPayment] = useState(false);
   const [donationAmount, setDonationAmount] = useState<number>(5000);
   const [tipPercentage, setTipPercentage] = useState<number | 'custom'>(10);
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
@@ -155,6 +157,27 @@ const DonatePage: React.FC = () => {
       renderPaymentBrick();
     }
   }, [showPaymentForm, totalAmount, campaign, mpPublicKey, donorEmail]);
+
+  const handleSimulatePayment = async () => {
+    if (!campaign) return;
+    setProcessingPayment(true);
+    setError(null);
+    try {
+      await service.simulateDonation({
+        campaignId: campaign.id,
+        monto: donationAmount, // Solo el monto de donación base, o totalAmount si quieres registrar todo
+        nombre: donorName || 'Anónimo',
+        email: donorEmail,
+        comentario: donorComment,
+        donorUserId: user?.id || null
+      });
+      setPaymentStatus('success');
+    } catch (e: any) {
+      setError(e.message || "Error al simular el pago.");
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -365,7 +388,32 @@ const DonatePage: React.FC = () => {
                     </button>
                   </div>
                   
-                  <div id="paymentBrick_container" ref={paymentBrickContainerRef} className="min-h-[300px]"></div>
+                  {/* Container de Mercado Pago */}
+                  <div id="paymentBrick_container" ref={paymentBrickContainerRef} className="min-h-[100px]"></div>
+
+                  {/* Botón de Simulación */}
+                  <div className="pt-6 border-t border-slate-100">
+                    <button
+                      onClick={handleSimulatePayment}
+                      disabled={processingPayment}
+                      className="w-full py-5 rounded-2xl font-black text-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-emerald-100 active:scale-95 disabled:opacity-70 disabled:cursor-wait"
+                    >
+                      {processingPayment ? (
+                         <>
+                           <Loader2 className="animate-spin" size={24} />
+                           Procesando...
+                         </>
+                      ) : (
+                         <>
+                           <CreditCard size={24} />
+                           Pagar ahora (Simulación)
+                         </>
+                      )}
+                    </button>
+                    <p className="text-center text-[10px] text-slate-400 font-bold mt-2">
+                      * Modo de pruebas activado: No se realizará cargo real.
+                    </p>
+                  </div>
                   
                   {error && (
                     <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 text-rose-700 text-xs font-bold items-center">
@@ -375,7 +423,7 @@ const DonatePage: React.FC = () => {
                   )}
 
                   <p className="text-center text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                    <Lock size={12} /> Pago seguro vía Mercado Pago
+                    <Lock size={12} /> Pago seguro vía Donia
                   </p>
                 </div>
               )}

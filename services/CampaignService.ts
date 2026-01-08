@@ -184,6 +184,26 @@ export class CampaignService {
     return json;
   }
 
+  // Nuevo método para simular donación
+  async simulateDonation(payload: { 
+    campaignId: string, 
+    monto: number, 
+    nombre: string, 
+    email: string, 
+    comentario: string, 
+    donorUserId?: string | null 
+  }): Promise<boolean> {
+    await this.initialize();
+    const response = await fetch('/api/donate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error);
+    return true;
+  }
+
   async uploadImage(base64: string, fileName: string): Promise<string> {
     await this.initialize();
     const response = await fetch('/api/upload', {

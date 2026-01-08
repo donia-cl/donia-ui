@@ -8,7 +8,7 @@ export default async function handler(req: any, res: any) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { campaignId, monto, nombre, comentario } = req.body;
+  const { campaignId, monto, nombre, comentario, email, donorUserId } = req.body;
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
   // Usamos service_role_key para realizar operaciones críticas de actualización de saldos
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
@@ -24,7 +24,11 @@ export default async function handler(req: any, res: any) {
       campaign_id: campaignId, 
       monto: Number(monto), 
       nombre_donante: nombre || 'Anónimo',
-      comentario: comentario || null
+      donor_email: email, // Guardamos el email
+      donor_user_id: donorUserId || null, // Linkeamos al usuario si existe
+      comentario: comentario || null,
+      payment_provider: 'simulated', // Marcamos como simulación/directo
+      status: 'completed'
     };
 
     // 1. Insertar donación
