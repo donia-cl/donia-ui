@@ -25,9 +25,7 @@ export class AuthService {
         let key = '';
 
         // 1. Intentar cargar variables de entorno (Build time injection)
-        // Soporte robusto para Vite y CRA/Node
         try {
-          // Intento 1: Vite (import.meta.env)
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
             // @ts-ignore
@@ -39,7 +37,6 @@ export class AuthService {
 
         if (!url || !key) {
           try {
-            // Intento 2: Process (CRA / Node global replacement)
             if (typeof process !== 'undefined' && process.env) {
               url = process.env.REACT_APP_SUPABASE_URL || '';
               key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
@@ -47,7 +44,7 @@ export class AuthService {
           } catch (e) { /* ignore */ }
         }
 
-        // 2. Intentar cargar configuración del servidor (Runtime injection) si no hay env vars locales
+        // 2. Intentar cargar configuración del servidor (Runtime injection)
         if (!url || !key) {
            try {
              const resp = await fetch('/api/config');
@@ -62,12 +59,11 @@ export class AuthService {
         }
           
         if (url && key) {
-          // console.log("[AuthService] Inicializando Supabase Client...");
           this.client = createClient(url, key, {
             auth: {
               persistSession: true,
               autoRefreshToken: true,
-              detectSessionInUrl: true, // CRÍTICO para OAuth
+              detectSessionInUrl: true,
               storageKey: 'donia-auth-token-v1',
               flowType: 'implicit'
             }
@@ -95,16 +91,22 @@ export class AuthService {
     }
     
     // 1. Crear usuario en Auth
+    // Nota: Si esto da 504, es probable que sea por el servicio de envío de emails de Supabase.
     const { data, error } = await this.client.auth.signUp({
       email,
       password: pass,
-      options: { data: { full_name: fullName } }
+      options: { 
+        data: { full_name: fullName },
+        // Intencionalmente no redirigimos para minimizar puntos de fallo en el flujo
+      }
     });
 
-    if (error) throw error;
+    if (error) {
+        console.error("Supabase SignUp Error:", error);
+        throw error;
+    }
 
-    // 2. Crear perfil manualmente si el registro fue exitoso y tenemos un usuario
-    // Esto reemplaza al Trigger SQL que causaba error 504
+    // 2. Crear perfil manualmente si el registro fue exitoso
     if (data.user) {
       try {
         await this.client.from('profiles').insert([{
@@ -114,7 +116,8 @@ export class AuthService {
           is_verified: false
         }]);
       } catch (profileError) {
-        console.warn("[AuthService] El perfil no se pudo crear inmediatamente (posiblemente por confirmación de email pendiente), se creará en el primer login.", profileError);
+        // No bloqueamos el flujo si falla el perfil, se puede crear después
+        console.warn("[AuthService] El perfil se creará en el próximo login.", profileError);
       }
     }
 
