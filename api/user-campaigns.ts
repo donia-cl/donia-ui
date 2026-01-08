@@ -16,7 +16,7 @@ export default async function handler(req: any, res: any) {
     const { data, error } = await supabase
       .from('campaigns')
       .select('*')
-      .eq('owner_id', userId) // Usamos owner_id
+      .eq('owner_id', userId) // Cambiado a owner_id
       .order('fecha_creacion', { ascending: false });
 
     if (error) throw error;

@@ -25,7 +25,7 @@ export interface CampaignData {
   beneficiarioNombre?: string;
   beneficiarioRelacion?: string;
   donations?: Donation[];
-  owner_id?: string; // Cambiado de user_id a owner_id
+  owner_id?: string; // Reemplaza conceptualmente a user_id
 }
 
 export interface Donation {
@@ -36,7 +36,7 @@ export interface Donation {
   nombreDonante: string;
   emailDonante: string; // Nuevo campo obligatorio
   comentario?: string;
-  donorUserId?: string; // Opcional, solo si está logueado
+  donorUserId?: string; // Opcional, vincula con Profile si existe
 }
 
 export interface Withdrawal {

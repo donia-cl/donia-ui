@@ -36,35 +36,34 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'POST') {
       const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id } = req.body;
       
-      // AUTORREPARACIÓN DE PERFIL
-      // 1. Verificar si existe el perfil para evitar error FK (campaigns_owner_id_fkey)
+      // --- AUTORREPARACIÓN DE PERFIL ---
+      // Verificamos si existe el perfil para evitar error de Foreign Key.
+      // Si el usuario es antiguo y no tiene perfil, lo creamos ahora.
       const { data: profile } = await supabase.from('profiles').select('id').eq('id', user_id).single();
       
       if (!profile) {
-        // Si no existe, lo creamos usando los datos de Auth y credenciales de admin
+        // Obtenemos datos del usuario desde Auth
         const { data: { user }, error: uError } = await supabase.auth.admin.getUserById(user_id);
         
-        const fullName = user?.user_metadata?.full_name || 'Usuario Donia';
-        
-        // Insertamos el perfil faltante
-        const { error: pError } = await supabase.from('profiles').insert([{
-             id: user_id,
-             full_name: fullName,
-             role: 'user',
-             is_verified: false
-        }]);
-
-        if (pError) {
-          console.error("Error creando perfil automático:", pError);
-          // Intentamos seguir, pero probablemente fallará el insert de campaña si falló esto
+        if (user) {
+            const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
+            
+            // Insertamos el perfil faltante usando credenciales de admin (Service Role)
+            await supabase.from('profiles').insert([{
+                 id: user_id,
+                 full_name: fullName,
+                 role: 'user',
+                 is_verified: false
+            }]);
+            // No capturamos error aquí para permitir que fluya, si falla, fallará el insert de campaña
         }
       }
 
-      // 2. Insertamos la campaña usando owner_id
+      // Insertamos la campaña usando owner_id
       const { data, error } = await supabase.from('campaigns').insert([{ 
         titulo, historia, monto: Number(monto), categoria, ubicacion, imagen_url: imagenUrl,
         beneficiario_nombre: beneficiarioNombre, beneficiario_relacion: beneficiarioRelacion,
-        owner_id: user_id, // FK a profiles.id
+        owner_id: user_id, // Usamos owner_id
         recaudado: 0, donantes_count: 0, estado: 'activa'
       }]).select();
       

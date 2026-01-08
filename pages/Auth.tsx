@@ -74,8 +74,8 @@ const Auth: React.FC = () => {
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
       if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
       if (msg.includes("Database error saving new user")) {
-        msg = "Error de configuración del sistema (Trigger DB). Contacta a soporte.";
-        console.error("IMPORTANTE: Ejecuta el script SQL con SECURITY DEFINER en Supabase para arreglar esto.");
+        msg = "Error de configuración del sistema (Trigger DB). Revisa la consola.";
+        console.error("IMPORTANTE: El trigger handle_new_user falló. Asegúrate de que la función tenga 'SECURITY DEFINER' para saltar las políticas RLS.");
       }
       
       setError(msg);

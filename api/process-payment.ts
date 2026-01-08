@@ -36,8 +36,8 @@ export default async function handler(req: any, res: any) {
         metadata: {
           campaign_id: campaignId,
           donor_name: metadata.nombre || 'Anónimo',
-          donor_email: metadata.email, // OBLIGATORIO
-          donor_user_id: metadata.donorUserId || null, // Opcional
+          donor_email: metadata.email, // OBLIGATORIO para trazabilidad
+          donor_user_id: metadata.donorUserId || null, // Opcional (Link a Profile)
           donor_comment: metadata.comentario || ''
         }
       }),

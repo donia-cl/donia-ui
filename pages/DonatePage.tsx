@@ -93,7 +93,7 @@ const DonatePage: React.FC = () => {
             initialization: { 
               amount: totalAmount,
               payer: {
-                email: donorEmail // Pasamos el email al brick para pre-llenar si es posible
+                email: donorEmail // Pasamos el email al brick para pre-llenar
               }
             },
             customization: {
@@ -105,7 +105,7 @@ const DonatePage: React.FC = () => {
                 try {
                   const result = await service.processPayment(formData, campaign.id, { 
                     nombre: donorName,
-                    email: donorEmail, // IMPORTANTE: Email obligatorio
+                    email: donorEmail, // OBLIGATORIO
                     comentario: donorComment,
                     tip: tipSubtotal,
                     iva: ivaAmount,

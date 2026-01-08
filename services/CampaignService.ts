@@ -51,14 +51,14 @@ export class CampaignService {
       donantesCount: Number(c.donantes_count || c.donantesCount || 0),
       beneficiarioNombre: c.beneficiario_nombre || c.beneficiarioNombre,
       beneficiarioRelacion: c.beneficiario_relacion || c.beneficiarioRelacion,
-      owner_id: c.owner_id, // Ahora usamos owner_id
+      owner_id: c.owner_id, // Usamos owner_id
       donations: c.donations ? c.donations.map((d: any) => ({
         id: d.id,
         campaignId: d.campaign_id,
         monto: Number(d.monto),
         fecha: d.fecha || d.created_at,
         nombreDonante: d.nombre_donante || d.donor_name || 'Anónimo',
-        emailDonante: d.donor_email || '',
+        emailDonante: d.donor_email || '', // Mapeo del nuevo campo
         comentario: d.comentario,
         donorUserId: d.donor_user_id
       })) : undefined
@@ -77,7 +77,6 @@ export class CampaignService {
   async getUserCampaigns(userId: string): Promise<CampaignData[]> {
     await this.initialize();
     try {
-      // Nota: userId aquí se refiere al ID del owner/profile
       const resp = await fetch(`/api/user-campaigns?userId=${userId}`);
       const json = await resp.json();
       return (json.data || []).map((c: any) => this.mapCampaign(c));
@@ -165,7 +164,7 @@ export class CampaignService {
 
   async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
     await this.initialize();
-    // metadata debe incluir { nombre, email, comentario, tip, iva }
+    // metadata debe incluir { nombre, email, comentario, tip, iva, donorUserId }
     const response = await fetch('/api/process-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

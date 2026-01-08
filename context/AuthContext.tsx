@@ -36,7 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
         
       if (error) {
-        // No logueamos error ruidoso si es solo que no existe (PGRST116)
+        // Ignoramos error PGRST116 (JSON nulo/no encontrado) para no ensuciar la consola
+        // Esto pasa si el usuario existe en Auth pero no tiene perfil aún (antes de la migración)
         if (error.code !== 'PGRST116') {
            console.error("Error fetching profile:", error);
         }
@@ -73,12 +74,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (client) {
           const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
-            console.log("[Auth] State Change:", event);
             if (mounted) {
               const currentUser = session?.user ?? null;
               setUser(currentUser);
               
               if (currentUser) {
+                 // Si nos logueamos, buscamos el perfil actualizado
                  const userProfile = await fetchProfile(currentUser.id);
                  setProfile(userProfile);
               } else {
