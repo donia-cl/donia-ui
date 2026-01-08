@@ -1,5 +1,5 @@
 
-import { createClient, User, SupabaseClient, Session } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
 
 export class AuthService {
   private static instance: AuthService;
@@ -16,30 +16,43 @@ export class AuthService {
   }
 
   public async initialize(): Promise<void> {
+    if (this.client) return; // Si ya existe cliente, no hacer nada
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
       try {
-        const resp = await fetch('/api/config');
-        if (resp.ok) {
-          const config = await resp.json();
-          const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
-          const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+        let url = process.env.REACT_APP_SUPABASE_URL;
+        let key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+        // Intentar cargar configuración del servidor si no está en env
+        if (!url || !key) {
+           try {
+             const resp = await fetch('/api/config');
+             if (resp.ok) {
+               const config = await resp.json();
+               url = config.supabaseUrl || url;
+               key = config.supabaseKey || key;
+             }
+           } catch (e) {
+             console.error("[AuthService] Error fetching config fallback:", e);
+           }
+        }
           
-          if (url && key && !this.client) {
-            this.client = createClient(url, key, {
-              auth: {
-                persistSession: true,
-                autoRefreshToken: true,
-                detectSessionInUrl: true,
-                storageKey: 'sb-mkdqpkrtegkhzakopnov-auth-token',
-                flowType: 'implicit' // Necesario para HashRouter sin configuración extra de servidor
-              }
-            });
-          }
+        if (url && key) {
+          this.client = createClient(url, key, {
+            auth: {
+              persistSession: true,
+              autoRefreshToken: true,
+              detectSessionInUrl: true, // CRÍTICO para OAuth
+              storageKey: 'donia-auth-token-v1',
+              flowType: 'implicit'
+            }
+          });
+        } else {
+          console.error("[AuthService] Missing Supabase Configuration");
         }
       } catch (e) {
-        console.error("[AuthService] Error cargando config:", e);
+        console.error("[AuthService] Initialization failed:", e);
       }
     })();
 
@@ -52,7 +65,7 @@ export class AuthService {
 
   async signUp(email: string, pass: string, fullName: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Sistema no listo.");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     const { data, error } = await this.client.auth.signUp({
       email,
       password: pass,
@@ -64,7 +77,7 @@ export class AuthService {
 
   async signIn(email: string, pass: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Sistema no listo.");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     const { data, error } = await this.client.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     return data;
@@ -72,20 +85,15 @@ export class AuthService {
 
   async signInWithGoogle() {
     await this.initialize();
-    if (!this.client) throw new Error("Sistema no listo.");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
-    // IMPORTANTE: Usamos solo el origin para evitar problemas con rutas anidadas o hash.
-    // Asegúrate de agregar esta URL exacta (ej: http://localhost:3000 o https://tu-app.vercel.app)
-    // en Authentication -> URL Configuration -> Redirect URLs en Supabase.
+    // Usamos origin limpio. Supabase añadirá el hash.
     const redirectTo = window.location.origin;
-    
-    console.log("[AuthService] Iniciando Google Auth hacia:", redirectTo);
     
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
       options: { 
         redirectTo,
-        // Eliminamos queryParams manuales para usar los defaults estables de Supabase
         skipBrowserRedirect: false
       }
     });
@@ -101,7 +109,12 @@ export class AuthService {
   async getSession(): Promise<Session | null> {
     await this.initialize();
     if (!this.client) return null;
-    const { data: { session } } = await this.client.auth.getSession();
-    return session;
+    try {
+      const { data: { session } } = await this.client.auth.getSession();
+      return session;
+    } catch (e) {
+      console.error("Error getting session:", e);
+      return null;
+    }
   }
 }
