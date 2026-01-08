@@ -22,7 +22,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initApp = async () => {
-      // Ambos servicios comparten ahora el mismo cliente inicializado
       await authService.initialize();
       await campaignService.initialize();
       
@@ -39,19 +38,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (mounted) {
             setUser(session?.user ?? null);
             
-            // Si hay tokens de Supabase en el hash, los limpiamos sin romper la ruta de React Router
+            // Lógica de redirección y limpieza tras login con Google
             if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-              const fullHash = window.location.hash; // Ejemplo: #/dashboard#access_token=...
-              if (fullHash.includes('access_token=')) {
-                // Dividimos el hash. El primer elemento tras '#' suele ser la ruta (/dashboard)
-                const hashParts = fullHash.split('#'); 
-                // Reconstruimos el hash manteniendo solo la ruta de la aplicación
-                // parts[0] es vacío, parts[1] es la ruta, parts[2] son los tokens
-                const cleanRouteHash = hashParts.length >= 2 ? '#' + hashParts[1] : '';
-                
-                if (cleanRouteHash !== fullHash) {
-                   window.history.replaceState(null, '', window.location.pathname + window.location.search + cleanRouteHash);
+              const hash = window.location.hash;
+              if (hash.includes('access_token=')) {
+                // Si estamos en la raíz o login, vamos al dashboard
+                if (hash.startsWith('#access_token') || hash === '' || hash === '#/') {
+                   window.location.hash = '#/dashboard';
                 }
+                
+                // Limpiamos los parámetros de Supabase de la URL
+                const cleanURL = window.location.origin + window.location.pathname + window.location.hash.split('&')[0].split('#')[0];
+                // En HashRouter es mejor simplemente navegar al dashboard como hicimos arriba.
               }
             }
           }

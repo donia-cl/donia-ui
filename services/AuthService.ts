@@ -73,9 +73,9 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
     
-    // Al usar HashRouter, debemos redirigir explícitamente a una ruta válida 
-    // para que Supabase anexe los tokens después del '#' de la ruta.
-    const redirectTo = window.location.origin + window.location.pathname + '#/dashboard';
+    // IMPORTANTE: Al usar HashRouter, redirigimos a la base sin hash.
+    // Supabase pondrá los tokens en el hash (#access_token=...) y nuestro listener los atrapará.
+    const redirectTo = window.location.origin + window.location.pathname;
     
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
