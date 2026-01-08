@@ -25,14 +25,29 @@ export class AuthService {
         let key = '';
 
         // 1. Intentar cargar variables de entorno (Build time injection)
+        // Soporte robusto para Vite y CRA/Node
         try {
-          url = process.env.REACT_APP_SUPABASE_URL || '';
-          key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
-        } catch (e) {
-          // Ignoramos error si process no está definido
+          // Intento 1: Vite (import.meta.env)
+          // @ts-ignore
+          if (typeof import.meta !== 'undefined' && import.meta.env) {
+            // @ts-ignore
+            url = import.meta.env.VITE_SUPABASE_URL || import.meta.env.REACT_APP_SUPABASE_URL || '';
+            // @ts-ignore
+            key = import.meta.env.VITE_SUPABASE_KEY || import.meta.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
+          }
+        } catch (e) { /* ignore */ }
+
+        if (!url || !key) {
+          try {
+            // Intento 2: Process (CRA / Node global replacement)
+            if (typeof process !== 'undefined' && process.env) {
+              url = process.env.REACT_APP_SUPABASE_URL || '';
+              key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
+            }
+          } catch (e) { /* ignore */ }
         }
 
-        // 2. Intentar cargar configuración del servidor (Runtime injection) si no hay env vars
+        // 2. Intentar cargar configuración del servidor (Runtime injection) si no hay env vars locales
         if (!url || !key) {
            try {
              const resp = await fetch('/api/config');
@@ -47,7 +62,7 @@ export class AuthService {
         }
           
         if (url && key) {
-          console.log("[AuthService] Inicializando Supabase Client...");
+          // console.log("[AuthService] Inicializando Supabase Client...");
           this.client = createClient(url, key, {
             auth: {
               persistSession: true,
@@ -58,7 +73,7 @@ export class AuthService {
             }
           });
         } else {
-          console.error("[AuthService] Missing Supabase Configuration. Please check .env or api/config.");
+          console.error("[AuthService] Error Crítico: No se encontraron llaves de Supabase (URL o KEY faltantes).");
         }
       } catch (e) {
         console.error("[AuthService] Initialization failed:", e);
@@ -73,15 +88,12 @@ export class AuthService {
   }
 
   async signUp(email: string, pass: string, fullName: string) {
-    console.log("[DEBUG] Inicio signUp en AuthService", { email });
     await this.initialize();
     
     if (!this.client) {
-        console.error("[DEBUG] Cliente Supabase no inicializado");
-        throw new Error("Servicio de autenticación no disponible.");
+        throw new Error("Servicio de autenticación no disponible (Faltan credenciales).");
     }
     
-    console.log("[DEBUG] Llamando a supabase.auth.signUp...");
     // 1. Crear usuario en Auth
     const { data, error } = await this.client.auth.signUp({
       email,
@@ -89,31 +101,21 @@ export class AuthService {
       options: { data: { full_name: fullName } }
     });
 
-    console.log("[DEBUG] Respuesta de supabase.auth.signUp:", { data, error });
-
-    if (error) {
-        console.error("[DEBUG] Error en signUp:", error);
-        throw error;
-    }
+    if (error) throw error;
 
     // 2. Crear perfil manualmente si el registro fue exitoso y tenemos un usuario
     // Esto reemplaza al Trigger SQL que causaba error 504
     if (data.user) {
-      console.log("[DEBUG] Usuario creado con ID:", data.user.id, ". Intentando crear perfil manual...");
       try {
-        const profileResult = await this.client.from('profiles').insert([{
+        await this.client.from('profiles').insert([{
           id: data.user.id,
           full_name: fullName,
           role: 'user',
           is_verified: false
         }]);
-        console.log("[DEBUG] Resultado creación perfil:", profileResult);
       } catch (profileError) {
-        console.warn("[DEBUG] El perfil no se pudo crear inmediatamente (posiblemente por confirmación de email pendiente), se creará en el primer login.", profileError);
-        // No lanzamos error aquí para no interrumpir el flujo de éxito del registro
+        console.warn("[AuthService] El perfil no se pudo crear inmediatamente (posiblemente por confirmación de email pendiente), se creará en el primer login.", profileError);
       }
-    } else {
-        console.warn("[DEBUG] SignUp exitoso pero no retornó objeto 'user' (Posible confirmación de email requerida)");
     }
 
     return data;
@@ -121,7 +123,7 @@ export class AuthService {
 
   async signIn(email: string, pass: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible (Faltan credenciales).");
     const { data, error } = await this.client.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     return data;
@@ -129,7 +131,7 @@ export class AuthService {
 
   async signInWithGoogle() {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible (Faltan credenciales).");
     
     const redirectTo = window.location.origin;
     

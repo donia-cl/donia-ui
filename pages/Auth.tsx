@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart, Terminal } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 
 const Auth: React.FC = () => {
@@ -9,6 +9,7 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSqlFix, setShowSqlFix] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,7 +21,7 @@ const Auth: React.FC = () => {
     fullName: ''
   });
 
-  // Resetear estados de carga al entrar o volver a la página (soluciona el bloqueo por bfcache)
+  // Resetear estados de carga al entrar o volver a la página
   useEffect(() => {
     const resetLoading = (event?: PageTransitionEvent) => {
       setLoading(false);
@@ -35,7 +36,6 @@ const Auth: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("[AuthPage] Submit iniciado. Modo:", isLogin ? "Login" : "Registro");
     
     if (!isLogin && !acceptTerms) {
       setError("Debes aceptar los Términos y Condiciones para continuar.");
@@ -44,6 +44,7 @@ const Auth: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setShowSqlFix(false);
 
     if (formData.password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres.");
@@ -55,18 +56,13 @@ const Auth: React.FC = () => {
       if (isLogin) {
         await authService.signIn(formData.email, formData.password);
       } else {
-        console.log("[AuthPage] Llamando a authService.signUp...");
         await authService.signUp(formData.email, formData.password, formData.fullName);
-        console.log("[AuthPage] authService.signUp completado.");
       }
       
       const from = (location.state as any)?.from?.pathname || '/';
-      console.log("[AuthPage] Navegando a:", from);
       navigate(from, { replace: true });
     } catch (err: any) {
-      console.error("[AuthPage] Error capturado en handleSubmit:", err);
-      console.log("[AuthPage] Estructura del error:", JSON.stringify(err, null, 2));
-
+      console.error("Auth error catch:", err);
       let msg = err.message || "Ocurrió un error inesperado.";
       const errorCode = err.status || 0;
       
@@ -74,8 +70,13 @@ const Auth: React.FC = () => {
       if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
       if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
-      if (errorCode === 504 || msg.includes("Timeout")) msg = "El servidor tardó en responder. Por favor intenta nuevamente.";
-      if (msg.includes("Database error saving new user")) msg = "Error de sistema. Por favor contacta a soporte.";
+      if (msg.includes("Servicio de autenticación no disponible")) msg = "Error de configuración: Faltan credenciales de Supabase.";
+      
+      // MANEJO ESPECÍFICO DE ERROR 504 (TIMEOUT POR TRIGGER)
+      if (errorCode === 504 || msg.includes("Timeout")) {
+        msg = "El servidor de base de datos no respondió a tiempo.";
+        setShowSqlFix(true);
+      }
       
       setError(msg);
       setLoading(false);
@@ -85,9 +86,9 @@ const Auth: React.FC = () => {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setError(null);
+    setShowSqlFix(false);
     try {
       await authService.signInWithGoogle();
-      // NO reseteamos googleLoading a false aquí porque la redirección ocurrirá
     } catch (err: any) {
       console.error("Google Auth error:", err);
       setError(err.message || "No pudimos conectar con Google. Verifica la configuración en Supabase.");
@@ -111,7 +112,26 @@ const Auth: React.FC = () => {
         </div>
 
         <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl shadow-slate-200/40 border border-slate-100">
-          {error && (
+          
+          {/* Mensaje de Ayuda SQL para Error 504 */}
+          {showSqlFix ? (
+             <div className="mb-8 p-5 bg-amber-50 border border-amber-200 rounded-3xl text-sm text-slate-700 animate-in fade-in zoom-in-95">
+                <div className="flex items-center gap-2 text-amber-700 font-black mb-3">
+                    <Terminal size={18} />
+                    <p>SOLUCIÓN TÉCNICA REQUERIDA</p>
+                </div>
+                <p className="mb-4 text-xs font-medium leading-relaxed">
+                   El error 504 indica que un Trigger antiguo está bloqueando la base de datos. Ejecuta esto en el <strong>SQL Editor</strong> de Supabase para solucionarlo:
+                </p>
+                <div className="bg-slate-900 text-slate-50 p-4 rounded-xl text-[10px] font-mono overflow-x-auto selection:bg-violet-500 selection:text-white border border-slate-800 shadow-sm relative group">
+                    <pre>{`DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user;`}</pre>
+                </div>
+                <p className="mt-4 text-[10px] font-bold text-amber-600/80 uppercase tracking-wide text-center">
+                    Intenta registrarte nuevamente tras ejecutarlo.
+                </p>
+             </div>
+          ) : error && (
             <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-700 text-sm font-bold animate-in fade-in slide-in-from-top-1">
               <AlertCircle size={18} />
               <p>{error}</p>
