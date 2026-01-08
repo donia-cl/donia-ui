@@ -33,7 +33,7 @@ export class AuthService {
                 autoRefreshToken: true,
                 detectSessionInUrl: true,
                 storageKey: 'sb-mkdqpkrtegkhzakopnov-auth-token',
-                flowType: 'implicit' // Forzamos implicit para mejor compatibilidad con HashRouter
+                flowType: 'implicit' // Necesario para HashRouter sin configuración extra de servidor
               }
             });
           }
@@ -74,14 +74,19 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
     
-    // Redirigimos a la base. Supabase inyectará el token en el fragmento #
-    const redirectTo = window.location.origin + window.location.pathname;
+    // IMPORTANTE: Usamos solo el origin para evitar problemas con rutas anidadas o hash.
+    // Asegúrate de agregar esta URL exacta (ej: http://localhost:3000 o https://tu-app.vercel.app)
+    // en Authentication -> URL Configuration -> Redirect URLs en Supabase.
+    const redirectTo = window.location.origin;
+    
+    console.log("[AuthService] Iniciando Google Auth hacia:", redirectTo);
     
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
       options: { 
         redirectTo,
-        queryParams: { access_type: 'offline', prompt: 'consent' }
+        // Eliminamos queryParams manuales para usar los defaults estables de Supabase
+        skipBrowserRedirect: false
       }
     });
     if (error) throw error;

@@ -82,10 +82,11 @@ const Auth: React.FC = () => {
     setError(null);
     try {
       await authService.signInWithGoogle();
-      // La redirección ocurre aquí. Si el usuario vuelve atrás, el useEffect de arriba reseteará el estado.
+      // NO reseteamos googleLoading a false aquí porque la redirección ocurrirá
+      // y queremos evitar que el usuario haga clic de nuevo.
     } catch (err: any) {
       console.error("Google Auth error:", err);
-      setError(err.message || "No pudimos conectar con Google.");
+      setError(err.message || "No pudimos conectar con Google. Verifica la configuración en Supabase.");
       setGoogleLoading(false);
     }
   };
