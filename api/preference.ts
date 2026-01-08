@@ -13,6 +13,7 @@ export default async function handler(req: any, res: any) {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+  // WEBHOOK: Mercado Pago envía notificaciones aquí sin 'action'
   if (req.method === 'POST' && req.body.type === 'payment' && !action) {
     const { data } = req.body;
     try {
@@ -40,6 +41,7 @@ export default async function handler(req: any, res: any) {
     } catch (e) { return res.status(500).send('Error'); }
   }
 
+  // CREAR PREFERENCIA (Checkout Pro)
   if (action === 'preference') {
     const { campaignId, monto, nombre, comentario, campaignTitle } = req.body;
     const preference = { 
@@ -57,6 +59,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ success: true, preference_id: data.id });
   }
 
+  // PROCESAR PAGO (Bricks / API Directa)
   if (action === 'process') {
     const { paymentData, campaignId, metadata } = req.body;
     const resp = await fetch('https://api.mercadopago.com/v1/payments', { 
