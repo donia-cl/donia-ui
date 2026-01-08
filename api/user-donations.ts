@@ -9,7 +9,12 @@ export default async function handler(req: any, res: any) {
 
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const supabase = createClient(supabaseUrl!, serviceRoleKey!);
+  
+  if (!supabaseUrl || !serviceRoleKey) {
+    return res.status(500).json({ error: 'Configuración incompleta en servidor' });
+  }
+  
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
     const { data, error } = await supabase
@@ -24,27 +29,36 @@ export default async function handler(req: any, res: any) {
       .eq('donor_user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error("[API/user-donations] DB Error:", error);
+      throw error;
+    }
 
-    // Mapeo para ajustar al frontend
-    const donations = (data || []).map((d: any) => ({
-      id: d.id,
-      campaignId: d.campaign_id,
-      monto: d.monto,
-      fecha: d.created_at,
-      nombreDonante: d.nombre_donante,
-      emailDonante: d.donor_email,
-      comentario: d.comentario,
-      status: d.status || 'completed', // Default a completed si no existe en DB antigua
-      paymentId: d.payment_id,
-      campaign: {
-        titulo: d.campaigns?.titulo || 'Campaña eliminada',
-        imagenUrl: d.campaigns?.imagen_url || ''
-      }
-    }));
+    // Mapeo defensivo para evitar crash si campaigns es null o array
+    const donations = (data || []).map((d: any) => {
+      // Supabase a veces retorna un array si la relación no es explícitamente 1:1, aunque logically lo sea.
+      const campaignData = Array.isArray(d.campaigns) ? d.campaigns[0] : d.campaigns;
+
+      return {
+        id: d.id,
+        campaignId: d.campaign_id,
+        monto: d.monto,
+        fecha: d.created_at,
+        nombreDonante: d.nombre_donante,
+        emailDonante: d.donor_email,
+        comentario: d.comentario,
+        status: d.status || 'completed',
+        paymentId: d.payment_id,
+        campaign: {
+          titulo: campaignData?.titulo || 'Campaña no disponible',
+          imagenUrl: campaignData?.imagen_url || 'https://picsum.photos/200/200'
+        }
+      };
+    });
 
     return res.status(200).json({ success: true, data: donations });
   } catch (error: any) {
+    console.error("[API/user-donations] Fatal Error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 }

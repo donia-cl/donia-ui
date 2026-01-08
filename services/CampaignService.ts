@@ -6,6 +6,7 @@ import { AuthService } from './AuthService';
 export class CampaignService {
   private static instance: CampaignService;
   private aiEnabled: boolean = false;
+  private initPromise: Promise<void> | null = null;
 
   private constructor() {}
 
@@ -21,16 +22,34 @@ export class CampaignService {
   }
 
   public async initialize(): Promise<void> {
-    await AuthService.getInstance().initialize();
-    try {
-      const resp = await fetch('/api/config');
-      if (resp.ok) {
-        const config = await resp.json();
-        this.aiEnabled = !!config.aiEnabled;
+    // Evitar múltiples llamadas simultáneas de inicialización
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = (async () => {
+      try {
+        await AuthService.getInstance().initialize();
+        
+        // Intentamos obtener configuración del servidor, pero no bloqueamos si falla
+        try {
+          const resp = await fetch('/api/config', { 
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          if (resp.ok) {
+            const config = await resp.json();
+            this.aiEnabled = !!config.aiEnabled;
+          }
+        } catch (netError) {
+          // Si falla /api/config (ej. offline o bloqueo), usamos valores seguros por defecto
+          console.warn("[CampaignService] No se pudo cargar config remota, usando defaults local.");
+          this.aiEnabled = false; 
+        }
+      } catch (e) {
+        console.error("[CampaignService] Error crítico en init:", e);
       }
-    } catch (e) {
-      console.error("[CampaignService] Error init:", e);
-    }
+    })();
+
+    return this.initPromise;
   }
 
   public checkAiAvailability(): boolean { return this.aiEnabled; }
@@ -69,6 +88,7 @@ export class CampaignService {
     await this.initialize();
     try {
       const resp = await fetch('/api/campaigns');
+      if (!resp.ok) return [];
       const json = await resp.json();
       return (json.data || []).map((c: any) => this.mapCampaign(c));
     } catch (e) { return []; }
@@ -78,6 +98,7 @@ export class CampaignService {
     await this.initialize();
     try {
       const resp = await fetch(`/api/user-campaigns?userId=${userId}`);
+      if (!resp.ok) return [];
       const json = await resp.json();
       return (json.data || []).map((c: any) => this.mapCampaign(c));
     } catch (e) { return []; }
@@ -87,6 +108,7 @@ export class CampaignService {
     await this.initialize();
     try {
       const resp = await fetch(`/api/user-donations?userId=${userId}`);
+      if (!resp.ok) return [];
       const json = await resp.json();
       return json.data || [];
     } catch (e) { return []; }
@@ -96,6 +118,7 @@ export class CampaignService {
     await this.initialize();
     try {
       const resp = await fetch(`/api/campaigns?id=${id}`);
+      if (!resp.ok) return null;
       const json = await resp.json();
       return json.success ? this.mapCampaign(json.data) : null;
     } catch (e) { return null; }
@@ -144,6 +167,7 @@ export class CampaignService {
     await this.initialize();
     try {
       const resp = await fetch(`/api/financial-summary?userId=${userId}&type=summary`);
+      if (!resp.ok) return { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 };
       const json = await resp.json();
       return json.data || { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 };
     } catch (e) { return { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 }; }
@@ -153,6 +177,7 @@ export class CampaignService {
     await this.initialize();
     try {
       const resp = await fetch(`/api/withdrawals?userId=${userId}`);
+      if (!resp.ok) return [];
       const json = await resp.json();
       return json.data || [];
     } catch (e) { return []; }
@@ -173,7 +198,6 @@ export class CampaignService {
 
   async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
     await this.initialize();
-    // metadata debe incluir { nombre, email, comentario, tip, iva, donorUserId }
     const response = await fetch('/api/process-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -184,7 +208,6 @@ export class CampaignService {
     return json;
   }
 
-  // Nuevo método para simular donación
   async simulateDonation(payload: { 
     campaignId: string, 
     monto: number, 
