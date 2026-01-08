@@ -37,6 +37,7 @@ import { useAuth } from '../context/AuthContext';
 import { AuthService } from '../services/AuthService';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, FinancialSummary, Withdrawal, Donation, Profile } from '../types';
+import { formatRut, validateRut, formatPhone, validateChileanPhone } from '../utils/validation';
 
 type TabType = 'resumen' | 'donaciones' | 'finanzas' | 'seguridad' | 'perfil';
 
@@ -58,6 +59,10 @@ const Dashboard: React.FC = () => {
     rut: '',
     phone: ''
   });
+  // Estados de error específicos para validación
+  const [rutError, setRutError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
   const [profileSaving, setProfileSaving] = useState(false);
   
   const [loading, setLoading] = useState(true);
@@ -72,7 +77,6 @@ const Dashboard: React.FC = () => {
     }
     if (user) {
       loadAllData();
-      // Inicializar formulario de perfil
       if (profile) {
         setProfileForm({
           full_name: profile.full_name || '',
@@ -103,8 +107,57 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleRutChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    const formatted = formatRut(val);
+    setProfileForm(prev => ({ ...prev, rut: formatted }));
+    
+    if (val.length > 2 && !validateRut(formatted)) {
+      setRutError('RUT inválido');
+    } else {
+      setRutError(null);
+    }
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    // Permitir solo números y +, espacio
+    if (!/^[0-9+\s]*$/.test(val)) return;
+
+    setProfileForm(prev => ({ ...prev, phone: val }));
+    
+    // Validación laxa durante tipeo, estricta al final
+    if (val.length > 8 && !validateChileanPhone(val)) {
+        setPhoneError('Formato: +56 9 XXXXXXXX');
+    } else {
+        setPhoneError(null);
+    }
+  };
+
+  const handlePhoneBlur = () => {
+    // Auto-formato al perder foco
+    const formatted = formatPhone(profileForm.phone);
+    setProfileForm(prev => ({ ...prev, phone: formatted }));
+    if (!validateChileanPhone(formatted) && formatted.length > 0) {
+        setPhoneError('Número inválido');
+    } else {
+        setPhoneError(null);
+    }
+  }
+
   const handleUpdateProfile = async () => {
     if (!user) return;
+    
+    // Validaciones finales antes de guardar
+    if (profileForm.rut && !validateRut(profileForm.rut)) {
+        alert("El RUT ingresado no es válido.");
+        return;
+    }
+    if (profileForm.phone && !validateChileanPhone(profileForm.phone)) {
+        alert("El teléfono debe ser un móvil chileno válido (+56 9...).");
+        return;
+    }
+
     setProfileSaving(true);
     try {
       await authService.updateProfile(user.id, {
@@ -113,7 +166,6 @@ const Dashboard: React.FC = () => {
         phone: profileForm.phone
       });
       setIsEditingProfile(false);
-      // Recargar página para actualizar contexto (solución simple, idealmente actualizar contexto)
       window.location.reload(); 
     } catch (e) {
       console.error("Error updating profile:", e);
@@ -150,7 +202,6 @@ const Dashboard: React.FC = () => {
     alert(`Descargando comprobante para donación #${donation.id.slice(0,8)}...`);
   };
 
-  // Check de perfil incompleto
   const isProfileIncomplete = !profile?.rut || !profile?.phone;
 
   if (authLoading || loading) {
@@ -555,7 +606,7 @@ const Dashboard: React.FC = () => {
                         
                         <div className="grid grid-cols-2 gap-4">
                            <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">RUT / DNI</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">RUT</label>
                               <div className="font-black text-slate-900 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
                                  {profile?.rut || <span className="text-slate-400 italic font-medium text-xs">Pendiente</span>}
                                  {!profile?.rut && <AlertTriangle size={14} className="text-amber-500" />}
@@ -612,31 +663,36 @@ const Dashboard: React.FC = () => {
 
                         <div className="grid grid-cols-2 gap-4">
                            <div>
-                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">RUT / DNI</label>
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">RUT</label>
                               <input
                                  type="text"
-                                 className="w-full p-4 bg-white border-2 border-slate-100 focus:border-violet-200 focus:bg-slate-50 rounded-2xl outline-none font-bold text-slate-900 transition-all"
+                                 className={`w-full p-4 bg-white border-2 ${rutError ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus:border-violet-200 focus:bg-slate-50'} rounded-2xl outline-none font-bold text-slate-900 transition-all`}
                                  value={profileForm.rut}
-                                 onChange={(e) => setProfileForm({...profileForm, rut: e.target.value})}
+                                 onChange={handleRutChange}
                                  placeholder="12.345.678-9"
+                                 maxLength={12}
                               />
+                              {rutError && <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1">{rutError}</p>}
                            </div>
                            <div>
                               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Teléfono</label>
                               <input
                                  type="text"
-                                 className="w-full p-4 bg-white border-2 border-slate-100 focus:border-violet-200 focus:bg-slate-50 rounded-2xl outline-none font-bold text-slate-900 transition-all"
+                                 className={`w-full p-4 bg-white border-2 ${phoneError ? 'border-rose-200 bg-rose-50' : 'border-slate-100 focus:border-violet-200 focus:bg-slate-50'} rounded-2xl outline-none font-bold text-slate-900 transition-all`}
                                  value={profileForm.phone}
-                                 onChange={(e) => setProfileForm({...profileForm, phone: e.target.value})}
+                                 onChange={handlePhoneChange}
+                                 onBlur={handlePhoneBlur}
                                  placeholder="+56 9..."
+                                 maxLength={15}
                               />
+                              {phoneError && <p className="text-[10px] text-rose-500 font-bold mt-1 ml-1">{phoneError}</p>}
                            </div>
                         </div>
 
                         <div className="bg-sky-50 p-4 rounded-2xl border border-sky-100 flex gap-3 mt-4">
                            <Info size={20} className="text-sky-600 shrink-0 mt-0.5" />
                            <p className="text-xs text-sky-800 font-medium leading-relaxed">
-                              La información proporcionada será utilizada para verificar tu identidad al momento de solicitar retiros. Asegúrate de que coincida con tu cuenta bancaria.
+                              La información proporcionada será utilizada para verificar tu identidad al momento de solicitar retiros. Tu teléfono quedará pendiente de validación vía código (próximamente).
                            </p>
                         </div>
 
@@ -649,8 +705,8 @@ const Dashboard: React.FC = () => {
                            </button>
                            <button 
                               onClick={handleUpdateProfile}
-                              disabled={profileSaving}
-                              className="flex-[2] py-4 bg-violet-600 text-white rounded-2xl font-black hover:bg-violet-700 transition-all shadow-xl shadow-violet-100 flex items-center justify-center gap-2 disabled:opacity-70"
+                              disabled={profileSaving || !!rutError || !!phoneError}
+                              className="flex-[2] py-4 bg-violet-600 text-white rounded-2xl font-black hover:bg-violet-700 transition-all shadow-xl shadow-violet-100 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                            >
                               {profileSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
                               Guardar Cambios
