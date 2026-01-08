@@ -42,7 +42,7 @@ import { formatRut, validateRut, formatPhone, validateChileanPhone } from '../ut
 type TabType = 'resumen' | 'donaciones' | 'finanzas' | 'seguridad' | 'perfil';
 
 const Dashboard: React.FC = () => {
-  const { user, profile, loading: authLoading, signOut } = useAuth();
+  const { user, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('resumen');
   
@@ -62,6 +62,7 @@ const Dashboard: React.FC = () => {
   // Estados de error específicos para validación
   const [rutError, setRutError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const [profileSaving, setProfileSaving] = useState(false);
   
@@ -165,8 +166,15 @@ const Dashboard: React.FC = () => {
         rut: profileForm.rut,
         phone: profileForm.phone
       });
+      
+      // Actualizamos el contexto local
+      await refreshProfile();
+      
       setIsEditingProfile(false);
-      window.location.reload(); 
+      setShowSuccessToast(true);
+      // Auto-ocultar después de 5 segundos
+      setTimeout(() => setShowSuccessToast(false), 5000);
+      
     } catch (e) {
       console.error("Error updating profile:", e);
       alert("Error actualizando perfil. Intenta nuevamente.");
@@ -562,7 +570,7 @@ const Dashboard: React.FC = () => {
         {activeTab === 'perfil' && (
           <div className="animate-in fade-in duration-500 max-w-xl">
              {/* Alerta de Perfil Incompleto */}
-             {isProfileIncomplete && !isEditingProfile && (
+             {isProfileIncomplete && !isEditingProfile && !showSuccessToast && (
                 <div className="mb-6 bg-amber-50 border border-amber-200 rounded-[32px] p-6 flex items-start gap-4">
                    <div className="bg-amber-100 p-2.5 rounded-xl text-amber-600 shrink-0">
                       <AlertTriangle size={24} />
@@ -579,6 +587,22 @@ const Dashboard: React.FC = () => {
                          Completar ahora
                       </button>
                    </div>
+                </div>
+             )}
+
+             {/* Mensaje de Éxito al Actualizar */}
+             {showSuccessToast && (
+                <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-[32px] p-6 flex items-center gap-4 animate-in slide-in-from-top-2">
+                    <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600 shrink-0">
+                      <CheckCircle2 size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-emerald-900 font-black text-sm mb-1">¡Perfil actualizado!</h4>
+                      <p className="text-emerald-800/80 text-xs font-medium">Tus datos se han guardado correctamente.</p>
+                    </div>
+                    <button onClick={() => setShowSuccessToast(false)} className="ml-auto text-emerald-500 hover:text-emerald-700">
+                      <X size={20} />
+                    </button>
                 </div>
              )}
 
