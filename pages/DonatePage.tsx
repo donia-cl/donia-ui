@@ -11,10 +11,12 @@ import {
   Info,
   Check,
   Zap,
-  Receipt
+  Receipt,
+  Mail
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 declare global {
   interface Window {
@@ -25,6 +27,7 @@ declare global {
 const DonatePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
   
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,10 +36,10 @@ const DonatePage: React.FC = () => {
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   
-  // Usar directamente la variable de entorno
   const mpPublicKey = process.env.REACT_APP_MP_PUBLIC_KEY || '';
   
   const [donorName, setDonorName] = useState<string>('');
+  const [donorEmail, setDonorEmail] = useState<string>('');
   const [donorComment, setDonorComment] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'rejected'>('idle');
@@ -50,6 +53,14 @@ const DonatePage: React.FC = () => {
     
   const ivaAmount = Math.round(tipSubtotal * 0.19);
   const totalAmount = donationAmount + tipSubtotal + ivaAmount;
+
+  // Pre-llenar datos si el usuario está logueado
+  useEffect(() => {
+    if (user || profile) {
+      if (profile?.full_name) setDonorName(profile.full_name);
+      if (user?.email) setDonorEmail(user.email);
+    }
+  }, [user, profile]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -79,7 +90,12 @@ const DonatePage: React.FC = () => {
         
         try {
           await bricksBuilder.create('payment', 'paymentBrick_container', {
-            initialization: { amount: totalAmount },
+            initialization: { 
+              amount: totalAmount,
+              payer: {
+                email: donorEmail // Pasamos el email al brick para pre-llenar si es posible
+              }
+            },
             customization: {
               paymentMethods: { creditCard: 'all', debitCard: 'all', mercadoPago: 'all' },
               visual: { style: { theme: 'flat' }, borderRadius: '16px' }
@@ -88,10 +104,12 @@ const DonatePage: React.FC = () => {
               onSubmit: async ({ formData }: any) => {
                 try {
                   const result = await service.processPayment(formData, campaign.id, { 
-                    nombre: donorName, 
+                    nombre: donorName,
+                    email: donorEmail, // IMPORTANTE: Email obligatorio
                     comentario: donorComment,
                     tip: tipSubtotal,
-                    iva: ivaAmount
+                    iva: ivaAmount,
+                    donorUserId: user?.id || null // Enviamos ID si está logueado
                   });
                   if (result.status === 'approved') {
                     setPaymentStatus('success');
@@ -114,7 +132,7 @@ const DonatePage: React.FC = () => {
       };
       renderPaymentBrick();
     }
-  }, [showPaymentForm, totalAmount, campaign, mpPublicKey]);
+  }, [showPaymentForm, totalAmount, campaign, mpPublicKey, donorEmail]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -132,9 +150,12 @@ const DonatePage: React.FC = () => {
           <Check size={40} />
         </div>
         <h1 className="text-3xl font-black text-slate-900 mb-3">¡Donación exitosa!</h1>
-        <p className="text-slate-500 mb-10 font-medium leading-relaxed">
+        <p className="text-slate-500 mb-6 font-medium leading-relaxed">
           Tu aporte voluntario para <span className="text-violet-600 font-bold">{campaign.titulo}</span> ha sido procesado correctamente.
         </p>
+        <div className="bg-slate-50 p-4 rounded-xl mb-10 text-sm text-slate-600 border border-slate-100">
+           Hemos enviado un comprobante a <strong>{donorEmail}</strong>.
+        </div>
         <button 
           onClick={() => navigate(`/campana/${campaign.id}`)} 
           className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black"
@@ -144,6 +165,20 @@ const DonatePage: React.FC = () => {
       </div>
     );
   }
+
+  const validateAndContinue = () => {
+    if (donationAmount < 500) {
+      setError("El monto mínimo de donación es $500 CLP");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!donorEmail || !emailRegex.test(donorEmail)) {
+      setError("Por favor ingresa un correo electrónico válido.");
+      return;
+    }
+    setError(null);
+    setShowPaymentForm(true);
+  };
 
   return (
     <div className="bg-slate-50 min-h-screen pb-20">
@@ -244,31 +279,51 @@ const DonatePage: React.FC = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
-                      placeholder="Tu nombre (opcional)"
-                      value={donorName}
-                      onChange={(e) => setDonorName(e.target.value)}
-                    />
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Email (Obligatorio)</label>
+                      <div className="relative">
+                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                        <input 
+                          type="email" 
+                          required
+                          className="w-full pl-11 px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
+                          placeholder="tu@correo.com"
+                          value={donorEmail}
+                          onChange={(e) => setDonorEmail(e.target.value)}
+                        />
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1 ml-1">Necesario para enviarte el comprobante.</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Tu nombre (Opcional)</label>
+                      <input 
+                        type="text" 
+                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
+                        placeholder="Ej: Juan Pérez"
+                        value={donorName}
+                        onChange={(e) => setDonorName(e.target.value)}
+                      />
+                    </div>
+                    
                     <textarea 
                       rows={3}
                       className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-medium text-slate-600 resize-none transition-all text-sm"
-                      placeholder="Mensaje de apoyo..."
+                      placeholder="Escribe un mensaje de apoyo..."
                       value={donorComment}
                       onChange={(e) => setDonorComment(e.target.value)}
                     />
                   </div>
 
+                  {error && (
+                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 text-rose-700 text-xs font-bold items-center animate-in slide-in-from-top-1">
+                      <AlertCircle size={16} />
+                      <p>{error}</p>
+                    </div>
+                  )}
+
                   <button 
-                    onClick={() => {
-                      if (donationAmount < 500) {
-                        setError("El monto mínimo de donación es $500 CLP");
-                        return;
-                      }
-                      setError(null);
-                      setShowPaymentForm(true);
-                    }}
+                    onClick={validateAndContinue}
                     className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-violet-100"
                   >
                     Continuar al pago <ArrowRight size={20} />
@@ -282,7 +337,7 @@ const DonatePage: React.FC = () => {
                       onClick={() => setShowPaymentForm(false)}
                       className="text-violet-600 font-bold text-xs uppercase tracking-widest hover:underline"
                     >
-                      Editar montos
+                      Editar datos
                     </button>
                   </div>
                   

@@ -21,7 +21,6 @@ export class CampaignService {
   }
 
   public async initialize(): Promise<void> {
-    // CampaignService ahora depende de la inicialización de AuthService
     await AuthService.getInstance().initialize();
     try {
       const resp = await fetch('/api/config');
@@ -52,14 +51,16 @@ export class CampaignService {
       donantesCount: Number(c.donantes_count || c.donantesCount || 0),
       beneficiarioNombre: c.beneficiario_nombre || c.beneficiarioNombre,
       beneficiarioRelacion: c.beneficiario_relacion || c.beneficiarioRelacion,
-      user_id: c.user_id,
+      owner_id: c.owner_id, // Ahora usamos owner_id
       donations: c.donations ? c.donations.map((d: any) => ({
         id: d.id,
         campaignId: d.campaign_id,
         monto: Number(d.monto),
-        fecha: d.fecha,
-        nombreDonante: d.nombre_donante || 'Anónimo',
-        comentario: d.comentario
+        fecha: d.fecha || d.created_at,
+        nombreDonante: d.nombre_donante || d.donor_name || 'Anónimo',
+        emailDonante: d.donor_email || '',
+        comentario: d.comentario,
+        donorUserId: d.donor_user_id
       })) : undefined
     };
   }
@@ -76,7 +77,8 @@ export class CampaignService {
   async getUserCampaigns(userId: string): Promise<CampaignData[]> {
     await this.initialize();
     try {
-      const resp = await fetch(`/api/campaigns?userId=${userId}`);
+      // Nota: userId aquí se refiere al ID del owner/profile
+      const resp = await fetch(`/api/user-campaigns?userId=${userId}`);
       const json = await resp.json();
       return (json.data || []).map((c: any) => this.mapCampaign(c));
     } catch (e) { return []; }
@@ -105,8 +107,8 @@ export class CampaignService {
 
   async updateCampaign(id: string, userId: string, updates: any): Promise<CampaignData> {
     await this.initialize();
-    const response = await fetch('/api/campaigns', {
-      method: 'PUT',
+    const response = await fetch('/api/update-campaign', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, userId, updates })
     });
@@ -121,7 +123,11 @@ export class CampaignService {
 
   async deleteCampaign(id: string, userId: string): Promise<boolean> {
     await this.initialize();
-    const response = await fetch(`/api/campaigns?id=${id}&userId=${userId}`, { method: 'DELETE' });
+    const response = await fetch('/api/delete-campaign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, userId })
+    });
     const json = await response.json();
     return json.success;
   }
@@ -138,7 +144,7 @@ export class CampaignService {
   async getWithdrawals(userId: string): Promise<Withdrawal[]> {
     await this.initialize();
     try {
-      const resp = await fetch(`/api/financial-summary?userId=${userId}&type=withdrawals`);
+      const resp = await fetch(`/api/withdrawals?userId=${userId}`);
       const json = await resp.json();
       return json.data || [];
     } catch (e) { return []; }
@@ -159,7 +165,8 @@ export class CampaignService {
 
   async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
     await this.initialize();
-    const response = await fetch('/api/preference?action=process', {
+    // metadata debe incluir { nombre, email, comentario, tip, iva }
+    const response = await fetch('/api/process-payment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paymentData, campaignId, metadata })

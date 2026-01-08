@@ -4,9 +4,11 @@ import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 import { CampaignService } from '../services/CampaignService';
+import { Profile } from '../types';
 
 interface AuthContextType {
   user: User | null;
+  profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -15,41 +17,67 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   
   const authService = AuthService.getInstance();
   const campaignService = CampaignService.getInstance();
 
+  const fetchProfile = async (userId: string) => {
+    const client = authService.getSupabase();
+    if (!client) return null;
+    
+    const { data, error } = await client
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+      
+    if (error) {
+      console.error("Error fetching profile:", error);
+      return null;
+    }
+    return data as Profile;
+  };
+
   useEffect(() => {
     let mounted = true;
 
     const initApp = async () => {
       try {
-        // 1. Inicializar servicios (esperar configuración)
         await authService.initialize();
         await campaignService.initialize();
         
         const client = authService.getSupabase();
-        
-        // 2. Intentar obtener sesión existente
         const session = await authService.getSession();
         
         if (mounted) {
-          setUser(session?.user ?? null);
+          const currentUser = session?.user ?? null;
+          setUser(currentUser);
+          
+          if (currentUser) {
+            const userProfile = await fetchProfile(currentUser.id);
+            setProfile(userProfile);
+          }
+          
           setLoading(false);
         }
 
-        // 3. Suscribirse a cambios de estado
         if (client) {
           const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
             console.log("[Auth] State Change:", event);
             if (mounted) {
-              setUser(session?.user ?? null);
+              const currentUser = session?.user ?? null;
+              setUser(currentUser);
               
+              if (currentUser && !profile) {
+                 const userProfile = await fetchProfile(currentUser.id);
+                 setProfile(userProfile);
+              }
+
               if (event === 'SIGNED_IN') {
                 setLoading(false);
-                // Si estamos en la raíz con hash de token, redirigir al dashboard
                 if (window.location.hash.includes('access_token')) {
                   window.location.hash = '#/dashboard';
                 }
@@ -57,6 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               
               if (event === 'SIGNED_OUT') {
                 setUser(null);
+                setProfile(null);
                 setLoading(false);
                 window.location.hash = '#/';
               }
@@ -84,12 +113,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     await authService.signOut();
     setUser(null);
+    setProfile(null);
     setLoading(false);
     window.location.hash = '#/';
   };
 
-  // BLOQUEO CRÍTICO: No renderizar el Router (children) hasta que AuthService 
-  // haya tenido oportunidad de procesar el hash de la URL.
   if (!isInitialized) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
@@ -100,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

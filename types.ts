@@ -1,6 +1,15 @@
 
 export type CampaignStatus = 'borrador' | 'activa' | 'finalizada' | 'en_revision' | 'pausada';
 
+export interface Profile {
+  id: string;
+  full_name: string;
+  rut?: string;
+  phone?: string;
+  role: 'user' | 'admin' | 'reviewer';
+  is_verified: boolean;
+}
+
 export interface CampaignData {
   id: string;
   titulo: string;
@@ -16,7 +25,7 @@ export interface CampaignData {
   beneficiarioNombre?: string;
   beneficiarioRelacion?: string;
   donations?: Donation[];
-  user_id?: string;
+  owner_id?: string; // Cambiado de user_id a owner_id
 }
 
 export interface Donation {
@@ -25,7 +34,9 @@ export interface Donation {
   monto: number;
   fecha: string;
   nombreDonante: string;
+  emailDonante: string; // Nuevo campo obligatorio
   comentario?: string;
+  donorUserId?: string; // Opcional, solo si está logueado
 }
 
 export interface Withdrawal {

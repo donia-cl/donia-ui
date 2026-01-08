@@ -20,39 +20,52 @@ export default async function handler(req: any, res: any) {
     const payment = await mpResponse.json();
 
     if (payment.status === 'approved') {
-      const { campaign_id, donor_name, donor_comment } = payment.metadata;
+      const { campaign_id, donor_name, donor_comment, donor_email, donor_user_id } = payment.metadata;
       const amount = payment.transaction_amount;
 
       if (!supabaseUrl || !serviceRoleKey) throw new Error("Configuración DB ausente");
       const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-      // 2. Registrar la donación
-      const { error: dError } = await supabase
+      // 2. Verificar si ya existe (idempotencia simple)
+      const { data: existing } = await supabase
         .from('donations')
-        .insert([{
-          campaign_id: campaign_id,
-          monto: amount,
-          nombre_donante: donor_name,
-          comentario: donor_comment
-        }]);
-
-      if (dError) throw dError;
-
-      // 3. Actualizar totales de la campaña
-      const { data: campaign } = await supabase
-        .from('campaigns')
-        .select('recaudado, donantes_count')
-        .eq('id', campaign_id)
+        .select('id')
+        .eq('payment_id', String(payment.id))
         .single();
 
-      if (campaign) {
-        await supabase
+      if (!existing) {
+        // 3. Registrar la donación
+        const { error: dError } = await supabase
+          .from('donations')
+          .insert([{
+            campaign_id: campaign_id,
+            monto: amount,
+            nombre_donante: donor_name,
+            donor_email: donor_email,
+            donor_user_id: donor_user_id || null,
+            comentario: donor_comment,
+            payment_provider: 'mercado_pago',
+            payment_id: String(payment.id)
+          }]);
+
+        if (dError) throw dError;
+
+        // 4. Actualizar totales de la campaña
+        const { data: campaign } = await supabase
           .from('campaigns')
-          .update({
-            recaudado: (Number(campaign.recaudado) || 0) + amount,
-            donantes_count: (Number(campaign.donantes_count) || 0) + 1
-          })
-          .eq('id', campaign_id);
+          .select('recaudado, donantes_count')
+          .eq('id', campaign_id)
+          .single();
+
+        if (campaign) {
+          await supabase
+            .from('campaigns')
+            .update({
+              recaudado: (Number(campaign.recaudado) || 0) + amount,
+              donantes_count: (Number(campaign.donantes_count) || 0) + 1
+            })
+            .eq('id', campaign_id);
+        }
       }
     }
 

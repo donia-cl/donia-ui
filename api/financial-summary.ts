@@ -13,8 +13,8 @@ export default async function handler(req: any, res: any) {
 
   try {
     if (type === 'summary') {
-      const { data: campaigns } = await supabase.from('campaigns').select('recaudado').eq('user_id', userId);
-      const { data: withdrawals } = await supabase.from('withdrawals').select('monto, estado').eq('user_id', userId);
+      const { data: campaigns } = await supabase.from('campaigns').select('recaudado').eq('owner_id', userId); // owner_id
+      const { data: withdrawals } = await supabase.from('withdrawals').select('monto, estado').eq('user_id', userId); // withdrawals usa user_id porque está ligado a la tabla profiles
 
       const totalRecaudado = (campaigns || []).reduce((acc, c) => acc + (Number(c.recaudado) || 0), 0);
       const totalRetirado = (withdrawals || []).filter(w => w.estado === 'completado').reduce((acc, w) => acc + (Number(w.monto) || 0), 0);

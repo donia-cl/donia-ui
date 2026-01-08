@@ -13,11 +13,15 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl!, supabaseKey!);
 
   try {
-    const { data: campaign } = await supabase.from('campaigns').select('user_id').eq('id', id).single();
-    if (!campaign || campaign.user_id !== userId) {
+    const { data: campaign } = await supabase.from('campaigns').select('owner_id, recaudado').eq('id', id).single();
+    
+    // Verificación con owner_id
+    if (!campaign || campaign.owner_id !== userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    if (campaign.recaudado > 0) return res.status(400).json({ error: 'Cannot delete campaign with donations' });
+    
     const { error } = await supabase.from('campaigns').delete().eq('id', id);
     if (error) throw error;
 

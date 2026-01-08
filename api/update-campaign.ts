@@ -14,9 +14,9 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl!, supabaseKey!);
 
   try {
-    // Verificamos que sea el dueño
-    const { data: campaign } = await supabase.from('campaigns').select('user_id').eq('id', id).single();
-    if (!campaign || campaign.user_id !== userId) {
+    // Verificamos que sea el dueño usando owner_id
+    const { data: campaign } = await supabase.from('campaigns').select('owner_id').eq('id', id).single();
+    if (!campaign || campaign.owner_id !== userId) {
       return res.status(403).json({ error: 'Unauthorized to edit this campaign' });
     }
 

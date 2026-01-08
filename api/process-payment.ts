@@ -30,9 +30,14 @@ export default async function handler(req: any, res: any) {
       body: JSON.stringify({
         ...paymentData,
         description: `Donación Donia - Campaña ${campaignId}`,
+        payer: {
+          email: metadata.email // Pasamos el email a MP
+        },
         metadata: {
           campaign_id: campaignId,
           donor_name: metadata.nombre || 'Anónimo',
+          donor_email: metadata.email, // OBLIGATORIO
+          donor_user_id: metadata.donorUserId || null, // Opcional
           donor_comment: metadata.comentario || ''
         }
       }),
@@ -50,12 +55,16 @@ export default async function handler(req: any, res: any) {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         const amount = paymentResult.transaction_amount;
 
-        // Registrar donación
+        // Registrar donación con el nuevo esquema
         await supabase.from('donations').insert([{
           campaign_id: campaignId,
           monto: amount,
           nombre_donante: metadata.nombre || 'Anónimo',
-          comentario: metadata.comentario || ''
+          donor_email: metadata.email,
+          donor_user_id: metadata.donorUserId || null,
+          comentario: metadata.comentario || '',
+          payment_provider: 'mercado_pago',
+          payment_id: String(paymentResult.id)
         }]);
 
         // Actualizar totales de campaña
