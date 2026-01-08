@@ -32,7 +32,8 @@ export class AuthService {
                 persistSession: true,
                 autoRefreshToken: true,
                 detectSessionInUrl: true,
-                storageKey: 'sb-mkdqpkrtegkhzakopnov-auth-token'
+                storageKey: 'sb-mkdqpkrtegkhzakopnov-auth-token',
+                flowType: 'implicit' // Forzamos implicit para mejor compatibilidad con HashRouter
               }
             });
           }
@@ -73,8 +74,7 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
     
-    // IMPORTANTE: Al usar HashRouter, redirigimos a la base sin hash.
-    // Supabase pondrá los tokens en el hash (#access_token=...) y nuestro listener los atrapará.
+    // Redirigimos a la base. Supabase inyectará el token en el fragmento #
     const redirectTo = window.location.origin + window.location.pathname;
     
     const { data, error } = await this.client.auth.signInWithOAuth({
@@ -93,17 +93,6 @@ export class AuthService {
     await this.client.auth.signOut();
   }
 
-  async getCurrentUser(): Promise<User | null> {
-    await this.initialize();
-    if (!this.client) return null;
-    try {
-      const { data: { user } } = await this.client.auth.getUser();
-      return user;
-    } catch {
-      return null;
-    }
-  }
-
   async getSession(): Promise<Session | null> {
     await this.initialize();
     if (!this.client) return null;
@@ -111,5 +100,3 @@ export class AuthService {
     return session;
   }
 }
-
-export const getSupabaseClient = () => AuthService.getInstance().getSupabase();

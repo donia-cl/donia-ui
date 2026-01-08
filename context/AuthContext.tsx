@@ -22,38 +22,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initApp = async () => {
+      // 1. Inicializar servicios
       await authService.initialize();
       await campaignService.initialize();
+      
+      const client = authService.getSupabase();
+      
+      // 2. Si detectamos tokens de Supabase en la URL, esperamos a que el listener actúe
+      const hasAuthToken = window.location.hash.includes('access_token=');
       
       const session = await authService.getSession();
       
       if (mounted) {
         setUser(session?.user ?? null);
-        setLoading(false);
+        // Solo quitamos el loading si no estamos en medio de un proceso de OAuth
+        if (!hasAuthToken) {
+          setLoading(false);
+        }
       }
 
-      const client = authService.getSupabase();
       if (client && mounted) {
-        const { data: { subscription } } = client.auth.onAuthStateChange((event, session) => {
+        const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
           if (mounted) {
             setUser(session?.user ?? null);
             
-            // Lógica de redirección y limpieza tras login con Google
-            if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-              const hash = window.location.hash;
-              if (hash.includes('access_token=')) {
-                // Si estamos en la raíz o login, vamos al dashboard
-                if (hash.startsWith('#access_token') || hash === '' || hash === '#/') {
-                   window.location.hash = '#/dashboard';
-                }
-                
-                // Limpiamos los parámetros de Supabase de la URL
-                const cleanURL = window.location.origin + window.location.pathname + window.location.hash.split('&')[0].split('#')[0];
-                // En HashRouter es mejor simplemente navegar al dashboard como hicimos arriba.
+            // Si el login fue exitoso (especialmente vía Google/OAuth)
+            if (event === 'SIGNED_IN' && session) {
+              setLoading(false);
+              // Si el hash actual es basura de Supabase, limpiamos y vamos al dashboard
+              if (window.location.hash.includes('access_token=')) {
+                window.location.hash = '#/dashboard';
               }
+            }
+            
+            if (event === 'SIGNED_OUT') {
+              setUser(null);
+              setLoading(false);
             }
           }
         });
+
+        // Timeout de seguridad: Si después de 5 segundos de ver un token no hemos logueado, liberamos el loading
+        if (hasAuthToken) {
+          setTimeout(() => {
+            if (mounted) setLoading(false);
+          }, 5000);
+        }
 
         return () => {
           subscription.unsubscribe();
@@ -68,6 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     await authService.signOut();
     setUser(null);
+    window.location.hash = '#/';
   };
 
   return (
