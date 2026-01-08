@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
   const { userId } = req.query;
 
   if (!userId) return res.status(400).json({ error: 'User ID is required' });
@@ -17,41 +19,55 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    const { data, error } = await supabase
+    // 1. Obtener donaciones del usuario
+    const { data: donationsData, error: dError } = await supabase
       .from('donations')
-      .select(`
-        *,
-        campaigns (
-          titulo,
-          imagen_url
-        )
-      `)
+      .select('*')
       .eq('donor_user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error("[API/user-donations] DB Error:", error);
-      throw error;
+    if (dError) throw dError;
+
+    if (!donationsData || donationsData.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
     }
 
-    // Mapeo defensivo para evitar crash si campaigns es null o array
-    const donations = (data || []).map((d: any) => {
-      // Supabase a veces retorna un array si la relación no es explícitamente 1:1, aunque logically lo sea.
-      const campaignData = Array.isArray(d.campaigns) ? d.campaigns[0] : d.campaigns;
+    // 2. Obtener IDs únicos de campañas para hacer un "Join Manual" seguro
+    // Esto evita errores 500 si la Foreign Key no está perfectamente configurada en Supabase
+    const campaignIds = [...new Set(donationsData.map((d: any) => d.campaign_id).filter(Boolean))];
 
+    let campaignsMap: Record<string, any> = {};
+
+    if (campaignIds.length > 0) {
+      const { data: campaignsData, error: cError } = await supabase
+        .from('campaigns')
+        .select('id, titulo, imagen_url')
+        .in('id', campaignIds);
+        
+      if (!cError && campaignsData) {
+        campaignsData.forEach((c: any) => {
+          campaignsMap[c.id] = c;
+        });
+      }
+    }
+
+    // 3. Combinar datos manualmente
+    const donations = donationsData.map((d: any) => {
+      const campaign = campaignsMap[d.campaign_id] || {};
+      
       return {
         id: d.id,
         campaignId: d.campaign_id,
         monto: d.monto,
-        fecha: d.created_at,
+        fecha: d.created_at || d.fecha, // Soporte para ambos nombres de columna
         nombreDonante: d.nombre_donante,
         emailDonante: d.donor_email,
         comentario: d.comentario,
         status: d.status || 'completed',
         paymentId: d.payment_id,
         campaign: {
-          titulo: campaignData?.titulo || 'Campaña no disponible',
-          imagenUrl: campaignData?.imagen_url || 'https://picsum.photos/200/200'
+          titulo: campaign.titulo || 'Campaña no disponible',
+          imagenUrl: campaign.imagen_url || 'https://picsum.photos/200/200'
         }
       };
     });
@@ -59,6 +75,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ success: true, data: donations });
   } catch (error: any) {
     console.error("[API/user-donations] Fatal Error:", error.message);
-    return res.status(500).json({ error: error.message });
+    // Retornamos array vacío en caso de error grave para no romper el frontend
+    return res.status(200).json({ success: false, error: error.message, data: [] });
   }
 }

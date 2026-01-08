@@ -2,7 +2,8 @@
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET');
-  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate'); // Cache simple
+  res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate'); 
+  res.setHeader('Connection', 'keep-alive'); // Ayuda a prevenir cierres prematuros y errores QUIC
   
   return res.status(200).json({
     supabaseUrl: process.env.REACT_APP_SUPABASE_URL,

@@ -22,33 +22,43 @@ export class CampaignService {
   }
 
   public async initialize(): Promise<void> {
-    // Evitar múltiples llamadas simultáneas de inicialización
+    // Si ya está inicializando, devolver la promesa existente
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
+      // Paso 1: Inicializar Auth
       try {
         await AuthService.getInstance().initialize();
-        
-        // Intentamos obtener configuración del servidor, pero no bloqueamos si falla
-        try {
-          const resp = await fetch('/api/config', { 
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-          });
-          if (resp.ok) {
-            const config = await resp.json();
-            this.aiEnabled = !!config.aiEnabled;
-          }
-        } catch (netError) {
-          // Si falla /api/config (ej. offline o bloqueo), usamos valores seguros por defecto
-          console.warn("[CampaignService] No se pudo cargar config remota, usando defaults local.");
-          this.aiEnabled = false; 
-        }
       } catch (e) {
-        console.error("[CampaignService] Error crítico en init:", e);
+        console.warn("[CampaignService] Auth init warning:", e);
+      }
+
+      // Paso 2: Obtener configuración remota (con fallback silencioso)
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // Timeout de 3s para config
+
+        const resp = await fetch('/api/config', { 
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+
+        if (resp.ok) {
+          const config = await resp.json();
+          this.aiEnabled = !!config.aiEnabled;
+        }
+      } catch (netError) {
+        // Ignoramos errores de red en init para permitir modo offline/local
+        console.warn("[CampaignService] Config remota no disponible, usando defaults.");
+        this.aiEnabled = false; 
       }
     })();
 
+    // IMPORTANTE: Devolvemos la promesa, pero si falla internamente, aquí ya está resuelta (void)
+    // gracias al catch interno. Esto asegura que await service.initialize() nunca lance excepción.
     return this.initPromise;
   }
 
