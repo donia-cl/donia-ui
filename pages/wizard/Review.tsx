@@ -16,7 +16,8 @@ import {
   Loader2,
   Check,
   FileText,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Clock
 } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useAuth } from '../../context/AuthContext';
@@ -104,6 +105,7 @@ const CreateReview: React.FC = () => {
         imagenUrl: campaign.imagenUrl || '',
         beneficiarioNombre: campaign.beneficiarioNombre || '',
         beneficiarioRelacion: campaign.beneficiarioRelacion || 'Yo mismo',
+        duracion: campaign.duracionDias || 60, // Pasamos la duración
         user_id: user.id
       });
       
@@ -185,6 +187,12 @@ const CreateReview: React.FC = () => {
                 icon={UserCheck}
                 label="Beneficiario"
                 value={`${campaign.beneficiarioNombre} (${campaign.beneficiarioRelacion})`}
+                onEdit={() => navigate('/crear/detalles')}
+              />
+              <ReviewItem 
+                icon={Clock}
+                label="Duración"
+                value={`${campaign.duracionDias} Días`}
                 onEdit={() => navigate('/crear/detalles')}
               />
             </div>

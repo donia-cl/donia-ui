@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, DollarSign, Image as ImageIcon, UserCheck, ShieldCheck, Loader2, AlertCircle, RefreshCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, DollarSign, Image as ImageIcon, UserCheck, ShieldCheck, Loader2, AlertCircle, RefreshCcw, Calendar, Clock } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
@@ -17,7 +17,8 @@ const CreateDetails: React.FC = () => {
     categoria: campaign.categoria || 'Salud',
     beneficiarioNombre: campaign.beneficiarioNombre || '',
     beneficiarioRelacion: campaign.beneficiarioRelacion || 'Yo mismo',
-    imagenUrl: campaign.imagenUrl || ''
+    imagenUrl: campaign.imagenUrl || '',
+    duracionDias: campaign.duracionDias || 60
   });
 
   const [uploading, setUploading] = useState(false);
@@ -47,11 +48,9 @@ const CreateDetails: React.FC = () => {
         setFormData(prev => ({ ...prev, imagenUrl: url }));
       } catch (err: any) {
         console.error("Detalle del error de subida:", err);
-        // Intentamos extraer un mensaje amigable
         let msg = "No pudimos subir la imagen. Inténtalo de nuevo.";
         if (err.message.includes("permisos")) msg = "Error de configuración de seguridad en el servidor.";
         if (err.message.includes("Large")) msg = "El archivo es demasiado grande para el servidor.";
-        
         setUploadError(msg);
       } finally {
         setUploading(false);
@@ -148,7 +147,7 @@ const CreateDetails: React.FC = () => {
           )}
         </div>
 
-        {/* El resto de los campos se mantienen igual... */}
+        {/* Detalles de la Campaña */}
         <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-sm">
           <div className="mb-8">
             <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Título de la campaña</label>
@@ -161,7 +160,7 @@ const CreateDetails: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
             <div>
               <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Monto objetivo (CLP)</label>
               <div className="relative">
@@ -191,8 +190,38 @@ const CreateDetails: React.FC = () => {
               </select>
             </div>
           </div>
+
+          {/* Nueva Sección: Duración */}
+          <div>
+            <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
+               <Clock size={14} /> Duración de la campaña
+            </label>
+            <div className="grid grid-cols-3 gap-4">
+               {[30, 60, 90].map(days => (
+                 <button
+                   key={days}
+                   onClick={() => setFormData({ ...formData, duracionDias: days })}
+                   className={`py-4 rounded-2xl font-black text-sm border-2 transition-all flex flex-col items-center gap-1 ${
+                     formData.duracionDias === days 
+                     ? 'bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-200' 
+                     : 'bg-slate-50 border-transparent text-slate-500 hover:border-violet-200'
+                   }`}
+                 >
+                   <span className="text-lg">{days} Días</span>
+                   <span className={`text-[10px] uppercase tracking-wider ${formData.duracionDias === days ? 'text-violet-200' : 'text-slate-400'}`}>
+                      {days === 30 ? 'Urgente' : days === 60 ? 'Estándar' : 'Extendido'}
+                   </span>
+                 </button>
+               ))}
+            </div>
+            <p className="mt-3 text-[11px] text-slate-400 font-medium flex items-center gap-2">
+               <Calendar size={12} />
+               La campaña finalizará automáticamente el {new Date(Date.now() + (formData.duracionDias * 24 * 60 * 60 * 1000)).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}.
+            </p>
+          </div>
         </div>
 
+        {/* Transparencia */}
         <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-sm border-l-8 border-l-sky-400">
           <div className="flex items-center gap-3 mb-8">
              <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-600">

@@ -75,6 +75,8 @@ export class CampaignService {
       categoria: c.categoria || 'General',
       ubicacion: c.ubicacion || 'Chile',
       fechaCreacion: c.fecha_creacion || c.fechaCreacion || new Date().toISOString(),
+      fechaTermino: c.fecha_termino || c.fechaTermino, // Mapeo
+      duracionDias: c.duracion_dias || c.duracionDias, // Mapeo
       imagenUrl: c.imagen_url || c.imagenUrl || 'https://picsum.photos/800/600',
       estado: c.estado as CampaignStatus || 'activa',
       donantesCount: Number(c.donantes_count || c.donantesCount || 0),

@@ -19,7 +19,8 @@ export const CampaignProvider: React.FC<{ children: ReactNode }> = ({ children }
     historia: '',
     monto: 0,
     categoria: 'Salud',
-    ubicacion: 'Santiago, Chile'
+    ubicacion: 'Santiago, Chile',
+    duracionDias: 60 // Valor por defecto
   });
 
   const updateCampaign = (data: Partial<CampaignData>) => {
@@ -33,7 +34,8 @@ export const CampaignProvider: React.FC<{ children: ReactNode }> = ({ children }
       historia: '',
       monto: 0,
       categoria: 'Salud',
-      ubicacion: 'Santiago, Chile'
+      ubicacion: 'Santiago, Chile',
+      duracionDias: 60
     });
   };
 

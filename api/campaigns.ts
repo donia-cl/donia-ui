@@ -34,11 +34,10 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'POST') {
-      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id } = req.body;
+      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id, duracion } = req.body;
       
       // --- AUTORREPARACIÓN DE PERFIL ---
       // Verificamos si existe el perfil para evitar error de Foreign Key.
-      // Si el usuario es antiguo y no tiene perfil, lo creamos ahora.
       const { data: profile } = await supabase.from('profiles').select('id').eq('id', user_id).single();
       
       if (!profile) {
@@ -48,23 +47,30 @@ export default async function handler(req: any, res: any) {
         if (user) {
             const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
             
-            // Insertamos el perfil faltante usando credenciales de admin (Service Role)
+            // Insertamos el perfil faltante
             await supabase.from('profiles').insert([{
                  id: user_id,
                  full_name: fullName,
                  role: 'user',
                  is_verified: false
             }]);
-            // No capturamos error aquí para permitir que fluya, si falla, fallará el insert de campaña
         }
       }
 
-      // Insertamos la campaña usando owner_id
+      // CÁLCULO DE FECHA DE TÉRMINO
+      const duracionDias = Number(duracion || 60);
+      const fechaCreacion = new Date();
+      const fechaTermino = new Date(fechaCreacion);
+      fechaTermino.setDate(fechaTermino.getDate() + duracionDias);
+
+      // Insertamos la campaña
       const { data, error } = await supabase.from('campaigns').insert([{ 
         titulo, historia, monto: Number(monto), categoria, ubicacion, imagen_url: imagenUrl,
         beneficiario_nombre: beneficiarioNombre, beneficiario_relacion: beneficiarioRelacion,
-        owner_id: user_id, // Usamos owner_id
-        recaudado: 0, donantes_count: 0, estado: 'activa'
+        owner_id: user_id,
+        recaudado: 0, donantes_count: 0, estado: 'activa',
+        duracion_dias: duracionDias,
+        fecha_termino: fechaTermino.toISOString()
       }]).select();
       
       if (error) throw error;

@@ -18,7 +18,9 @@ import {
   X,
   MessageSquare,
   Heart,
-  UserCheck
+  UserCheck,
+  Clock,
+  Timer
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData, Donation } from '../types';
@@ -105,6 +107,22 @@ const CampaignDetail: React.FC = () => {
   const limitedDonations = campaign.donations?.slice(0, 5) || [];
   const totalDonations = campaign.donations?.length || 0;
 
+  // Lógica de fechas
+  const startDate = new Date(campaign.fechaCreacion);
+  let daysLeft = 0;
+  let isExpired = false;
+
+  if (campaign.fechaTermino) {
+    const now = new Date();
+    const end = new Date(campaign.fechaTermino);
+    const diffTime = end.getTime() - now.getTime();
+    daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    isExpired = daysLeft <= 0 || campaign.estado === 'finalizada';
+  }
+
+  // Formateador de meses
+  const monthName = startDate.toLocaleDateString('es-CL', { month: 'long' });
+
   return (
     <div className="bg-slate-50 min-h-screen pb-16 relative">
       <div className="max-w-6xl mx-auto px-4 pt-8">
@@ -118,15 +136,46 @@ const CampaignDetail: React.FC = () => {
             <h1 className="text-3xl md:text-4xl font-black text-slate-900 mb-6 leading-tight tracking-tight">{campaign.titulo}</h1>
             
             <div className="relative rounded-3xl overflow-hidden mb-8 shadow-lg bg-slate-200">
-              <img src={campaign.imagenUrl} alt={campaign.titulo} className="w-full aspect-video object-cover" />
+              <img src={campaign.imagenUrl} alt={campaign.titulo} className={`w-full aspect-video object-cover ${isExpired ? 'grayscale' : ''}`} />
               <div className="absolute top-4 left-4">
-                <span className="bg-violet-600 text-white font-black px-4 py-1.5 rounded-full text-xs uppercase tracking-widest shadow-md">
-                  {campaign.categoria}
+                <span className={`text-white font-black px-4 py-1.5 rounded-full text-xs uppercase tracking-widest shadow-md ${isExpired ? 'bg-slate-600' : 'bg-violet-600'}`}>
+                  {isExpired ? 'Finalizada' : campaign.categoria}
                 </span>
               </div>
+              {isExpired && (
+                <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center">
+                   <div className="bg-white px-6 py-4 rounded-2xl shadow-xl flex items-center gap-3">
+                      <Clock className="text-slate-500" />
+                      <div>
+                        <p className="font-black text-slate-900">Campaña Finalizada</p>
+                        <p className="text-xs text-slate-500 font-medium">Gracias a todos los que apoyaron</p>
+                      </div>
+                   </div>
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-3xl p-8 md:p-10 shadow-sm border border-slate-100 mb-8">
+              <div className="flex flex-wrap gap-4 mb-8">
+                 {/* Fecha de Inicio */}
+                 <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
+                    <Calendar size={16} className="text-slate-400" />
+                    <span className="text-xs font-bold text-slate-600">
+                       Campaña activa desde el {startDate.getDate()} de {monthName}
+                    </span>
+                 </div>
+
+                 {/* Cuenta Regresiva */}
+                 {!isExpired && daysLeft > 0 && (
+                   <div className="flex items-center gap-2 bg-violet-50 px-4 py-2 rounded-xl border border-violet-100">
+                      <Timer size={16} className="text-violet-500" />
+                      <span className="text-xs font-black text-violet-700">
+                         {daysLeft === 1 ? '¡Último día!' : `Faltan ${daysLeft} días para que termine`}
+                      </span>
+                   </div>
+                 )}
+              </div>
+
               <div className="mb-10">
                 <h2 className="text-xl font-black text-slate-900 mb-5 tracking-tight">La historia</h2>
                 <div className="text-slate-600 leading-relaxed text-base whitespace-pre-wrap font-medium">
@@ -223,17 +272,31 @@ const CampaignDetail: React.FC = () => {
                   </div>
                 </div>
                 <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-violet-600 to-sky-400 rounded-full shadow-inner" style={{ width: `${progress}%` }} />
+                  <div className={`h-full rounded-full shadow-inner ${isExpired ? 'bg-slate-400' : 'bg-gradient-to-r from-violet-600 to-sky-400'}`} style={{ width: `${progress}%` }} />
                 </div>
               </div>
 
               <div className="space-y-6">
                 <button 
-                  onClick={() => navigate(`/campana/${campaign.id}/donar`)}
-                  className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-lg shadow-violet-100 active:scale-95"
+                  onClick={() => !isExpired && navigate(`/campana/${campaign.id}/donar`)}
+                  disabled={isExpired}
+                  className={`w-full py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-lg active:scale-95 ${
+                     isExpired 
+                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none' 
+                     : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100'
+                  }`}
                 >
-                  <Heart size={20} className="fill-current" />
-                  Contribuir ahora
+                  {isExpired ? (
+                    <>
+                       <Clock size={20} />
+                       Campaña Finalizada
+                    </>
+                  ) : (
+                    <>
+                       <Heart size={20} className="fill-current" />
+                       Contribuir ahora
+                    </>
+                  )}
                 </button>
 
                 {/* Bloques de Información Separados */}

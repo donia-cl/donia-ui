@@ -19,6 +19,8 @@ export interface CampaignData {
   categoria: string;
   ubicacion: string;
   fechaCreacion: string;
+  fechaTermino?: string; // Nuevo campo
+  duracionDias?: number; // Nuevo campo
   imagenUrl: string;
   estado: CampaignStatus;
   donantesCount: number;
