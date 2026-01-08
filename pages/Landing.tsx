@@ -49,7 +49,7 @@ const CampaignCard: React.FC<{ campaign: CampaignData }> = ({ campaign }) => {
 };
 
 const FeatureCard = ({ icon: Icon, title, description }: { icon: any, title: string, description: string }) => (
-  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg transition-all group">
+  <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-lg transition-all group flex flex-col items-center text-center">
     <div className="w-14 h-14 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
       <Icon size={28} />
     </div>
