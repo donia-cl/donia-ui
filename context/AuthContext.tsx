@@ -22,10 +22,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let mounted = true;
 
     const initApp = async () => {
-      await Promise.all([
-        authService.initialize(),
-        campaignService.initialize()
-      ]);
+      // Ambos servicios comparten ahora el mismo cliente inicializado
+      await authService.initialize();
+      await campaignService.initialize();
       
       const session = await authService.getSession();
       
@@ -40,15 +39,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (mounted) {
             setUser(session?.user ?? null);
             
-            // Si el evento es SIGNED_IN y hay tokens en la URL, los limpiamos con cuidado
+            // Si hay tokens de Supabase en el hash, los limpiamos sin romper la ruta de React Router
             if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-              const hash = window.location.hash;
-              if (hash.includes('access_token=')) {
-                // Solo eliminamos la parte de los parámetros de Supabase del hash
-                // para no romper la ruta de HashRouter (e.g. #/dashboard)
-                const cleanHash = hash.split('#')[0] || hash.split('&')[0];
-                if (cleanHash !== hash) {
-                   window.history.replaceState(null, '', window.location.pathname + window.location.search + cleanHash);
+              const fullHash = window.location.hash; // Ejemplo: #/dashboard#access_token=...
+              if (fullHash.includes('access_token=')) {
+                // Dividimos el hash. El primer elemento tras '#' suele ser la ruta (/dashboard)
+                const hashParts = fullHash.split('#'); 
+                // Reconstruimos el hash manteniendo solo la ruta de la aplicación
+                // parts[0] es vacío, parts[1] es la ruta, parts[2] son los tokens
+                const cleanRouteHash = hashParts.length >= 2 ? '#' + hashParts[1] : '';
+                
+                if (cleanRouteHash !== fullHash) {
+                   window.history.replaceState(null, '', window.location.pathname + window.location.search + cleanRouteHash);
                 }
               }
             }

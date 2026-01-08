@@ -31,7 +31,8 @@ export class AuthService {
               auth: {
                 persistSession: true,
                 autoRefreshToken: true,
-                detectSessionInUrl: true
+                detectSessionInUrl: true,
+                storageKey: 'sb-mkdqpkrtegkhzakopnov-auth-token'
               }
             });
           }
@@ -72,12 +73,14 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Sistema no listo.");
     
-    let currentOrigin = window.location.origin + window.location.pathname;
-    // En HashRouter, redirigimos al origen y dejamos que Supabase maneje el fragmento
+    // Al usar HashRouter, debemos redirigir explícitamente a una ruta válida 
+    // para que Supabase anexe los tokens después del '#' de la ruta.
+    const redirectTo = window.location.origin + window.location.pathname + '#/dashboard';
+    
     const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
       options: { 
-        redirectTo: currentOrigin,
+        redirectTo,
         queryParams: { access_type: 'offline', prompt: 'consent' }
       }
     });

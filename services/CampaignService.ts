@@ -1,20 +1,13 @@
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { CampaignData, Donation, FinancialSummary, Withdrawal, CampaignStatus } from '../types';
+import { AuthService } from './AuthService';
 
 export class CampaignService {
   private static instance: CampaignService;
-  private supabase: SupabaseClient | null = null;
-  private initPromise: Promise<void> | null = null;
   private aiEnabled: boolean = false;
 
-  private constructor() {
-    const url = process.env.REACT_APP_SUPABASE_URL;
-    const key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-    if (url && key) {
-      this.supabase = createClient(url, key);
-    }
-  }
+  private constructor() {}
 
   public static getInstance(): CampaignService {
     if (!CampaignService.instance) {
@@ -23,25 +16,22 @@ export class CampaignService {
     return CampaignService.instance;
   }
 
+  private get supabase(): SupabaseClient | null {
+    return AuthService.getInstance().getSupabase();
+  }
+
   public async initialize(): Promise<void> {
-    if (this.initPromise) return this.initPromise;
-    this.initPromise = (async () => {
-      try {
-        const resp = await fetch('/api/config');
-        if (resp.ok) {
-          const config = await resp.json();
-          const url = config.supabaseUrl || process.env.REACT_APP_SUPABASE_URL;
-          const key = config.supabaseKey || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-          if (url && key) {
-            this.supabase = createClient(url, key);
-          }
-          this.aiEnabled = !!config.aiEnabled;
-        }
-      } catch (e) {
-        console.error("[CampaignService] Error:", e);
+    // CampaignService ahora depende de la inicialización de AuthService
+    await AuthService.getInstance().initialize();
+    try {
+      const resp = await fetch('/api/config');
+      if (resp.ok) {
+        const config = await resp.json();
+        this.aiEnabled = !!config.aiEnabled;
       }
-    })();
-    return this.initPromise;
+    } catch (e) {
+      console.error("[CampaignService] Error init:", e);
+    }
   }
 
   public checkAiAvailability(): boolean { return this.aiEnabled; }
