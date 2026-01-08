@@ -21,10 +21,20 @@ export class AuthService {
 
     this.initPromise = (async () => {
       try {
-        let url = process.env.REACT_APP_SUPABASE_URL;
-        let key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+        let url = '';
+        let key = '';
 
-        // Intentar cargar configuración del servidor si no está en env
+        // 1. Intentar cargar variables de entorno (Build time injection)
+        // Usamos try/catch para permitir que el bundler reemplace las variables si existen,
+        // pero evitando que la app crashee si 'process' no está definido en el navegador.
+        try {
+          url = process.env.REACT_APP_SUPABASE_URL || '';
+          key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
+        } catch (e) {
+          // Ignoramos error si process no está definido, url/key seguirán vacíos
+        }
+
+        // 2. Intentar cargar configuración del servidor (Runtime injection) si no hay env vars
         if (!url || !key) {
            try {
              const resp = await fetch('/api/config');
@@ -34,7 +44,7 @@ export class AuthService {
                key = config.supabaseKey || key;
              }
            } catch (e) {
-             console.error("[AuthService] Error fetching config fallback:", e);
+             console.warn("[AuthService] Runtime config fetch failed.");
            }
         }
           
@@ -49,7 +59,7 @@ export class AuthService {
             }
           });
         } else {
-          console.error("[AuthService] Missing Supabase Configuration");
+          console.error("[AuthService] Missing Supabase Configuration. Please check .env or api/config.");
         }
       } catch (e) {
         console.error("[AuthService] Initialization failed:", e);
