@@ -64,7 +64,8 @@ export default async function handler(req: any, res: any) {
           donor_user_id: metadata.donorUserId || null,
           comentario: metadata.comentario || '',
           payment_provider: 'mercado_pago',
-          payment_id: String(paymentResult.id)
+          payment_id: String(paymentResult.id),
+          status: 'completed'
         }]);
 
         // Actualizar totales de campaña
