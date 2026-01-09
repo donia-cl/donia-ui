@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { Validator, logger } from './_utils.js';
+import { Buffer } from 'buffer';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');

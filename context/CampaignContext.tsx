@@ -1,9 +1,8 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { CampaignData } from '../types';
 
 interface CampaignContextType {
-  // Use Partial<CampaignData> since the campaign is being constructed and lacks some fields initially
   campaign: Partial<CampaignData>;
   setCampaign: React.Dispatch<React.SetStateAction<Partial<CampaignData>>>;
   updateCampaign: (data: Partial<CampaignData>) => void;
@@ -12,31 +11,53 @@ interface CampaignContextType {
 
 const CampaignContext = createContext<CampaignContextType | undefined>(undefined);
 
+const STORAGE_KEY = 'donia_campaign_draft';
+
 export const CampaignProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Fix: use Partial<CampaignData> as the initial state does not yet contain all required properties (id, recaudado, fechaCreacion)
-  const [campaign, setCampaign] = useState<Partial<CampaignData>>({
-    titulo: '',
-    historia: '',
-    monto: 0,
-    categoria: 'Salud',
-    ubicacion: 'Santiago, Chile',
-    duracionDias: 60 // Valor por defecto
-  });
-
-  const updateCampaign = (data: Partial<CampaignData>) => {
-    setCampaign(prev => ({ ...prev, ...data }));
-  };
-
-  const resetCampaign = () => {
-    // Fix: provide only the draft fields when resetting the wizard state
-    setCampaign({
+  // Initialize state from localStorage if available
+  const [campaign, setCampaign] = useState<Partial<CampaignData>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Error parsing saved campaign draft", e);
+    }
+    return {
       titulo: '',
       historia: '',
       monto: 0,
       categoria: 'Salud',
       ubicacion: 'Santiago, Chile',
       duracionDias: 60
-    });
+    };
+  });
+
+  // Save to localStorage whenever campaign changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(campaign));
+    } catch (e) {
+      console.error("Error saving campaign draft", e);
+    }
+  }, [campaign]);
+
+  const updateCampaign = (data: Partial<CampaignData>) => {
+    setCampaign(prev => ({ ...prev, ...data }));
+  };
+
+  const resetCampaign = () => {
+    const emptyState = {
+      titulo: '',
+      historia: '',
+      monto: 0,
+      categoria: 'Salud',
+      ubicacion: 'Santiago, Chile',
+      duracionDias: 60
+    };
+    setCampaign(emptyState);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   return (
