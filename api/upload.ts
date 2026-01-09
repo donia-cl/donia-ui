@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { Buffer } from 'buffer';
+import { Validator, logger } from './utils';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,31 +11,35 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { image, name } = req.body;
-  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  
-  /**
-   * NOTA DE SEGURIDAD:
-   * No usamos el prefijo REACT_APP_ para SUPABASE_SERVICE_ROLE_KEY.
-   * Esto garantiza que la clave solo sea accesible desde el servidor (Vercel)
-   * y nunca sea inyectada en el bundle de JavaScript que recibe el cliente.
-   */
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return res.status(500).json({ 
-      success: false, 
-      error: 'Error de configuración: Faltan llaves de acceso en el servidor.' 
-    });
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
-
   try {
-    if (!image) throw new Error("No se recibió imagen.");
+    const { image, name } = req.body;
+    
+    // Validación de entrada
+    Validator.required(image, 'image');
+    Validator.required(name, 'name');
+    
+    // Validación de tamaño (aprox check sobre base64 string)
+    // Base64 es ~33% más grande que el binario. 5MB binario ~= 6.7MB Base64.
+    if (image.length > 7 * 1024 * 1024) {
+        throw new Error("El archivo excede el límite permitido (5MB).");
+    }
+
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error('Configuración de servidor incompleta.');
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const mimeMatch = image.match(/^data:(image\/\w+);base64,/);
     const contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
+        throw new Error("Formato de archivo no soportado.");
+    }
+
     const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, 'base64');
     
@@ -55,11 +60,13 @@ export default async function handler(req: any, res: any) {
     const { data: { publicUrl } } = supabase.storage
       .from('campaign-images')
       .getPublicUrl(fileName);
+      
+    logger.info('IMAGE_UPLOADED', { fileName, size: image.length });
 
     return res.status(200).json({ success: true, url: publicUrl });
 
   } catch (error: any) {
-    console.error("[API/upload] Error:", error.message);
+    logger.error('UPLOAD_ERROR', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }

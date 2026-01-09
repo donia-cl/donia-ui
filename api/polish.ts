@@ -1,9 +1,8 @@
 
 import { GoogleGenAI } from "@google/genai";
+import { Validator, logger, checkRateLimit } from './utils';
 
-// Vercel Serverless Function Handler
 export default async function handler(req: any, res: any) {
-  // Configuración de CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -17,18 +16,25 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    // 1. Rate Limiting (Protección contra abuso de cuota)
+    // Usamos la IP de la cabecera x-forwarded-for (estándar en Vercel)
+    const ip = req.headers['x-forwarded-for'] || 'unknown';
+    checkRateLimit(String(ip), 5, 60000); // Máx 5 peticiones por minuto por IP
+
     const { story } = req.body;
     
-    if (!story) {
-        return res.status(400).json({ error: 'Story content is required' });
-    }
+    // 2. Validación
+    Validator.required(story, 'story');
+    Validator.string(story, 10, 'story'); // Mínimo 10 caracteres
 
     if (!process.env.API_KEY) {
-      return res.status(500).json({ error: 'AI API Key not configured on server' });
+      throw new Error('AI API Key not configured');
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
+    logger.info('AI_POLISH_REQUEST', { ip, storyLength: story.length });
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Transforma el siguiente borrador en una historia de campaña de recaudación única, potente y conmovedora. 
@@ -42,16 +48,17 @@ TEXTO DEL USUARIO:
       },
     });
 
-    // Se extrae el texto puro y se limpia cualquier residuo de formato markdown de headers si el modelo insistiera
     let polishedText = response.text?.trim() || story;
-    
-    // Limpieza adicional por si el modelo incluye "Aquí tienes la versión mejorada" o similar
     polishedText = polishedText.replace(/^(Aquí tienes|Esta es|He mejorado|Versión mejorada).*:(\n)?/i, "");
 
     return res.status(200).json({ text: polishedText });
 
   } catch (error: any) {
-    console.error("Gemini API Server Error:", error);
+    logger.error('AI_POLISH_ERROR', error);
+    
+    if (error.message.includes('Demasiadas solicitudes')) {
+       return res.status(429).json({ error: error.message });
+    }
     return res.status(500).json({ error: 'Error processing content on the server' });
   }
 }

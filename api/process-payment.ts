@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { Validator, logger } from './utils';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -9,17 +10,23 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { paymentData, campaignId, metadata } = req.body;
-  const accessToken = process.env.MP_ACCESS_TOKEN;
-  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!accessToken) {
-    return res.status(500).json({ success: false, error: 'Mercado Pago Access Token ausente.' });
-  }
-
   try {
-    // 1. Procesar el pago en Mercado Pago
+    const { paymentData, campaignId, metadata } = req.body;
+    
+    // 1. Validación de Inputs
+    Validator.required(paymentData, 'paymentData');
+    Validator.uuid(campaignId, 'campaignId');
+    Validator.email(metadata.email);
+
+    const accessToken = process.env.MP_ACCESS_TOKEN;
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (!accessToken) {
+      throw new Error('Mercado Pago Access Token ausente.');
+    }
+
+    // 2. Procesar el pago
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
       headers: {
@@ -31,13 +38,13 @@ export default async function handler(req: any, res: any) {
         ...paymentData,
         description: `Donación Donia - Campaña ${campaignId}`,
         payer: {
-          email: metadata.email // Pasamos el email a MP
+          email: metadata.email 
         },
         metadata: {
           campaign_id: campaignId,
           donor_name: metadata.nombre || 'Anónimo',
-          donor_email: metadata.email, // OBLIGATORIO para trazabilidad
-          donor_user_id: metadata.donorUserId || null, // Opcional (Link a Profile)
+          donor_email: metadata.email, 
+          donor_user_id: metadata.donorUserId || null,
           donor_comment: metadata.comentario || ''
         }
       }),
@@ -46,16 +53,22 @@ export default async function handler(req: any, res: any) {
     const paymentResult = await mpResponse.json();
 
     if (!mpResponse.ok) {
+      logger.error('MP_API_ERROR', paymentResult);
       throw new Error(paymentResult.message || 'Error en la pasarela de pago');
     }
 
-    // 2. Si el pago fue aprobado, actualizamos Supabase
+    // 3. Auditoría y Persistencia
+    logger.info('PAYMENT_PROCESSED', { 
+        id: paymentResult.id, 
+        status: paymentResult.status, 
+        amount: paymentResult.transaction_amount 
+    });
+
     if (paymentResult.status === 'approved') {
       if (supabaseUrl && serviceRoleKey) {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         const amount = paymentResult.transaction_amount;
 
-        // Registrar donación con el nuevo esquema
         await supabase.from('donations').insert([{
           campaign_id: campaignId,
           monto: amount,
@@ -68,7 +81,6 @@ export default async function handler(req: any, res: any) {
           status: 'completed'
         }]);
 
-        // Actualizar totales de campaña
         const { data: campaign } = await supabase
           .from('campaigns')
           .select('recaudado, donantes_count')
@@ -92,7 +104,7 @@ export default async function handler(req: any, res: any) {
     });
 
   } catch (error: any) {
-    console.error("[Process Payment Error]:", error.message);
+    logger.error('PROCESS_PAYMENT_ERROR', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }

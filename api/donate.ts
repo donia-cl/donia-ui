@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { Validator, logger } from './utils';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8,18 +9,25 @@ export default async function handler(req: any, res: any) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { campaignId, monto, nombre, comentario, email, donorUserId } = req.body;
-  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  // Usamos service_role_key para realizar operaciones críticas de actualización de saldos
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    return res.status(500).json({ success: false, error: 'Configuración de base de datos incompleta.' });
-  }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
-
   try {
+    const { campaignId, monto, nombre, comentario, email, donorUserId } = req.body;
+
+    // 1. Validación Estricta
+    Validator.uuid(campaignId, 'campaignId');
+    Validator.number(monto, 500, 'monto'); // Mínimo $500 CLP
+    Validator.email(email);
+    if (nombre) Validator.string(nombre, 2, 'nombre');
+    if (comentario) Validator.string(comentario, 0, 'comentario');
+
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Configuración de base de datos incompleta.');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     const donationData: any = { 
       campaign_id: campaignId, 
       monto: Number(monto), 
@@ -28,10 +36,10 @@ export default async function handler(req: any, res: any) {
       donor_user_id: donorUserId || null,
       comentario: comentario || null,
       payment_provider: 'simulated',
-      status: 'completed' // Restaurado: Se asume completado al ser simulación
+      status: 'completed'
     };
 
-    // 1. Insertar donación
+    // 2. Insertar donación
     const { data: donation, error: dError } = await supabase
       .from('donations')
       .insert([donationData])
@@ -40,7 +48,14 @@ export default async function handler(req: any, res: any) {
 
     if (dError) throw dError;
 
-    // 2. Actualizar totales usando privilegios de admin (Service Role)
+    // 3. Auditoría
+    logger.audit(donorUserId || 'anonymous', 'DONATION_CREATED', donation.id, { 
+      campaignId, 
+      amount: monto, 
+      provider: 'simulated' 
+    });
+
+    // 4. Actualizar totales (Service Role)
     const { data: campaign, error: cError } = await supabase
       .from('campaigns')
       .select('recaudado, donantes_count')
@@ -58,8 +73,9 @@ export default async function handler(req: any, res: any) {
     }
 
     return res.status(200).json({ success: true, data: donation });
+
   } catch (error: any) {
-    console.error("[API/donate] Error:", error.message);
+    logger.error('DONATE_ENDPOINT_ERROR', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }
