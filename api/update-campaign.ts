@@ -20,9 +20,17 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Unauthorized to edit this campaign' });
     }
 
+    // Map camelCase to snake_case
+    const dbUpdates: any = { ...updates };
+    if (updates.imagenUrl) { dbUpdates.imagen_url = updates.imagenUrl; delete dbUpdates.imagenUrl; }
+    if (updates.beneficiarioNombre) { dbUpdates.beneficiario_nombre = updates.beneficiarioNombre; delete dbUpdates.beneficiarioNombre; }
+    if (updates.beneficiarioRelacion) { dbUpdates.beneficiario_relacion = updates.beneficiarioRelacion; delete dbUpdates.beneficiarioRelacion; }
+    if (updates.duracionDias) { dbUpdates.duracion_dias = updates.duracionDias; delete dbUpdates.duracionDias; }
+    if (updates.fechaTermino) { dbUpdates.fecha_termino = updates.fechaTermino; delete dbUpdates.fechaTermino; }
+
     const { data, error } = await supabase
       .from('campaigns')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', id)
       .select();
 

@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Validator, logger } from './utils.js';
+import { Validator, logger } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,20 +12,16 @@ export default async function handler(req: any, res: any) {
   try {
     const { campaignId, monto, nombre, comentario, email, donorUserId } = req.body;
 
-    // 1. Validación Estricta
     Validator.uuid(campaignId, 'campaignId');
-    Validator.number(monto, 500, 'monto'); // Mínimo $500 CLP
+    Validator.number(monto, 500, 'monto');
     Validator.email(email);
-    if (nombre) Validator.string(nombre, 2, 'nombre');
-    if (comentario) Validator.string(comentario, 0, 'comentario');
 
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    // SEGURIDAD: Solo Service Role Key. Necesitamos permisos de escritura privilegiados para registrar donaciones y actualizar contadores.
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing for donation processing.");
-      throw new Error('Configuración de base de datos incompleta (Server Key Missing).');
+      throw new Error('Configuración de base de datos incompleta.');
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -41,7 +37,6 @@ export default async function handler(req: any, res: any) {
       status: 'completed'
     };
 
-    // 2. Insertar donación
     const { data: donation, error: dError } = await supabase
       .from('donations')
       .insert([donationData])
@@ -50,28 +45,17 @@ export default async function handler(req: any, res: any) {
 
     if (dError) throw dError;
 
-    // 3. Auditoría
     logger.audit(donorUserId || 'anonymous', 'DONATION_CREATED', donation.id, { 
       campaignId, 
-      amount: monto, 
-      provider: 'simulated' 
+      amount: monto 
     });
 
-    // 4. Actualizar totales (Service Role permite bypass de RLS si es necesario)
-    const { data: campaign, error: cError } = await supabase
-      .from('campaigns')
-      .select('recaudado, donantes_count')
-      .eq('id', campaignId)
-      .single();
-
-    if (!cError && campaign) {
-      await supabase
-        .from('campaigns')
-        .update({
+    const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
+    if (campaign) {
+      await supabase.from('campaigns').update({
           recaudado: (Number(campaign.recaudado) || 0) + Number(monto),
           donantes_count: (Number(campaign.donantes_count) || 0) + 1
-        })
-        .eq('id', campaignId);
+        }).eq('id', campaignId);
     }
 
     return res.status(200).json({ success: true, data: donation });

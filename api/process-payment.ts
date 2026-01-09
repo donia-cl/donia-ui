@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Validator, logger } from './utils.js';
+import { Validator, logger } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,19 +13,16 @@ export default async function handler(req: any, res: any) {
   try {
     const { paymentData, campaignId, metadata } = req.body;
     
-    // 1. Validación de Inputs
     Validator.required(paymentData, 'paymentData');
     Validator.uuid(campaignId, 'campaignId');
     Validator.email(metadata.email);
 
     const accessToken = process.env.MP_ACCESS_TOKEN;
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Pagos requieren Service Role por seguridad
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!accessToken) throw new Error('Mercado Pago Access Token ausente.');
-    if (!supabaseUrl || !serviceRoleKey) throw new Error('DB Config ausente.');
+    if (!accessToken || !supabaseUrl || !serviceRoleKey) throw new Error('Configuración del servidor incompleta.');
 
-    // 2. Procesar el pago
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
       headers: {
@@ -36,9 +33,7 @@ export default async function handler(req: any, res: any) {
       body: JSON.stringify({
         ...paymentData,
         description: `Donación Donia - Campaña ${campaignId}`,
-        payer: {
-          email: metadata.email 
-        },
+        payer: { email: metadata.email },
         metadata: {
           campaign_id: campaignId,
           donor_name: metadata.nombre || 'Anónimo',
@@ -56,12 +51,7 @@ export default async function handler(req: any, res: any) {
       throw new Error(paymentResult.message || 'Error en la pasarela de pago');
     }
 
-    // 3. Auditoría y Persistencia
-    logger.info('PAYMENT_PROCESSED', { 
-        id: paymentResult.id, 
-        status: paymentResult.status, 
-        amount: paymentResult.transaction_amount 
-    });
+    logger.info('PAYMENT_PROCESSED', { id: paymentResult.id, status: paymentResult.status });
 
     if (paymentResult.status === 'approved') {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -79,12 +69,7 @@ export default async function handler(req: any, res: any) {
           status: 'completed'
         }]);
 
-        const { data: campaign } = await supabase
-          .from('campaigns')
-          .select('recaudado, donantes_count')
-          .eq('id', campaignId)
-          .single();
-
+        const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
         if (campaign) {
           await supabase.from('campaigns').update({
             recaudado: (Number(campaign.recaudado) || 0) + amount,
@@ -96,7 +81,6 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ 
       success: true, 
       status: paymentResult.status,
-      status_detail: paymentResult.status_detail,
       id: paymentResult.id 
     });
 

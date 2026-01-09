@@ -105,8 +105,8 @@ const CreateReview: React.FC = () => {
         imagenUrl: campaign.imagenUrl || '',
         beneficiarioNombre: campaign.beneficiarioNombre || '',
         beneficiarioRelacion: campaign.beneficiarioRelacion || 'Yo mismo',
-        duracion: campaign.duracionDias || 60, // Pasamos la duración
-        user_id: user.id
+        duracionDias: campaign.duracionDias || 60,
+        owner_id: user.id
       });
       
       if (result && result.id) {

@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   DollarSign,
   UserCheck,
-  // Fix: Add missing Settings icon import
   Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -65,8 +64,6 @@ const EditCampaign: React.FC = () => {
         setError("Campaña no encontrada");
         return;
       }
-      // Aquí ideally verificaríamos si el user.id coincide con el creador, 
-      // pero la API ya lo hace al guardar.
       setFormData({
         titulo: data.titulo,
         historia: data.historia,
@@ -131,9 +128,9 @@ const EditCampaign: React.FC = () => {
         historia: formData.historia,
         monto: Number(formData.monto),
         categoria: formData.categoria,
-        imagen_url: formData.imagenUrl,
-        beneficiario_nombre: formData.beneficiarioNombre,
-        beneficiario_relacion: formData.beneficiarioRelacion
+        imagenUrl: formData.imagenUrl,
+        beneficiarioNombre: formData.beneficiarioNombre,
+        beneficiarioRelacion: formData.beneficiarioRelacion
       });
       setSuccess(true);
       setTimeout(() => navigate('/dashboard'), 2000);

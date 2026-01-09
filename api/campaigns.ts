@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Validator, logger } from './utils.js';
+import { Validator, logger } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,7 +11,6 @@ export default async function handler(req: any, res: any) {
 
   try {
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    // FALLBACK: Intentamos usar la Service Key, pero si no está, usamos la Pública para no romper la app.
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
@@ -22,7 +21,6 @@ export default async function handler(req: any, res: any) {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { id, userId } = req.query;
 
-    // --- GET: OBTENER CAMPAÑAS ---
     if (req.method === 'GET') {
       if (id) {
         Validator.uuid(id, 'id');
@@ -39,26 +37,24 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // --- POST: CREAR CAMPAÑA ---
     if (req.method === 'POST') {
-      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id, duracion } = req.body;
+      const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id, owner_id, duracion, duracionDias } = req.body;
       
-      // Validación Estricta
-      Validator.required(user_id, 'user_id');
+      const finalUserId = user_id || owner_id;
+      Validator.required(finalUserId, 'user_id');
       Validator.string(titulo, 5, 'titulo');
       Validator.string(historia, 20, 'historia');
       Validator.number(monto, 1000, 'monto');
       
-      // Autorreparación de perfil (Intento)
-      // Solo funciona si tenemos Service Role, si no, se salta silenciosamente
+      // Auto-reparación de perfil
       if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        const { data: profile } = await supabase.from('profiles').select('id').eq('id', user_id).single();
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', finalUserId).single();
         if (!profile) {
-            const { data: { user } } = await supabase.auth.admin.getUserById(user_id);
+            const { data: { user } } = await supabase.auth.admin.getUserById(finalUserId);
             if (user) {
                 const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
                 await supabase.from('profiles').insert([{
-                    id: user_id,
+                    id: finalUserId,
                     full_name: fullName,
                     role: 'user',
                     is_verified: false
@@ -67,23 +63,23 @@ export default async function handler(req: any, res: any) {
         }
       }
 
-      const duracionDias = Number(duracion || 60);
+      const finalDuracion = Number(duracion || duracionDias || 60);
       const fechaCreacion = new Date();
       const fechaTermino = new Date(fechaCreacion);
-      fechaTermino.setDate(fechaTermino.getDate() + duracionDias);
+      fechaTermino.setDate(fechaTermino.getDate() + finalDuracion);
 
       const { data, error } = await supabase.from('campaigns').insert([{ 
         titulo, historia, monto: Number(monto), categoria, ubicacion, imagen_url: imagenUrl,
         beneficiario_nombre: beneficiarioNombre, beneficiario_relacion: beneficiarioRelacion,
-        owner_id: user_id,
+        owner_id: finalUserId,
         recaudado: 0, donantes_count: 0, estado: 'activa',
-        duracion_dias: duracionDias,
+        duracion_dias: finalDuracion,
         fecha_termino: fechaTermino.toISOString()
       }]).select();
       
       if (error) throw error;
       
-      logger.audit(user_id, 'CREATE_CAMPAIGN', data[0].id, { titulo });
+      logger.audit(finalUserId, 'CREATE_CAMPAIGN', data[0].id, { titulo });
       
       return res.status(201).json({ success: true, data: data[0] });
     }

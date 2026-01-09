@@ -1,3 +1,4 @@
+
 import { SupabaseClient } from '@supabase/supabase-js';
 import { CampaignData, Donation, FinancialSummary, Withdrawal, CampaignStatus } from '../types';
 import { AuthService } from './AuthService';
@@ -170,14 +171,29 @@ export class CampaignService {
 
   async uploadImage(base64: string, name: string): Promise<string> {
       await this.initialize();
-      const response = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64, name })
-      });
-      const json = await response.json();
-      if (!json.success) throw new Error(json.error || 'Error uploading image');
-      return json.url;
+      try {
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64, name })
+        });
+        
+        // Manejo de error si la respuesta no es JSON (ej: 504 Gateway Time-out o 413 Payload Too Large)
+        const text = await response.text();
+        let json;
+        try {
+            json = JSON.parse(text);
+        } catch (e) {
+            console.error("Respuesta no-JSON del servidor:", text.substring(0, 100));
+            throw new Error(`Error del servidor (${response.status}): Es posible que la imagen sea muy pesada.`);
+        }
+
+        if (!json.success) throw new Error(json.error || 'Error uploading image');
+        return json.url;
+      } catch (err: any) {
+        console.error("Upload failed:", err);
+        throw err;
+      }
   }
 
   async polishStory(story: string): Promise<string> {
