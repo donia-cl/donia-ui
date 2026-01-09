@@ -103,6 +103,9 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
   };
 
   const handleGoogle = async () => {
+    // Guardamos la ubicación actual para volver aquí tras la redirección de Google
+    localStorage.setItem('donia_auth_redirect', window.location.hash);
+    
     setGoogleLoading(true);
     try {
       await authService.signInWithGoogle();

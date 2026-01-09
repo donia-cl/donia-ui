@@ -118,7 +118,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
               if (event === 'SIGNED_IN') {
                 setLoading(false);
-                if (window.location.hash.includes('access_token')) {
+                
+                // LÓGICA DE REDIRECCIÓN INTELIGENTE
+                const savedRedirect = localStorage.getItem('donia_auth_redirect');
+                if (savedRedirect) {
+                  localStorage.removeItem('donia_auth_redirect');
+                  // Aseguramos formato hash para HashRouter
+                  const target = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
+                  window.location.hash = target;
+                } else if (window.location.hash.includes('access_token')) {
                   window.location.hash = '#/dashboard';
                 }
               }
@@ -151,11 +159,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     setLoading(true);
-    await authService.signOut();
-    setUser(null);
-    setProfile(null);
-    setLoading(false);
-    window.location.hash = '#/';
+    try {
+      await authService.signOut();
+    } catch (e) {
+      console.error("Error al cerrar sesión (se forzará cierre local):", e);
+    } finally {
+      // Limpieza forzada del estado local independientemente del resultado del servidor
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
+      localStorage.removeItem('donia_auth_redirect'); // Limpiamos cualquier redirección pendiente
+      window.location.hash = '#/';
+    }
   };
 
   if (!isInitialized) {
