@@ -20,11 +20,10 @@ export default async function handler(req: any, res: any) {
 
     const accessToken = process.env.MP_ACCESS_TOKEN;
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Pagos requieren Service Role por seguridad
 
-    if (!accessToken) {
-      throw new Error('Mercado Pago Access Token ausente.');
-    }
+    if (!accessToken) throw new Error('Mercado Pago Access Token ausente.');
+    if (!supabaseUrl || !serviceRoleKey) throw new Error('DB Config ausente.');
 
     // 2. Procesar el pago
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -65,7 +64,6 @@ export default async function handler(req: any, res: any) {
     });
 
     if (paymentResult.status === 'approved') {
-      if (supabaseUrl && serviceRoleKey) {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         const amount = paymentResult.transaction_amount;
 
@@ -93,7 +91,6 @@ export default async function handler(req: any, res: any) {
             donantes_count: (Number(campaign.donantes_count) || 0) + 1
           }).eq('id', campaignId);
         }
-      }
     }
 
     return res.status(200).json({ 

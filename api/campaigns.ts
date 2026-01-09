@@ -9,11 +9,17 @@ export default async function handler(req: any, res: any) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const supabase = createClient(supabaseUrl!, serviceRoleKey!);
-
   try {
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    // Fallback: Si no hay Service Role, usar la Anon Key para evitar crash en lecturas
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("CRITICAL: Supabase credentials missing in environment variables.");
+      throw new Error('Error interno: Configuración de base de datos no disponible.');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
     const { id, userId } = req.query;
 
     if (req.method === 'GET') {
@@ -39,7 +45,7 @@ export default async function handler(req: any, res: any) {
       Validator.required(user_id, 'user_id');
       Validator.string(titulo, 5, 'titulo');
       Validator.string(historia, 20, 'historia');
-      Validator.number(monto, 1000, 'monto'); // Mínimo $1000 para crear
+      Validator.number(monto, 1000, 'monto');
       Validator.string(categoria, 3, 'categoria');
       
       // Autorreparación de perfil

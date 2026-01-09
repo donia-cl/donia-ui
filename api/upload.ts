@@ -14,12 +14,9 @@ export default async function handler(req: any, res: any) {
   try {
     const { image, name } = req.body;
     
-    // Validación de entrada
     Validator.required(image, 'image');
     Validator.required(name, 'name');
     
-    // Validación de tamaño (aprox check sobre base64 string)
-    // Base64 es ~33% más grande que el binario. 5MB binario ~= 6.7MB Base64.
     if (image.length > 7 * 1024 * 1024) {
         throw new Error("El archivo excede el límite permitido (5MB).");
     }
@@ -28,7 +25,7 @@ export default async function handler(req: any, res: any) {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Configuración de servidor incompleta.');
+      throw new Error('Configuración de almacenamiento incompleta (SERVICE_ROLE_KEY missing).');
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);

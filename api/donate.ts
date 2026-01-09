@@ -55,7 +55,7 @@ export default async function handler(req: any, res: any) {
       provider: 'simulated' 
     });
 
-    // 4. Actualizar totales (Service Role)
+    // 4. Actualizar totales (Service Role o RLS policy)
     const { data: campaign, error: cError } = await supabase
       .from('campaigns')
       .select('recaudado, donantes_count')
