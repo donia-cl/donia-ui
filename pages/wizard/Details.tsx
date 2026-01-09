@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, DollarSign, Image as ImageIcon, UserCheck, ShieldCheck, Loader2, AlertCircle, RefreshCcw, Calendar, Clock } from 'lucide-react';
@@ -29,9 +28,9 @@ const CreateDetails: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validación de cliente básica
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("La imagen es muy pesada (máx 5MB)");
+    // Validación de cliente: Máximo 3MB para asegurar que el Base64 entre en el payload de 4.5MB de Vercel
+    if (file.size > 3 * 1024 * 1024) {
+      setUploadError("La imagen es muy pesada. El máximo permitido es 3MB.");
       return;
     }
 
@@ -50,7 +49,7 @@ const CreateDetails: React.FC = () => {
         console.error("Detalle del error de subida:", err);
         let msg = "No pudimos subir la imagen. Inténtalo de nuevo.";
         if (err.message.includes("permisos")) msg = "Error de configuración de seguridad en el servidor.";
-        if (err.message.includes("Large")) msg = "El archivo es demasiado grande para el servidor.";
+        if (err.message.includes("Valid JSON")) msg = "Error del servidor: La imagen es demasiado grande o hubo un problema interno.";
         setUploadError(msg);
       } finally {
         setUploading(false);
@@ -126,7 +125,7 @@ const CreateDetails: React.FC = () => {
                   <ImageIcon size={32} />
                 </div>
                 <p className="font-bold text-sm">Haz clic para subir una foto</p>
-                <p className="text-[10px] uppercase tracking-wider font-black opacity-60">JPG o PNG (Máx 5MB)</p>
+                <p className="text-[10px] uppercase tracking-wider font-black opacity-60">JPG o PNG (Máx 3MB)</p>
               </div>
             )}
             <input 
@@ -171,100 +170,93 @@ const CreateDetails: React.FC = () => {
                   type="number"
                   className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
                   placeholder="0"
-                  value={formData.monto || ''}
+                  value={formData.monto}
                   onChange={(e) => setFormData({ ...formData, monto: Number(e.target.value) })}
                 />
               </div>
             </div>
+            
             <div>
               <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Categoría</label>
               <select
-                className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
+                className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900 appearance-none"
                 value={formData.categoria}
                 onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
               >
                 <option value="Salud">Salud</option>
+                <option value="Educación">Educación</option>
                 <option value="Emergencias">Emergencias</option>
                 <option value="Animales">Animales</option>
-                <option value="Educación">Educación</option>
+                <option value="Comunidad">Comunidad</option>
+                <option value="Otros">Otros</option>
               </select>
             </div>
           </div>
-
-          {/* Nueva Sección: Duración */}
-          <div>
-            <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-2">
-               <Clock size={14} /> Duración de la campaña
-            </label>
-            <div className="grid grid-cols-3 gap-4">
-               {[30, 60, 90].map(days => (
-                 <button
-                   key={days}
-                   onClick={() => setFormData({ ...formData, duracionDias: days })}
-                   className={`py-4 rounded-2xl font-black text-sm border-2 transition-all flex flex-col items-center gap-1 ${
-                     formData.duracionDias === days 
-                     ? 'bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-200' 
-                     : 'bg-slate-50 border-transparent text-slate-500 hover:border-violet-200'
-                   }`}
-                 >
-                   <span className="text-lg">{days} Días</span>
-                   <span className={`text-[10px] uppercase tracking-wider ${formData.duracionDias === days ? 'text-violet-200' : 'text-slate-400'}`}>
-                      {days === 30 ? 'Urgente' : days === 60 ? 'Estándar' : 'Extendido'}
-                   </span>
-                 </button>
-               ))}
-            </div>
-            <p className="mt-3 text-[11px] text-slate-400 font-medium flex items-center gap-2">
-               <Calendar size={12} />
-               La campaña finalizará automáticamente el {new Date(Date.now() + (formData.duracionDias * 24 * 60 * 60 * 1000)).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}.
-            </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
+             <div>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Duración (Días)</label>
+                <div className="relative">
+                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                     <Clock size={18} />
+                   </div>
+                   <input 
+                      type="number"
+                      min={7}
+                      max={90}
+                      className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
+                      value={formData.duracionDias}
+                      onChange={(e) => setFormData({ ...formData, duracionDias: Number(e.target.value) })}
+                   />
+                </div>
+             </div>
+             <div className="flex items-center">
+                 <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                    La campaña estará activa por el número de días seleccionado. Puedes extenderla luego si es necesario.
+                 </p>
+             </div>
           </div>
         </div>
 
         {/* Transparencia */}
-        <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-sm border-l-8 border-l-sky-400">
-          <div className="flex items-center gap-3 mb-8">
-             <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-600">
-               <ShieldCheck size={22} />
-             </div>
-             <div>
-               <h3 className="font-black text-slate-900 uppercase text-xs tracking-widest">Transparencia</h3>
-               <p className="text-slate-400 text-[10px] font-bold">Información del beneficiario de los fondos</p>
-             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Nombre del Beneficiario</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                  <UserCheck size={18} />
-                </div>
-                <input
-                  type="text"
-                  className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
-                  placeholder="Nombre completo"
-                  value={formData.beneficiarioNombre}
-                  onChange={(e) => setFormData({ ...formData, beneficiarioNombre: e.target.value })}
-                />
+        <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-sm">
+           <div className="flex items-center gap-3 mb-6">
+              <ShieldCheck size={24} className="text-violet-600" />
+              <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Transparencia del Beneficiario</h2>
+           </div>
+           
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                 <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Nombre Completo</label>
+                 <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+                       <UserCheck size={18} />
+                    </div>
+                    <input
+                       type="text"
+                       className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
+                       placeholder="Nombre del beneficiario"
+                       value={formData.beneficiarioNombre}
+                       onChange={(e) => setFormData({ ...formData, beneficiarioNombre: e.target.value })}
+                    />
+                 </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Relación contigo</label>
-              <select
-                className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
-                value={formData.beneficiarioRelacion}
-                onChange={(e) => setFormData({ ...formData, beneficiarioRelacion: e.target.value })}
-              >
-                <option value="Yo mismo">Yo mismo</option>
-                <option value="Hijo/a">Hijo/a</option>
-                <option value="Familiar">Familiar</option>
-                <option value="Amigo/a">Amigo/a</option>
-                <option value="Vecino/a">Vecino/a</option>
-                <option value="Organización">Organización</option>
-              </select>
-            </div>
-          </div>
+              
+              <div>
+                 <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Relación contigo</label>
+                 <select
+                    className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900 appearance-none"
+                    value={formData.beneficiarioRelacion}
+                    onChange={(e) => setFormData({ ...formData, beneficiarioRelacion: e.target.value })}
+                 >
+                    <option value="Yo mismo">Yo mismo</option>
+                    <option value="Familiar">Familiar</option>
+                    <option value="Amigo">Amigo</option>
+                    <option value="Organización">Organización</option>
+                    <option value="Mascota">Mascota</option>
+                 </select>
+              </div>
+           </div>
         </div>
 
         <button 
@@ -276,7 +268,7 @@ const CreateDetails: React.FC = () => {
             : 'bg-slate-100 text-slate-300 cursor-not-allowed'
           }`}
         >
-          {uploading ? 'Finalizando carga...' : 'Siguiente: Revisar'}
+          Revisar y Publicar
           <ChevronRight className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>

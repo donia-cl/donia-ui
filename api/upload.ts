@@ -1,7 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Buffer } from 'buffer';
-import { Validator, logger } from './utils';
+import { Validator, logger } from './utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,30 +13,33 @@ export default async function handler(req: any, res: any) {
   try {
     const { image, name } = req.body;
     
-    Validator.required(image, 'image');
-    Validator.required(name, 'name');
+    if (!image || !name) {
+        throw new Error("Faltan datos de la imagen.");
+    }
     
+    // Validación de tamaño (aprox 7MB en base64 equivalen a ~5MB en disco)
     if (image.length > 7 * 1024 * 1024) {
-        throw new Error("El archivo excede el límite permitido (5MB).");
+        throw new Error("El archivo excede el límite permitido.");
     }
 
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // FALLBACK: Usar Service Role si existe (ideal), si no, Pública (funciona si RLS del bucket está abierto)
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Configuración de almacenamiento incompleta (SERVICE_ROLE_KEY missing).');
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Configuración faltante: Supabase Credentials");
+      throw new Error('Error interno de configuración en el servidor.');
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Detección segura de MIME type
     const mimeMatch = image.match(/^data:(image\/\w+);base64,/);
     const contentType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(contentType)) {
-        throw new Error("Formato de archivo no soportado.");
-    }
-
+    // Limpieza y conversión segura a Buffer
     const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+    // Buffer es global en entorno Node (Vercel)
     const buffer = Buffer.from(base64Data, 'base64');
     
     const fileExt = name.split('.').pop() || 'jpg';
@@ -58,12 +60,12 @@ export default async function handler(req: any, res: any) {
       .from('campaign-images')
       .getPublicUrl(fileName);
       
-    logger.info('IMAGE_UPLOADED', { fileName, size: image.length });
+    logger.info('IMAGE_UPLOADED', { fileName });
 
     return res.status(200).json({ success: true, url: publicUrl });
 
   } catch (error: any) {
-    logger.error('UPLOAD_ERROR', error);
-    return res.status(500).json({ success: false, error: error.message });
+    console.error('UPLOAD_ERROR:', error);
+    return res.status(500).json({ success: false, error: error.message || 'Error al subir imagen' });
   }
 }

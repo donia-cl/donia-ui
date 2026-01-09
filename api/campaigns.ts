@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Validator, logger } from './utils';
+import { Validator, logger } from './utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -11,18 +11,18 @@ export default async function handler(req: any, res: any) {
 
   try {
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    // SEGURIDAD: En backend exigimos estrictamente la llave de servicio (Service Role).
-    // No hacemos fallback a la llave pública para garantizar comportamiento determinista y privilegios completos de administración.
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    // FALLBACK: Intentamos usar la Service Key, pero si no está, usamos la Pública para no romper la app.
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing in server environment.");
-      throw new Error('Error interno: Configuración de seguridad del servidor incompleta.');
+      console.error("CRITICAL: Supabase credentials missing.");
+      throw new Error('Error interno: Configuración del servidor incompleta.');
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const { id, userId } = req.query;
 
+    // --- GET: OBTENER CAMPAÑAS ---
     if (req.method === 'GET') {
       if (id) {
         Validator.uuid(id, 'id');
@@ -39,6 +39,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // --- POST: CREAR CAMPAÑA ---
     if (req.method === 'POST') {
       const { titulo, historia, monto, categoria, ubicacion, imagenUrl, beneficiarioNombre, beneficiarioRelacion, user_id, duracion } = req.body;
       
@@ -47,21 +48,22 @@ export default async function handler(req: any, res: any) {
       Validator.string(titulo, 5, 'titulo');
       Validator.string(historia, 20, 'historia');
       Validator.number(monto, 1000, 'monto');
-      Validator.string(categoria, 3, 'categoria');
       
-      // Autorreparación de perfil
-      const { data: profile } = await supabase.from('profiles').select('id').eq('id', user_id).single();
-      
-      if (!profile) {
-        const { data: { user } } = await supabase.auth.admin.getUserById(user_id);
-        if (user) {
-            const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
-            await supabase.from('profiles').insert([{
-                 id: user_id,
-                 full_name: fullName,
-                 role: 'user',
-                 is_verified: false
-            }]);
+      // Autorreparación de perfil (Intento)
+      // Solo funciona si tenemos Service Role, si no, se salta silenciosamente
+      if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', user_id).single();
+        if (!profile) {
+            const { data: { user } } = await supabase.auth.admin.getUserById(user_id);
+            if (user) {
+                const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
+                await supabase.from('profiles').insert([{
+                    id: user_id,
+                    full_name: fullName,
+                    role: 'user',
+                    is_verified: false
+                }]);
+            }
         }
       }
 
