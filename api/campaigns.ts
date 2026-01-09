@@ -11,12 +11,13 @@ export default async function handler(req: any, res: any) {
 
   try {
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    // Fallback: Si no hay Service Role, usar la Anon Key para evitar crash en lecturas
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    // SEGURIDAD: En backend exigimos estrictamente la llave de servicio (Service Role).
+    // No hacemos fallback a la llave pública para garantizar comportamiento determinista y privilegios completos de administración.
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("CRITICAL: Supabase credentials missing in environment variables.");
-      throw new Error('Error interno: Configuración de base de datos no disponible.');
+      console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing in server environment.");
+      throw new Error('Error interno: Configuración de seguridad del servidor incompleta.');
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);

@@ -20,10 +20,12 @@ export default async function handler(req: any, res: any) {
     if (comentario) Validator.string(comentario, 0, 'comentario');
 
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+    // SEGURIDAD: Solo Service Role Key. Necesitamos permisos de escritura privilegiados para registrar donaciones y actualizar contadores.
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Configuración de base de datos incompleta.');
+      console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing for donation processing.");
+      throw new Error('Configuración de base de datos incompleta (Server Key Missing).');
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -55,7 +57,7 @@ export default async function handler(req: any, res: any) {
       provider: 'simulated' 
     });
 
-    // 4. Actualizar totales (Service Role o RLS policy)
+    // 4. Actualizar totales (Service Role permite bypass de RLS si es necesario)
     const { data: campaign, error: cError } = await supabase
       .from('campaigns')
       .select('recaudado, donantes_count')
