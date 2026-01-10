@@ -122,6 +122,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <nav className="flex flex-col space-y-6">
               <Link to="/explorar" onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-black text-slate-900 py-2 border-b border-slate-50">Explorar causas</Link>
               <Link to="/acerca" onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-black text-slate-900 py-2 border-b border-slate-50">Cómo funciona</Link>
+              <Link to="/ayuda" onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-black text-slate-900 py-2 border-b border-slate-50">Centro de Ayuda</Link>
               
               {user ? (
                 <>
@@ -146,7 +147,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
       <footer className="bg-slate-50 border-t border-slate-100 py-16 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
             <div className="text-center md:text-left">
               <div className="flex justify-center md:justify-start items-center gap-2 mb-4">
                 <Heart size={24} className="text-violet-600" />
@@ -165,6 +166,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <li><Link to="/explorar" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Explorar causas</Link></li>
                 <li><Link to="/crear" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Crear campaña</Link></li>
                 <li><Link to="/acerca" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Cómo funciona</Link></li>
+              </ul>
+            </div>
+
+            <div className="text-center md:text-left">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Ayuda</h4>
+              <ul className="space-y-4">
+                <li><Link to="/ayuda" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Preguntas Frecuentes</Link></li>
+                <li><Link to="/soporte" className="text-slate-600 font-bold hover:text-violet-600 transition-colors">Soporte y Contacto</Link></li>
               </ul>
             </div>
 

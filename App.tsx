@@ -18,6 +18,8 @@ import CreateIntro from './pages/wizard/Intro';
 import CreateStory from './pages/wizard/Story';
 import CreateDetails from './pages/wizard/Details';
 import CreateReview from './pages/wizard/Review';
+import Help from './pages/Help';
+import Support from './pages/Support';
 
 const App: React.FC = () => {
   return (
@@ -44,11 +46,11 @@ const App: React.FC = () => {
               {/* About Page */}
               <Route path="/acerca" element={<About />} />
 
-              {/* Terms and Conditions */}
+              {/* Legal & Help */}
               <Route path="/terminos" element={<Terms />} />
-
-              {/* Privacy Policy */}
               <Route path="/privacidad" element={<Privacy />} />
+              <Route path="/ayuda" element={<Help />} />
+              <Route path="/soporte" element={<Support />} />
               
               {/* Campaign Detail */}
               <Route path="/campana/:id" element={<CampaignDetail />} />
