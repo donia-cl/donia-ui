@@ -279,9 +279,12 @@ const CreateReview: React.FC = () => {
   const handleSubmit = async () => {
     if (isSubmitting) return;
     
-    // Verificación de respaldo
-    const currentUser = AuthService.getInstance().getSupabase()?.auth.getUser(); 
-    if (!user && !currentUser) {
+    // Obtenemos sesión fresca para asegurar el ID del usuario
+    // Esto es crítico porque el estado 'user' de useAuth puede estar "stale" en el cierre de esta función
+    const session = await AuthService.getInstance().getSession();
+    const currentUser = session?.user;
+
+    if (!currentUser) {
       setShowAuthModal(true);
       return;
     }
@@ -300,7 +303,7 @@ const CreateReview: React.FC = () => {
         beneficiarioNombre: campaign.beneficiarioNombre || '',
         beneficiarioRelacion: campaign.beneficiarioRelacion || 'Yo mismo',
         duracionDias: campaign.duracionDias || 60,
-        owner_id: user?.id 
+        owner_id: currentUser.id 
       });
       
       if (result && result.id) {
