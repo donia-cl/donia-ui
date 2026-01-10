@@ -255,7 +255,7 @@ const CampaignDetail: React.FC = () => {
                     <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <MessageSquare className="mx-auto text-slate-200 mb-3" size={40} />
                       <p className="text-slate-400 font-bold text-base">
-                        {totalDonations > 0 ? 'Las donaciones recientes son privadas.' : 'Aún no hay mensajes. ¡Sé el primero!'}
+                        {totalDonations > 0 ? 'No hay mensajes con comentario para mostrar.' : 'Aún no hay mensajes. ¡Sé el primero!'}
                       </p>
                     </div>
                   )}
