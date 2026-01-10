@@ -187,7 +187,7 @@ const CreateDetails: React.FC = () => {
             <div>
               <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Categoría</label>
               <select
-                className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900 appearance-none"
+                className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
                 value={formData.categoria}
                 onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
               >
@@ -203,24 +203,27 @@ const CreateDetails: React.FC = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
              <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Duración</label>
-                <div className="relative">
-                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-                     <Clock size={18} />
-                   </div>
-                   <select 
-                      className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900 appearance-none"
-                      value={formData.duracionDias}
-                      onChange={(e) => setFormData({ ...formData, duracionDias: Number(e.target.value) })}
-                   >
-                     <option value={30}>30 Días</option>
-                     <option value={60}>60 Días</option>
-                     <option value={90}>90 Días</option>
-                   </select>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Duración de la campaña</label>
+                <div className="grid grid-cols-3 gap-3">
+                   {[30, 60, 90].map((days) => (
+                      <button
+                        key={days}
+                        onClick={() => setFormData({ ...formData, duracionDias: days })}
+                        className={`py-3 rounded-2xl font-black transition-all border-2 flex flex-col items-center justify-center gap-0.5 ${
+                           formData.duracionDias === days
+                           ? 'bg-violet-600 border-violet-600 text-white shadow-md shadow-violet-200'
+                           : 'bg-slate-50 border-slate-50 text-slate-400 hover:bg-white hover:border-violet-100 hover:text-violet-600'
+                        }`}
+                      >
+                         <span className="text-lg leading-none">{days}</span>
+                         <span className="text-[10px] uppercase tracking-widest">Días</span>
+                      </button>
+                   ))}
                 </div>
              </div>
              <div className="flex items-center">
-                 <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                 <p className="text-xs text-slate-400 font-medium leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <Clock size={16} className="inline-block mr-1.5 mb-0.5 text-violet-500" />
                     La campaña estará activa por el periodo seleccionado. El tiempo empieza a correr una vez publicada.
                  </p>
              </div>
@@ -254,7 +257,7 @@ const CreateDetails: React.FC = () => {
               <div>
                  <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Relación contigo</label>
                  <select
-                    className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900 appearance-none"
+                    className="w-full p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
                     value={formData.beneficiarioRelacion}
                     onChange={(e) => setFormData({ ...formData, beneficiarioRelacion: e.target.value })}
                  >
