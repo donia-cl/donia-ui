@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Wand2, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Wand2, Loader2, AlertCircle } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { ProgressBar } from '../../components/ProgressBar';
 import { CampaignService } from '../../services/CampaignService';
@@ -14,6 +14,7 @@ const CreateStory: React.FC = () => {
   const [canUseAi, setCanUseAi] = useState(false);
   
   const service = CampaignService.getInstance();
+  const MIN_LENGTH = 100;
 
   useEffect(() => {
     // Verificamos disponibilidad de IA al montar
@@ -21,6 +22,7 @@ const CreateStory: React.FC = () => {
   }, []);
 
   const handleNext = () => {
+    if (localStory.length < MIN_LENGTH) return;
     updateCampaign({ historia: localStory });
     navigate('/crear/detalles');
   };
@@ -39,6 +41,9 @@ const CreateStory: React.FC = () => {
       setIsAiProcessing(false);
     }
   };
+
+  const isValid = localStory.length >= MIN_LENGTH;
+  const remainingChars = Math.max(0, MIN_LENGTH - localStory.length);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-16">
@@ -59,7 +64,7 @@ const CreateStory: React.FC = () => {
       </div>
 
       <div className="space-y-8">
-        <div className="bg-white rounded-[32px] border-2 border-slate-100 p-8 shadow-sm focus-within:border-violet-200 transition-all relative">
+        <div className={`bg-white rounded-[32px] border-2 p-8 shadow-sm transition-all relative ${!isValid && localStory.length > 0 ? 'border-amber-200' : 'border-slate-100 focus-within:border-violet-200'}`}>
           <label className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Relato de la campaña</span>
             {canUseAi && (
@@ -96,15 +101,32 @@ const CreateStory: React.FC = () => {
             value={localStory}
             onChange={(e) => setLocalStory(e.target.value)}
           />
+
+          <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-50">
+             {!isValid && localStory.length > 0 ? (
+               <div className="flex items-center gap-2 text-amber-500 text-xs font-bold animate-pulse">
+                  <AlertCircle size={14} />
+                  <span>Es muy breve, agrega más detalles.</span>
+               </div>
+             ) : (
+               <span></span>
+             )}
+             <span className={`text-xs font-black uppercase tracking-widest ${isValid ? 'text-emerald-500' : 'text-slate-300'}`}>
+                {isValid 
+                  ? 'Largo adecuado' 
+                  : `Faltan ${remainingChars} caracteres`
+                }
+             </span>
+          </div>
         </div>
 
         <button 
-          disabled={!localStory.trim() || isAiProcessing}
+          disabled={!isValid || isAiProcessing}
           onClick={handleNext}
           className={`w-full py-5 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-2xl ${
-            localStory.trim() && !isAiProcessing
-            ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100' 
-            : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+            isValid && !isAiProcessing
+            ? 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95' 
+            : 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
           }`}
         >
           Continuar
