@@ -1,5 +1,5 @@
 
-import { createClient, SupabaseClient, Session } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Profile } from '../types';
 
 export class AuthService {
@@ -90,7 +90,7 @@ export class AuthService {
     }
     
     // 1. Crear usuario en Auth
-    const { data, error } = await this.client.auth.signUp({
+    const { data, error } = await (this.client.auth as any).signUp({
       email,
       password: pass,
       options: { 
@@ -125,7 +125,7 @@ export class AuthService {
   async signIn(email: string, pass: string) {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
-    const { data, error } = await this.client.auth.signInWithPassword({ email, password: pass });
+    const { data, error } = await (this.client.auth as any).signInWithPassword({ email, password: pass });
     if (error) throw error;
     return data;
   }
@@ -136,7 +136,7 @@ export class AuthService {
     
     const redirectTo = window.location.origin;
     
-    const { data, error } = await this.client.auth.signInWithOAuth({
+    const { data, error } = await (this.client.auth as any).signInWithOAuth({
       provider: 'google',
       options: { 
         redirectTo,
@@ -149,14 +149,14 @@ export class AuthService {
 
   async signOut() {
     if (!this.client) return;
-    await this.client.auth.signOut();
+    await (this.client.auth as any).signOut();
   }
 
-  async getSession(): Promise<Session | null> {
+  async getSession(): Promise<any> {
     await this.initialize();
     if (!this.client) return null;
     try {
-      const { data: { session } } = await this.client.auth.getSession();
+      const { data: { session } } = await (this.client.auth as any).getSession();
       return session;
     } catch (e) {
       console.error("Error getting session:", e);

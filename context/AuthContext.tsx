@@ -1,13 +1,12 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User } from '@supabase/supabase-js';
 import { Loader2 } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 import { CampaignService } from '../services/CampaignService';
 import { Profile } from '../types';
 
 interface AuthContextType {
-  user: User | null;
+  user: any | null;
   profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -17,7 +16,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -46,7 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const ensureProfileExists = async (currentUser: User) => {
+  const ensureProfileExists = async (currentUser: any) => {
     let userProfile = await fetchProfile(currentUser.id);
     
     // Si no existe perfil (común en Google Login por primera vez), lo creamos
@@ -104,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (client) {
-          const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
+          const { data: { subscription } } = (client.auth as any).onAuthStateChange(async (event: any, session: any) => {
             if (mounted) {
               const currentUser = session?.user ?? null;
               setUser(currentUser);

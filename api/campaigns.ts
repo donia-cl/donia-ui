@@ -14,7 +14,7 @@ export default async function handler(req: any, res: any) {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("CRITICAL: Supabase credentials missing.");
+      console.error("CRITICAL: Supabase Credentials missing.");
       throw new Error('Error interno: Configuración del servidor incompleta.');
     }
 
@@ -27,7 +27,8 @@ export default async function handler(req: any, res: any) {
         const { data: campaign, error: cError } = await supabase.from('campaigns').select('*').eq('id', id).single();
         if (cError) throw cError;
         
-        const { data: donations } = await supabase.from('donations').select('*').eq('campaign_id', id).order('created_at', { ascending: false }).limit(50);
+        // CORREGIDO: Ordenar por 'fecha' en lugar de 'created_at' para coincidir con el esquema de la DB
+        const { data: donations } = await supabase.from('donations').select('*').eq('campaign_id', id).order('fecha', { ascending: false }).limit(50);
         
         return res.status(200).json({ success: true, data: { ...campaign, donations: donations || [] } });
       } else {
@@ -50,7 +51,7 @@ export default async function handler(req: any, res: any) {
       if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
         const { data: profile } = await supabase.from('profiles').select('id').eq('id', finalUserId).single();
         if (!profile) {
-            const { data: { user } } = await supabase.auth.admin.getUserById(finalUserId);
+            const { data: { user } } = await (supabase.auth as any).admin.getUserById(finalUserId);
             if (user) {
                 const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
                 await supabase.from('profiles').insert([{

@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
       .from('donations')
       .select('*')
       .eq('donor_user_id', userId)
-      .order('created_at', { ascending: false });
+      .order('fecha', { ascending: false }); // CORREGIDO: Usar 'fecha' en lugar de 'created_at'
 
     if (dError) throw dError;
 
@@ -59,7 +59,7 @@ export default async function handler(req: any, res: any) {
         id: d.id,
         campaignId: d.campaign_id,
         monto: d.monto,
-        fecha: d.created_at || d.fecha, // Soporte para ambos nombres de columna
+        fecha: d.fecha || d.created_at, // Soporte para ambos
         nombreDonante: d.nombre_donante,
         emailDonante: d.donor_email,
         comentario: d.comentario,
