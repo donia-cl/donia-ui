@@ -2,6 +2,15 @@
 import { createClient } from '@supabase/supabase-js';
 import { Validator, logger } from './_utils.js';
 
+// Mapa de traducción de asuntos (Backend)
+const SUBJECT_TRANSLATIONS: Record<string, string> = {
+  'report': 'Reportar una campaña',
+  'payment': 'Problema con un pago',
+  'withdraw': 'Problema con retiros',
+  'account': 'Acceso a mi cuenta',
+  'other': 'Otro tema'
+};
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -19,6 +28,9 @@ export default async function handler(req: any, res: any) {
     Validator.required(subject, 'Asunto');
     Validator.string(message, 10, 'Mensaje');
 
+    // Traducir el asunto técnico a español para humanos
+    const displaySubject = SUBJECT_TRANSLATIONS[subject] || subject;
+
     // 2. Guardar en Base de Datos (Respaldo Histórico)
     try {
       const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -29,7 +41,7 @@ export default async function handler(req: any, res: any) {
         await supabase.from('support_tickets').insert([{
           name,
           email,
-          subject,
+          subject: displaySubject, // Guardamos la versión traducida también en DB
           message,
           status: 'pending',
           source: 'web_form'
@@ -40,12 +52,11 @@ export default async function handler(req: any, res: any) {
     }
 
     // 3. Integración con Trello (No bloqueante)
-    // Usamos .trim() para eliminar espacios accidentales al copiar/pegar
     const trelloKey = process.env.TRELLO_API_KEY ? process.env.TRELLO_API_KEY.trim() : '';
     const trelloToken = process.env.TRELLO_TOKEN ? process.env.TRELLO_TOKEN.trim() : '';
     const trelloListId = process.env.TRELLO_LIST_ID ? process.env.TRELLO_LIST_ID.trim() : '';
 
-    // Log de diagnóstico (Ocultamos los valores reales por seguridad, solo mostramos longitud)
+    // Log de diagnóstico
     console.log(`[Trello Debug] Key Length: ${trelloKey.length}, Token Length: ${trelloToken.length}, ListID: ${trelloListId}`);
 
     if (trelloKey && trelloToken && trelloListId) {
@@ -53,7 +64,7 @@ export default async function handler(req: any, res: any) {
         const cardDesc = `
 **Solicitante:** ${name}
 **Email:** ${email}
-**Asunto:** ${subject}
+**Asunto:** ${displaySubject}
 
 ---
 **Mensaje:**
@@ -64,7 +75,7 @@ ${message}
           key: trelloKey,
           token: trelloToken,
           idList: trelloListId,
-          name: `🎫 [${subject}] - ${name}`,
+          name: `🎫 [${displaySubject}] - ${name}`, // Usamos el asunto traducido aquí
           desc: cardDesc,
           pos: 'top'
         });
