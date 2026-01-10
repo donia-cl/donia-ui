@@ -24,18 +24,31 @@ const Support: React.FC = () => {
     setSending(true);
     setError(null);
 
-    // Simulación de envío (Aquí iría la llamada a tu backend o servicio de email como SendGrid/Resend)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Validación simple simulada
+      // Validación local básica antes de enviar
       if (formData.message.length < 10) {
         throw new Error("El mensaje es muy corto. Por favor detalla más tu problema.");
+      }
+
+      // Conexión con el endpoint real
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Hubo un problema al enviar tu mensaje.");
       }
 
       setSuccess(true);
       setFormData({ name: '', email: '', subject: '', message: '' });
     } catch (err: any) {
+      console.error("Error envío soporte:", err);
       setError(err.message || "Error al enviar el mensaje. Inténtalo de nuevo.");
     } finally {
       setSending(false);
