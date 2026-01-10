@@ -20,7 +20,6 @@ export default async function handler(req: any, res: any) {
     Validator.string(message, 10, 'Mensaje');
 
     // 2. Guardar en Base de Datos (Respaldo Histórico)
-    // Esto es útil para tener un registro propio independiente de Trello
     try {
       const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
       const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,17 +37,20 @@ export default async function handler(req: any, res: any) {
       }
     } catch (dbError) {
       console.error("Error guardando en Supabase (no crítico):", dbError);
-      // No detenemos el flujo si falla la DB, priorizamos Trello si está configurado
     }
 
-    // 3. Integración con Trello
-    const trelloKey = process.env.TRELLO_API_KEY;
-    const trelloToken = process.env.TRELLO_TOKEN;
-    const trelloListId = process.env.TRELLO_LIST_ID;
+    // 3. Integración con Trello (No bloqueante)
+    // Usamos .trim() para eliminar espacios accidentales al copiar/pegar
+    const trelloKey = process.env.TRELLO_API_KEY ? process.env.TRELLO_API_KEY.trim() : '';
+    const trelloToken = process.env.TRELLO_TOKEN ? process.env.TRELLO_TOKEN.trim() : '';
+    const trelloListId = process.env.TRELLO_LIST_ID ? process.env.TRELLO_LIST_ID.trim() : '';
+
+    // Log de diagnóstico (Ocultamos los valores reales por seguridad, solo mostramos longitud)
+    console.log(`[Trello Debug] Key Length: ${trelloKey.length}, Token Length: ${trelloToken.length}, ListID: ${trelloListId}`);
 
     if (trelloKey && trelloToken && trelloListId) {
-      // Formateamos la descripción de la tarjeta en Markdown
-      const cardDesc = `
+      try {
+        const cardDesc = `
 **Solicitante:** ${name}
 **Email:** ${email}
 **Asunto:** ${subject}
@@ -56,40 +58,38 @@ export default async function handler(req: any, res: any) {
 ---
 **Mensaje:**
 ${message}
-      `.trim();
+        `.trim();
 
-      const trelloParams = new URLSearchParams({
-        key: trelloKey,
-        token: trelloToken,
-        idList: trelloListId,
-        name: `🎫 [${subject}] - ${name}`,
-        desc: cardDesc,
-        pos: 'top' // La tarjeta aparecerá arriba de la lista
-      });
+        const trelloParams = new URLSearchParams({
+          key: trelloKey,
+          token: trelloToken,
+          idList: trelloListId,
+          name: `🎫 [${subject}] - ${name}`,
+          desc: cardDesc,
+          pos: 'top'
+        });
 
-      const trelloResp = await fetch(`https://api.trello.com/1/cards?${trelloParams.toString()}`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json'
+        const trelloResp = await fetch(`https://api.trello.com/1/cards?${trelloParams.toString()}`, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        if (!trelloResp.ok) {
+          const trelloError = await trelloResp.text();
+          console.error(`Error Trello API (${trelloResp.status}):`, trelloError);
+        } else {
+          logger.info('TRELLO_CARD_CREATED', { email, subject });
         }
-      });
-
-      if (!trelloResp.ok) {
-        const trelloError = await trelloResp.text();
-        console.error("Error Trello API:", trelloError);
-        // Si falla Trello, lanzamos error para que el usuario sepa (o podríamos guardarlo solo en DB y retornar OK)
-        throw new Error("Error interno conectando con el sistema de tickets.");
+      } catch (trelloEx) {
+        console.error("Error de conexión con Trello:", trelloEx);
       }
-
-      logger.info('TRELLO_CARD_CREATED', { email, subject });
-      
-      return res.status(200).json({ success: true, message: "Ticket creado en Trello exitosamente" });
-
     } else {
-      // Fallback si no hay credenciales de Trello configuradas
-      console.warn("Faltan credenciales de Trello. El mensaje solo se guardó en DB/Logs.");
-      return res.status(200).json({ success: true, warning: "Credentials missing for Trello integration" });
+      console.warn("Faltan credenciales de Trello. Revise las variables de entorno.");
     }
+
+    return res.status(200).json({ success: true, message: "Mensaje recibido correctamente" });
 
   } catch (error: any) {
     console.error('CONTACT_API_ERROR', error);
