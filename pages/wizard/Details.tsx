@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, DollarSign, Image as ImageIcon, UserCheck, ShieldCheck, Loader2, AlertCircle, RefreshCcw, Calendar, Clock } from 'lucide-react';
@@ -60,6 +61,13 @@ const CreateDetails: React.FC = () => {
       setUploadError("Error al leer el archivo desde tu dispositivo.");
       setUploading(false);
     };
+  };
+
+  const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Eliminar puntos y caracteres no numéricos
+    const rawValue = e.target.value.replace(/\./g, '').replace(/\D/g, '');
+    const numberValue = rawValue === '' ? 0 : parseInt(rawValue, 10);
+    setFormData({ ...formData, monto: numberValue });
   };
 
   const handleNext = () => {
@@ -167,11 +175,11 @@ const CreateDetails: React.FC = () => {
                   <DollarSign size={18} />
                 </div>
                 <input
-                  type="number"
+                  type="text"
                   className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
                   placeholder="0"
-                  value={formData.monto}
-                  onChange={(e) => setFormData({ ...formData, monto: Number(e.target.value) })}
+                  value={formData.monto > 0 ? formData.monto.toLocaleString('es-CL') : ''}
+                  onChange={handleMontoChange}
                 />
               </div>
             </div>
@@ -195,24 +203,25 @@ const CreateDetails: React.FC = () => {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-4">
              <div>
-                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Duración (Días)</label>
+                <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Duración</label>
                 <div className="relative">
                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
                      <Clock size={18} />
                    </div>
-                   <input 
-                      type="number"
-                      min={7}
-                      max={90}
-                      className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
+                   <select 
+                      className="w-full pl-10 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900 appearance-none"
                       value={formData.duracionDias}
                       onChange={(e) => setFormData({ ...formData, duracionDias: Number(e.target.value) })}
-                   />
+                   >
+                     <option value={30}>30 Días</option>
+                     <option value={60}>60 Días</option>
+                     <option value={90}>90 Días</option>
+                   </select>
                 </div>
              </div>
              <div className="flex items-center">
                  <p className="text-xs text-slate-400 font-medium leading-relaxed">
-                    La campaña estará activa por el número de días seleccionado. Puedes extenderla luego si es necesario.
+                    La campaña estará activa por el periodo seleccionado. El tiempo empieza a correr una vez publicada.
                  </p>
              </div>
           </div>

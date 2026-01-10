@@ -72,10 +72,19 @@ const DonatePage: React.FC = () => {
     return Math.max(100, Math.floor(val / 10));
   };
 
-  // Manejo manual de la propina
-  const handleManualTipChange = (val: number) => {
-    setCustomTipAmount(val);
+  // Manejo manual de la propina con formato
+  const handleManualTipChange = (strVal: string) => {
+    const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
+    const numVal = cleanVal === '' ? 0 : parseInt(cleanVal, 10);
+    setCustomTipAmount(numVal);
     setTipPercentage('custom');
+  };
+
+  // Manejo manual de la donación con formato
+  const handleDonationChange = (strVal: string) => {
+    const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
+    const numVal = cleanVal === '' ? 0 : parseInt(cleanVal, 10);
+    setDonationAmount(numVal);
   };
 
   // Pre-llenar datos si el usuario está logueado
@@ -252,12 +261,11 @@ const DonatePage: React.FC = () => {
                     <div className="relative mb-4">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-xl">$</span>
                       <input 
-                        type="number" 
-                        step={getDynamicStep(donationAmount)}
+                        type="text" 
                         className="w-full pl-9 pr-4 py-5 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-black text-slate-900 transition-all text-xl"
                         placeholder="0"
-                        value={donationAmount || ''}
-                        onChange={(e) => setDonationAmount(Number(e.target.value))}
+                        value={donationAmount > 0 ? donationAmount.toLocaleString('es-CL') : ''}
+                        onChange={(e) => handleDonationChange(e.target.value)}
                       />
                     </div>
                     <div className="grid grid-cols-3 gap-3">
@@ -267,7 +275,7 @@ const DonatePage: React.FC = () => {
                           onClick={() => setDonationAmount(amt)}
                           className={`py-3 rounded-xl text-sm font-black border transition-all ${donationAmount === amt ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500 hover:border-violet-200 shadow-sm'}`}
                         >
-                          ${amt.toLocaleString()}
+                          ${amt.toLocaleString('es-CL')}
                         </button>
                       ))}
                     </div>
@@ -305,14 +313,13 @@ const DonatePage: React.FC = () => {
                         <div className="relative">
                           <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-sm">$</span>
                           <input 
-                            type="number"
-                            step={getDynamicStep(tipGrossAmount)}
+                            type="text"
                             className={`w-full pl-8 pr-4 py-3 border rounded-xl outline-none font-bold text-slate-700 text-sm focus:border-violet-300 transition-all ${
                               tipPercentage === 'custom' ? 'bg-white border-violet-200' : 'bg-slate-100 border-transparent text-slate-500'
                             }`}
                             placeholder="Monto de aporte (IVA incluido)"
-                            value={tipGrossAmount || ''}
-                            onChange={(e) => handleManualTipChange(Number(e.target.value))}
+                            value={tipGrossAmount > 0 ? tipGrossAmount.toLocaleString('es-CL') : ''}
+                            onChange={(e) => handleManualTipChange(e.target.value)}
                           />
                         </div>
                         {tipPercentage !== 'custom' && tipGrossAmount > 0 && (

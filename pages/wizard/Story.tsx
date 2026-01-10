@@ -64,7 +64,7 @@ const CreateStory: React.FC = () => {
       </div>
 
       <div className="space-y-8">
-        <div className={`bg-white rounded-[32px] border-2 p-8 shadow-sm transition-all relative ${!isValid && localStory.length > 0 ? 'border-amber-200' : 'border-slate-100 focus-within:border-violet-200'}`}>
+        <div className={`bg-white rounded-[32px] border-2 p-8 shadow-sm transition-all relative ${!isValid && localStory.length > 0 ? 'border-rose-200' : 'border-slate-100 focus-within:border-violet-200'}`}>
           <label className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Relato de la campaña</span>
             {canUseAi && (
@@ -104,7 +104,7 @@ const CreateStory: React.FC = () => {
 
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-50">
              {!isValid && localStory.length > 0 ? (
-               <div className="flex items-center gap-2 text-amber-500 text-xs font-bold animate-pulse">
+               <div className="flex items-center gap-2 text-rose-500 text-xs font-bold animate-pulse">
                   <AlertCircle size={14} />
                   <span>Es muy breve, agrega más detalles.</span>
                </div>

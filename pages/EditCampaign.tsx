@@ -80,6 +80,12 @@ const EditCampaign: React.FC = () => {
     }
   };
 
+  const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/\./g, '').replace(/\D/g, '');
+    const numberValue = rawValue === '' ? 0 : parseInt(rawValue, 10);
+    setFormData({ ...formData, monto: numberValue });
+  };
+
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -249,10 +255,10 @@ const EditCampaign: React.FC = () => {
                   <div className="relative">
                     <DollarSign size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" />
                     <input
-                      type="number"
+                      type="text"
                       className="w-full pl-11 p-4 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl transition-all outline-none font-bold text-slate-900"
-                      value={formData.monto}
-                      onChange={(e) => setFormData({ ...formData, monto: Number(e.target.value) })}
+                      value={formData.monto > 0 ? formData.monto.toLocaleString('es-CL') : ''}
+                      onChange={handleMontoChange}
                     />
                   </div>
                 </div>
