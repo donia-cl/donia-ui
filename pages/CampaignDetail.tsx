@@ -13,7 +13,7 @@ import {
   Twitter,
   Link as LinkIcon,
   Check,
-  Loader2,
+  Loader2, 
   ArrowRight,
   X,
   MessageSquare,
@@ -104,8 +104,12 @@ const CampaignDetail: React.FC = () => {
   );
 
   const progress = Math.min((campaign.recaudado / campaign.monto) * 100, 100);
-  const limitedDonations = campaign.donations?.slice(0, 5) || [];
-  const totalDonations = campaign.donations?.length || 0;
+  
+  // CORRECCIÓN: Usar donantesCount como fuente principal, fallback a longitud de array
+  const totalDonations = campaign.donantesCount || campaign.donations?.length || 0;
+  
+  const donationList = campaign.donations || [];
+  const limitedDonations = donationList.slice(0, 5);
 
   // Lógica de fechas
   const startDate = new Date(campaign.fechaCreacion);
@@ -209,17 +213,17 @@ const CampaignDetail: React.FC = () => {
                 </div>
                 
                 <div className="space-y-4">
-                  {totalDonations > 0 ? (
+                  {limitedDonations.length > 0 ? (
                     <>
                       {limitedDonations.map((don: Donation) => (
                         <div key={don.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100 transition-colors hover:bg-white hover:border-violet-100">
                           <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-4">
                               <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-violet-600 font-black text-xs border border-slate-100 shadow-sm uppercase">
-                                {don.nombreDonante.charAt(0)}
+                                {don.nombreDonante ? don.nombreDonante.charAt(0) : 'A'}
                               </div>
                               <div>
-                                <p className="font-black text-slate-900 text-sm">{don.nombreDonante}</p>
+                                <p className="font-black text-slate-900 text-sm">{don.nombreDonante || 'Anónimo'}</p>
                                 <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                                   <Calendar size={10} />
                                   {new Date(don.fecha).toLocaleDateString('es-CL')}
@@ -250,7 +254,9 @@ const CampaignDetail: React.FC = () => {
                   ) : (
                     <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <MessageSquare className="mx-auto text-slate-200 mb-3" size={40} />
-                      <p className="text-slate-400 font-bold text-base">Aún no hay mensajes. ¡Sé el primero!</p>
+                      <p className="text-slate-400 font-bold text-base">
+                        {totalDonations > 0 ? 'Las donaciones recientes son privadas.' : 'Aún no hay mensajes. ¡Sé el primero!'}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -363,15 +369,15 @@ const CampaignDetail: React.FC = () => {
             </div>
             
             <div className="flex-grow overflow-y-auto p-8 space-y-5 custom-scrollbar">
-              {campaign.donations?.map((don: Donation) => (
+              {donationList.map((don: Donation) => (
                 <div key={don.id} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-violet-600 font-black text-xs border border-slate-100 shadow-sm uppercase">
-                        {don.nombreDonante.charAt(0)}
+                        {don.nombreDonante ? don.nombreDonante.charAt(0) : 'A'}
                       </div>
                       <div>
-                        <p className="font-black text-slate-900 text-sm">{don.nombreDonante}</p>
+                        <p className="font-black text-slate-900 text-sm">{don.nombreDonante || 'Anónimo'}</p>
                         <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                           <Calendar size={10} />
                           {new Date(don.fecha).toLocaleDateString('es-CL')}
