@@ -46,14 +46,23 @@ export class AuthService {
 
         if (!url || !key) {
            try {
-             const resp = await fetch('/api/config');
+             // Usamos AbortController para evitar que este fetch se quede colgado
+             const controller = new AbortController();
+             const timeoutId = setTimeout(() => controller.abort(), 3000);
+             
+             const resp = await fetch('/api/config', { signal: controller.signal });
+             clearTimeout(timeoutId);
+
              if (resp.ok) {
                const config = await resp.json();
                url = config.supabaseUrl || url;
                key = config.supabaseKey || key;
              }
-           } catch (e) {
-             console.warn("[AuthService] Runtime config fetch failed.");
+           } catch (e: any) {
+             // Ignoramos errores de red/abort en la config dinámica
+             if (e.name !== 'AbortError') {
+                console.warn("[AuthService] Runtime config fetch failed.", e.message);
+             }
            }
         }
           
@@ -68,7 +77,8 @@ export class AuthService {
             }
           });
         } else {
-          console.error("[AuthService] Error Crítico: No se encontraron llaves de Supabase.");
+          // No bloqueamos, pero logueamos advertencia
+          console.warn("[AuthService] No se encontraron llaves de Supabase. La autenticación estará deshabilitada.");
         }
       } catch (e) {
         console.error("[AuthService] Initialization failed:", e);
@@ -158,7 +168,11 @@ export class AuthService {
     try {
       const { data: { session } } = await (this.client.auth as any).getSession();
       return session;
-    } catch (e) {
+    } catch (e: any) {
+      // FIX: Ignorar AbortError para no ensuciar la consola
+      if (e.name === 'AbortError' || e.message?.includes('aborted')) {
+        return null;
+      }
       console.error("Error getting session:", e);
       return null;
     }
