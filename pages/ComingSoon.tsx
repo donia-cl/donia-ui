@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Heart } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const ComingSoon: React.FC = () => {
   return (
@@ -37,8 +38,11 @@ const ComingSoon: React.FC = () => {
         </div>
       </div>
       
-      <div className="absolute bottom-8 text-slate-300 text-[10px] font-black uppercase tracking-widest">
-         © 2026 Donia SpA
+      <div className="absolute bottom-8 flex flex-col items-center gap-2">
+         <span className="text-slate-300 text-[10px] font-black uppercase tracking-widest">© 2026 Donia SpA</span>
+         <Link to="/home" className="text-slate-200 hover:text-violet-300 text-[9px] font-black uppercase tracking-widest transition-colors">
+            Acceso Anticipado (Dev)
+         </Link>
       </div>
     </div>
   );

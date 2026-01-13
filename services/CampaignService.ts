@@ -24,16 +24,26 @@ export class CampaignService {
   public async initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
-    this.initPromise = (async () => {
-      try {
-        await AuthService.getInstance().initialize();
-      } catch (e) {
-        console.warn("[CampaignService] Auth init warning:", e);
-      }
+    // Inicializamos Auth primero (esto es rápido si las llaves están locales)
+    try {
+       await AuthService.getInstance().initialize();
+    } catch (e) {
+       console.warn("[CampaignService] Auth init warning:", e);
+    }
 
-      try {
+    // CRITICO: No bloqueamos la inicialización esperando la configuración del servidor.
+    // Lanzamos la petición en segundo plano. Si falla o demora, la app ya cargó.
+    this.fetchServerConfig();
+
+    this.initPromise = Promise.resolve();
+    return this.initPromise;
+  }
+
+  private async fetchServerConfig() {
+     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        // Timeout corto para no dejar conexiones colgadas en background
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         const resp = await fetch('/api/config', { 
           method: 'GET',
@@ -48,11 +58,9 @@ export class CampaignService {
           this.aiEnabled = !!config.aiEnabled;
         }
       } catch (netError) {
+        // Silencioso: Si falla, asumimos configuración por defecto (sin IA)
         this.aiEnabled = false; 
       }
-    })();
-
-    return this.initPromise;
   }
 
   public checkAiAvailability(): boolean { return this.aiEnabled; }
@@ -178,7 +186,6 @@ export class CampaignService {
             body: JSON.stringify({ image: base64, name })
         });
         
-        // Manejo de error si la respuesta no es JSON (ej: 504 Gateway Time-out o 413 Payload Too Large)
         const text = await response.text();
         let json;
         try {
@@ -197,6 +204,7 @@ export class CampaignService {
   }
 
   async polishStory(story: string): Promise<string> {
+      // Intentamos inicializar pero no bloqueamos si falla la config AI
       await this.initialize();
       if (!this.aiEnabled) return story;
       try {

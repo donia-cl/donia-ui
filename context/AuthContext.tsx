@@ -84,8 +84,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initApp = async () => {
       try {
+        // Optimización: Solo esperamos la autenticación crítica.
+        // CampaignService se inicializa en segundo plano (fire-and-forget)
         await authService.initialize();
-        await campaignService.initialize();
+        campaignService.initialize().catch(console.warn);
         
         const client = authService.getSupabase();
         const session = await authService.getSession();
@@ -95,6 +97,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(currentUser);
           
           if (currentUser) {
+            // No bloqueamos el renderizado inicial por el perfil si es posible, 
+            // pero para consistencia lo esperamos brevemente
             const userProfile = await ensureProfileExists(currentUser);
             setProfile(userProfile);
           }
