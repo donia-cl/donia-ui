@@ -135,7 +135,9 @@ const DonatePage: React.FC = () => {
             initialization: { 
               amount: totalAmount,
               payer: {
-                email: donorEmail || undefined, 
+                email: donorEmail || undefined,
+                // Agregamos entityType para evitar advertencias de consola
+                entityType: 'individual'
               }
             },
             customization: {
@@ -192,9 +194,13 @@ const DonatePage: React.FC = () => {
                 });
               },
               onError: (error: any) => {
-                console.error("Brick Error:", error);
-                setBrickLoading(false);
-                setError("Ocurrió un error al cargar la pasarela de pagos. Por favor refresca la página.");
+                // Mercado Pago a veces lanza errores genéricos al desmontar o cancelar,
+                // solo los mostramos si son críticos y no estamos navegando.
+                console.warn("Brick Warning:", error);
+                if (brickLoading) { // Solo si falla al cargar
+                   setBrickLoading(false);
+                   setError("Ocurrió un error al cargar la pasarela de pagos. Por favor refresca la página.");
+                }
               },
             },
           });
