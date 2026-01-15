@@ -13,15 +13,40 @@ export default async function handler(req: any, res: any) {
   try {
     const { paymentData, campaignId, metadata } = req.body;
     
+    // Validaciones básicas
     Validator.required(paymentData, 'paymentData');
     Validator.uuid(campaignId, 'campaignId');
     Validator.email(metadata.email);
 
+    // Obtenemos variables de entorno del servidor
     const accessToken = process.env.MP_ACCESS_TOKEN;
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!accessToken || !supabaseUrl || !serviceRoleKey) throw new Error('Configuración del servidor incompleta.');
+    if (!accessToken || !supabaseUrl || !serviceRoleKey) {
+        throw new Error('Error de configuración del servidor (Credenciales faltantes).');
+    }
+
+    // Procesamos el pago con Mercado Pago
+    // Importante: El brick envía un objeto con token, issuer_id, payment_method_id, etc.
+    // Nosotros debemos construir el payload final.
+    const paymentPayload = {
+      ...paymentData, // Incluye token, amount, installments, etc.
+      description: `Donación Donia - Campaña ${campaignId}`,
+      payer: {
+        email: metadata.email,
+        first_name: metadata.nombre || 'Anónimo'
+      },
+      metadata: {
+        campaign_id: campaignId,
+        donor_user_id: metadata.donorUserId || null,
+        donor_comment: metadata.comentario || ''
+      },
+      // Forzamos la moneda por seguridad, aunque el brick ya la define
+      currency_id: 'CLP',
+      // Agregamos binary_mode para respuesta inmediata (aprueba o rechaza, sin pendientes largos)
+      binary_mode: true 
+    };
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
@@ -30,33 +55,26 @@ export default async function handler(req: any, res: any) {
         'Content-Type': 'application/json',
         'X-Idempotency-Key': `pay-${Date.now()}-${Math.random()}`
       },
-      body: JSON.stringify({
-        ...paymentData,
-        description: `Donación Donia - Campaña ${campaignId}`,
-        payer: { email: metadata.email },
-        metadata: {
-          campaign_id: campaignId,
-          donor_name: metadata.nombre || 'Anónimo',
-          donor_email: metadata.email, 
-          donor_user_id: metadata.donorUserId || null,
-          donor_comment: metadata.comentario || ''
-        }
-      }),
+      body: JSON.stringify(paymentPayload),
     });
 
     const paymentResult = await mpResponse.json();
 
     if (!mpResponse.ok) {
       logger.error('MP_API_ERROR', paymentResult);
-      throw new Error(paymentResult.message || 'Error en la pasarela de pago');
+      // Extraemos mensaje de error legible si existe
+      const msg = paymentResult.message || 'Error procesando el pago en la pasarela.';
+      throw new Error(msg);
     }
 
     logger.info('PAYMENT_PROCESSED', { id: paymentResult.id, status: paymentResult.status });
 
+    // Si el pago fue aprobado, guardamos en Supabase
     if (paymentResult.status === 'approved') {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         const amount = paymentResult.transaction_amount;
 
+        // Insertar Donación
         await supabase.from('donations').insert([{
           campaign_id: campaignId,
           monto: amount,
@@ -69,6 +87,7 @@ export default async function handler(req: any, res: any) {
           status: 'completed'
         }]);
 
+        // Actualizar Campaña
         const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
         if (campaign) {
           await supabase.from('campaigns').update({

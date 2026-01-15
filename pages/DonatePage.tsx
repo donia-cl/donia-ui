@@ -38,7 +38,8 @@ const DonatePage: React.FC = () => {
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   
-  const mpPublicKey = process.env.REACT_APP_MP_PUBLIC_KEY || '';
+  // Estado para la llave pública obtenida del servidor
+  const [mpPublicKey, setMpPublicKey] = useState<string>('');
   
   const [donorName, setDonorName] = useState<string>('');
   const [donorEmail, setDonorEmail] = useState<string>('');
@@ -47,32 +48,17 @@ const DonatePage: React.FC = () => {
   const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'rejected'>('idle');
 
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
+  const brickControllerRef = useRef<any>(null); // Para controlar el desmontaje del brick
   const service = CampaignService.getInstance();
 
   // --- CÁLCULO FINANCIERO (IVA INCLUIDO) ---
-  
-  // 1. Calculamos el monto bruto de la propina
   const tipGrossAmount = tipPercentage === 'custom' 
     ? customTipAmount 
     : Math.round(donationAmount * (Number(tipPercentage) / 100));
-    
-  // 2. Desglosamos el IVA desde el bruto (Neto = Bruto / 1.19)
   const tipNetAmount = Math.round(tipGrossAmount / 1.19);
-  
-  // 3. Obtenemos el monto del IVA por diferencia
   const ivaAmount = tipGrossAmount - tipNetAmount;
-
-  // 4. El total a pagar es la donación + la propina bruta
   const totalAmount = donationAmount + tipGrossAmount;
 
-  // --- FUNCIÓN HELPER PARA STEP DINÁMICO ---
-  const getDynamicStep = (val: number) => {
-    if (!val || val === 0) return 500;
-    // El step es el 10% del valor actual, con un mínimo de 100 pesos
-    return Math.max(100, Math.floor(val / 10));
-  };
-
-  // Manejo manual de la propina con formato
   const handleManualTipChange = (strVal: string) => {
     const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
     const numVal = cleanVal === '' ? 0 : parseInt(cleanVal, 10);
@@ -80,14 +66,13 @@ const DonatePage: React.FC = () => {
     setTipPercentage('custom');
   };
 
-  // Manejo manual de la donación con formato
   const handleDonationChange = (strVal: string) => {
     const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
     const numVal = cleanVal === '' ? 0 : parseInt(cleanVal, 10);
     setDonationAmount(numVal);
   };
 
-  // Pre-llenar datos si el usuario está logueado
+  // Pre-llenar datos
   useEffect(() => {
     if (user || profile) {
       if (profile?.full_name) setDonorName(profile.full_name);
@@ -95,6 +80,7 @@ const DonatePage: React.FC = () => {
     }
   }, [user, profile]);
 
+  // Cargar Campaña y Configuración (Llave MP)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -102,8 +88,14 @@ const DonatePage: React.FC = () => {
           const data = await service.getCampaignById(id);
           setCampaign(data);
         }
+        // Obtenemos la llave pública desde el backend para asegurar que esté disponible
+        const configResp = await fetch('/api/config');
+        const configData = await configResp.json();
+        if (configData.mpPublicKey) {
+            setMpPublicKey(configData.mpPublicKey);
+        }
       } catch (e) {
-        console.error("Error cargando campaña:", e);
+        console.error("Error cargando datos:", e);
       } finally {
         setLoading(false);
       }
@@ -111,87 +103,107 @@ const DonatePage: React.FC = () => {
     fetchData();
   }, [id]);
 
+  // Inicializar Mercado Pago Brick
   useEffect(() => {
     if (showPaymentForm && window.MercadoPago && paymentBrickContainerRef.current && campaign && mpPublicKey) {
+      
       const mp = new window.MercadoPago(mpPublicKey, {
         locale: 'es-CL'
       });
       const bricksBuilder = mp.bricks();
 
       const renderPaymentBrick = async () => {
+        // Limpiamos el contenedor por si acaso
         if (paymentBrickContainerRef.current) paymentBrickContainerRef.current.innerHTML = '';
         
         try {
-          await bricksBuilder.create('payment', 'paymentBrick_container', {
+          const controller = await bricksBuilder.create('payment', 'paymentBrick_container', {
             initialization: { 
               amount: totalAmount,
               payer: {
-                email: donorEmail // Pasamos el email al brick para pre-llenar
+                email: donorEmail, // Pre-llenamos el email
               }
             },
             customization: {
-              paymentMethods: { creditCard: 'all', debitCard: 'all', mercadoPago: 'all' },
-              visual: { style: { theme: 'flat' }, borderRadius: '16px' }
+              paymentMethods: {
+                creditCard: 'all',
+                debitCard: 'all',
+                mercadoPago: 'all',
+              },
+              visual: {
+                style: {
+                  theme: 'default', // 'default' | 'dark' | 'bootstrap' | 'flat'
+                }
+              }
             },
             callbacks: {
-              onSubmit: async ({ formData }: any) => {
-                try {
-                  const result = await service.processPayment(formData, campaign.id, { 
-                    nombre: donorName,
-                    email: donorEmail, // OBLIGATORIO
-                    comentario: donorComment,
-                    tip: tipNetAmount, // Enviamos el Neto para registro contable
-                    iva: ivaAmount,    // Enviamos el IVA para registro contable
-                    donorUserId: user?.id || null 
+              onReady: () => {
+                // Brick cargado
+              },
+              onSubmit: ({ selectedPaymentMethod, formData }: any) => {
+                // Retornamos una promesa para que el Brick maneje el estado de carga
+                return new Promise((resolve, reject) => {
+                  fetch("/api/process-payment", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      paymentData: formData, // Datos encriptados del brick
+                      campaignId: campaign.id,
+                      metadata: {
+                        nombre: donorName,
+                        email: donorEmail,
+                        comentario: donorComment,
+                        tip: tipNetAmount,
+                        iva: ivaAmount,
+                        donorUserId: user?.id || null
+                      }
+                    })
+                  })
+                  .then((response) => response.json())
+                  .then((response) => {
+                    if (response.success && response.status === 'approved') {
+                      setPaymentStatus('success');
+                      resolve(void 0); 
+                    } else {
+                      // Si fue rechazado, avisamos al brick para que deje reintentar
+                      setError("El pago fue rechazado. Revisa los datos de tu tarjeta.");
+                      reject(); 
+                    }
+                  })
+                  .catch((error) => {
+                    console.error("Error de red:", error);
+                    setError("Error de conexión al procesar el pago.");
+                    reject();
                   });
-                  if (result.status === 'approved') {
-                    setPaymentStatus('success');
-                  } else {
-                    setPaymentStatus('rejected');
-                  }
-                } catch (e: any) {
-                  setError(e.message || "Error procesando el pago.");
-                }
+                });
               },
               onError: (error: any) => {
-                console.error("Error en Mercado Pago Brick:", error);
-                setError("Error al cargar la pasarela de pagos.");
-              }
-            }
+                console.error("Brick Error:", error);
+                setError("Ocurrió un error al cargar el formulario de pago.");
+              },
+            },
           });
+          brickControllerRef.current = controller;
         } catch (e) {
-          console.error("Error renderizando brick:", e);
+          console.error("Error creating brick:", e);
         }
       };
+      
       renderPaymentBrick();
     }
-  }, [showPaymentForm, totalAmount, campaign, mpPublicKey, donorEmail]);
-
-  const handleSimulatePayment = async () => {
-    if (!campaign) return;
-    setProcessingPayment(true);
-    setError(null);
-    try {
-      await service.simulateDonation({
-        campaignId: campaign.id,
-        monto: donationAmount, // Solo el monto de donación base, o totalAmount si quieres registrar todo
-        nombre: donorName || 'Anónimo',
-        email: donorEmail,
-        comentario: donorComment,
-        donorUserId: user?.id || null
-      });
-      setPaymentStatus('success');
-    } catch (e: any) {
-      setError(e.message || "Error al simular el pago.");
-    } finally {
-      setProcessingPayment(false);
-    }
-  };
+    
+    // Cleanup al desmontar
+    return () => {
+        if (brickControllerRef.current) {
+            brickControllerRef.current.unmount(); 
+        }
+    };
+  }, [showPaymentForm, totalAmount, campaign, mpPublicKey]); // Eliminamos donorEmail del dependency array para evitar re-render del brick al escribir
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
       <Loader2 className="w-10 h-10 text-violet-600 animate-spin mb-4" />
-      <span className="text-slate-400 font-bold uppercase tracking-widest text-xs">Preparando checkout...</span>
+      <span className="text-slate-400 font-bold uppercase tracking-widest text-xs">Cargando...</span>
     </div>
   );
 
@@ -212,7 +224,7 @@ const DonatePage: React.FC = () => {
         </div>
         <button 
           onClick={() => navigate(`/campana/${campaign.id}`)} 
-          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black"
+          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black hover:bg-slate-800 transition-colors"
         >
           Volver a la campaña
         </button>
@@ -281,7 +293,7 @@ const DonatePage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* SECCIÓN DE PROPINA MODIFICADA */}
+                  {/* SECCIÓN DE PROPINA */}
                   <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                       <Zap size={80} className="text-violet-600" />
@@ -291,10 +303,9 @@ const DonatePage: React.FC = () => {
                          Apoyo a la plataforma Donia
                       </h3>
                       <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6 pr-10">
-                        Donia no cobra comisiones a los organizadores. Tu aporte voluntario (IVA incluido) permite mantener el sitio gratuito.
+                        Donia no cobra comisiones a los organizadores. Tu aporte voluntario permite mantener el sitio gratuito.
                       </p>
                       
-                      {/* Botones de Porcentaje */}
                       <div className="grid grid-cols-3 gap-2 mb-4">
                         {[10, 15, 20].map(pct => (
                           <button 
@@ -307,7 +318,6 @@ const DonatePage: React.FC = () => {
                         ))}
                       </div>
 
-                      {/* Input Manual siempre visible */}
                       <div>
                         <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Monto del aporte</label>
                         <div className="relative">
@@ -322,13 +332,7 @@ const DonatePage: React.FC = () => {
                             onChange={(e) => handleManualTipChange(e.target.value)}
                           />
                         </div>
-                        {tipPercentage !== 'custom' && tipGrossAmount > 0 && (
-                          <p className="text-[10px] text-slate-400 mt-1.5 ml-1 italic">
-                            Calculado automáticamente ({tipPercentage}%). Escribe para cambiarlo.
-                          </p>
-                        )}
                       </div>
-
                     </div>
                   </div>
 
@@ -346,7 +350,6 @@ const DonatePage: React.FC = () => {
                           onChange={(e) => setDonorEmail(e.target.value)}
                         />
                       </div>
-                      <p className="text-[10px] text-slate-400 mt-1 ml-1">Necesario para enviarte el comprobante.</p>
                     </div>
 
                     <div>
@@ -397,30 +400,6 @@ const DonatePage: React.FC = () => {
                   
                   {/* Container de Mercado Pago */}
                   <div id="paymentBrick_container" ref={paymentBrickContainerRef} className="min-h-[100px]"></div>
-
-                  {/* Botón de Simulación */}
-                  <div className="pt-6 border-t border-slate-100">
-                    <button
-                      onClick={handleSimulatePayment}
-                      disabled={processingPayment}
-                      className="w-full py-5 rounded-2xl font-black text-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-emerald-100 active:scale-95 disabled:opacity-70 disabled:cursor-wait"
-                    >
-                      {processingPayment ? (
-                         <>
-                           <Loader2 className="animate-spin" size={24} />
-                           Procesando...
-                         </>
-                      ) : (
-                         <>
-                           <CreditCard size={24} />
-                           Pagar ahora (Simulación)
-                         </>
-                      )}
-                    </button>
-                    <p className="text-center text-[10px] text-slate-400 font-bold mt-2">
-                      * Modo de pruebas activado: No se realizará cargo real.
-                    </p>
-                  </div>
                   
                   {error && (
                     <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 text-rose-700 text-xs font-bold items-center">
@@ -430,7 +409,7 @@ const DonatePage: React.FC = () => {
                   )}
 
                   <p className="text-center text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                    <Lock size={12} /> Pago seguro vía Donia
+                    <Lock size={12} /> Pago seguro vía Mercado Pago
                   </p>
                 </div>
               )}
@@ -438,6 +417,7 @@ const DonatePage: React.FC = () => {
           </div>
 
           <div className="lg:col-span-5 h-fit sticky top-24">
+             {/* Resumen Lateral */}
             <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-violet-100 overflow-hidden relative">
               <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50/50 rounded-bl-[100px] -z-0 pointer-events-none"></div>
               
@@ -459,17 +439,9 @@ const DonatePage: React.FC = () => {
                   <div className="flex justify-between items-center group">
                     <div className="flex flex-col">
                       <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Aporte Donia</span>
-                      <span className="text-slate-600 text-sm font-bold">Neto {tipPercentage !== 'custom' && tipPercentage !== 0 && `(${tipPercentage}%)`}</span>
+                      <span className="text-slate-600 text-sm font-bold">Ayuda a mantener el sitio</span>
                     </div>
-                    <span className="font-black text-slate-900 text-lg">${tipNetAmount.toLocaleString('es-CL')}</span>
-                  </div>
-
-                  <div className="flex justify-between items-center group">
-                    <div className="flex flex-col">
-                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Impuestos</span>
-                      <span className="text-slate-600 text-sm font-bold">IVA Incluido (19%)</span>
-                    </div>
-                    <span className="font-black text-slate-900 text-lg">${ivaAmount.toLocaleString('es-CL')}</span>
+                    <span className="font-black text-slate-900 text-lg">${tipGrossAmount.toLocaleString('es-CL')}</span>
                   </div>
                 </div>
                 
@@ -484,15 +456,6 @@ const DonatePage: React.FC = () => {
                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seguro</span>
                     </div>
                   </div>
-                </div>
-
-                <div className="bg-slate-50 p-5 rounded-2xl flex gap-4 items-start border border-slate-100">
-                  <div className="bg-white p-2 rounded-lg shadow-sm text-violet-600">
-                    <Info size={16} />
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
-                    El IVA ya está incluido dentro del aporte voluntario seleccionado. No se agregarán cargos adicionales al total mostrado.
-                  </p>
                 </div>
               </div>
             </div>
