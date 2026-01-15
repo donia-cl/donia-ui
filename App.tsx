@@ -20,49 +20,40 @@ import CreateDetails from './pages/wizard/Details';
 import CreateReview from './pages/wizard/Review';
 import Help from './pages/Help';
 import Support from './pages/Support';
-import ComingSoon from './pages/ComingSoon';
 
 const App: React.FC = () => {
   return (
     <AuthProvider>
       <CampaignProvider>
         <Router>
-          <Routes>
-            {/* 1. Portada Temporal (Sin Layout, sin navegación) */}
-            <Route path="/" element={<ComingSoon />} />
+          <Layout>
+            <Routes>
+              {/* Ruta Principal: Landing Page */}
+              <Route path="/" element={<Landing />} />
+              
+              {/* Rutas de la App */}
+              <Route path="/login" element={<Auth />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/campana/:id/editar" element={<EditCampaign />} />
+              <Route path="/explorar" element={<Explore />} />
+              <Route path="/acerca" element={<About />} />
+              <Route path="/terminos" element={<Terms />} />
+              <Route path="/privacidad" element={<Privacy />} />
+              <Route path="/ayuda" element={<Help />} />
+              <Route path="/soporte" element={<Support />} />
+              <Route path="/campana/:id" element={<CampaignDetail />} />
+              <Route path="/campana/:id/donar" element={<DonatePage />} />
 
-            {/* 2. Aplicación Completa (Con Layout y Navegación) */}
-            <Route path="/*" element={
-              <Layout>
-                <Routes>
-                  {/* La landing original se mueve a /home */}
-                  <Route path="/home" element={<Landing />} />
-                  
-                  {/* Rutas de la App */}
-                  <Route path="/login" element={<Auth />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/campana/:id/editar" element={<EditCampaign />} />
-                  <Route path="/explorar" element={<Explore />} />
-                  <Route path="/acerca" element={<About />} />
-                  <Route path="/terminos" element={<Terms />} />
-                  <Route path="/privacidad" element={<Privacy />} />
-                  <Route path="/ayuda" element={<Help />} />
-                  <Route path="/soporte" element={<Support />} />
-                  <Route path="/campana/:id" element={<CampaignDetail />} />
-                  <Route path="/campana/:id/donar" element={<DonatePage />} />
+              {/* Wizard Routes */}
+              <Route path="/crear" element={<CreateIntro />} />
+              <Route path="/crear/historia" element={<CreateStory />} />
+              <Route path="/crear/detalles" element={<CreateDetails />} />
+              <Route path="/crear/revisar" element={<CreateReview />} />
 
-                  {/* Wizard Routes */}
-                  <Route path="/crear" element={<CreateIntro />} />
-                  <Route path="/crear/historia" element={<CreateStory />} />
-                  <Route path="/crear/detalles" element={<CreateDetails />} />
-                  <Route path="/crear/revisar" element={<CreateReview />} />
-
-                  {/* Fallback interno: Si la ruta no existe dentro de la app, ir a /home */}
-                  <Route path="*" element={<Navigate to="/home" replace />} />
-                </Routes>
-              </Layout>
-            } />
-          </Routes>
+              {/* Fallback: Cualquier ruta desconocida lleva al inicio */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Layout>
         </Router>
       </CampaignProvider>
     </AuthProvider>
