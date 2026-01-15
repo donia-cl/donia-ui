@@ -30,7 +30,6 @@ const DonatePage: React.FC = () => {
   
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
-  // Estado específico para la carga del Brick de Mercado Pago
   const [brickLoading, setBrickLoading] = useState(false);
   
   const [donationAmount, setDonationAmount] = useState<number>(5000);
@@ -48,9 +47,14 @@ const DonatePage: React.FC = () => {
 
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
   const brickControllerRef = useRef<any>(null);
+  const isMountedRef = useRef(true);
   const service = CampaignService.getInstance();
 
-  // --- CÁLCULOS ---
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   const tipGrossAmount = tipPercentage === 'custom' 
     ? customTipAmount 
     : Math.round(donationAmount * (Number(tipPercentage) / 100));
@@ -71,7 +75,6 @@ const DonatePage: React.FC = () => {
     setDonationAmount(numVal);
   };
 
-  // Pre-llenar datos
   useEffect(() => {
     if (user || profile) {
       if (profile?.full_name) setDonorName(profile.full_name);
@@ -79,40 +82,40 @@ const DonatePage: React.FC = () => {
     }
   }, [user, profile]);
 
-  // Cargar Campaña y Configuración
   useEffect(() => {
     const fetchData = async () => {
       try {
         if (id) {
           const data = await service.getCampaignById(id);
-          setCampaign(data);
+          if (isMountedRef.current) setCampaign(data);
         }
         const configResp = await fetch('/api/config');
         const configData = await configResp.json();
-        if (configData.mpPublicKey) {
-            setMpPublicKey(configData.mpPublicKey);
-        } else {
-            console.warn("Mercado Pago Public Key not found in server config.");
+        if (isMountedRef.current) {
+            if (configData.mpPublicKey) {
+                setMpPublicKey(configData.mpPublicKey);
+            } else {
+                console.warn("Mercado Pago Public Key not found in server config.");
+            }
         }
       } catch (e) {
         console.error("Error cargando datos:", e);
       } finally {
-        setLoading(false);
+        if (isMountedRef.current) setLoading(false);
       }
     };
     fetchData();
   }, [id]);
 
-  // Inicializar Mercado Pago Brick
   useEffect(() => {
-    // Si no estamos mostrando el formulario, no hacemos nada
     if (!showPaymentForm) return;
 
-    // Si falta la llave pública, mostramos error
     if (!mpPublicKey) {
-        setError("Error de configuración: No se encontró la llave pública de Mercado Pago. Contacta al soporte.");
+        setError("Error de configuración: No se encontró la llave pública de Mercado Pago.");
         return;
     }
+
+    let brickController: any = null;
 
     if (window.MercadoPago && paymentBrickContainerRef.current && campaign) {
       setBrickLoading(true);
@@ -124,19 +127,14 @@ const DonatePage: React.FC = () => {
       const bricksBuilder = mp.bricks();
 
       const renderPaymentBrick = async () => {
-        // Limpieza previa
         if (paymentBrickContainerRef.current) paymentBrickContainerRef.current.innerHTML = '';
-        if (brickControllerRef.current) {
-            try { await brickControllerRef.current.unmount(); } catch (e) { /* ignore */ }
-        }
         
         try {
-          const controller = await bricksBuilder.create('payment', 'paymentBrick_container', {
+          brickController = await bricksBuilder.create('payment', 'paymentBrick_container', {
             initialization: { 
               amount: totalAmount,
               payer: {
                 email: donorEmail || undefined,
-                // Agregamos entityType para evitar advertencias de consola
                 entityType: 'individual'
               }
             },
@@ -155,10 +153,15 @@ const DonatePage: React.FC = () => {
             },
             callbacks: {
               onReady: () => {
-                setBrickLoading(false);
+                if (isMountedRef.current) setBrickLoading(false);
               },
               onSubmit: ({ selectedPaymentMethod, formData }: any) => {
                 return new Promise((resolve, reject) => {
+                  if (!isMountedRef.current) {
+                      resolve(void 0);
+                      return;
+                  }
+
                   fetch("/api/process-payment", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -177,6 +180,8 @@ const DonatePage: React.FC = () => {
                   })
                   .then((response) => response.json())
                   .then((response) => {
+                    if (!isMountedRef.current) return;
+                    
                     if (response.success && response.status === 'approved') {
                       setPaymentStatus('success');
                       resolve(void 0); 
@@ -188,27 +193,29 @@ const DonatePage: React.FC = () => {
                   })
                   .catch((error) => {
                     console.error("Error de red:", error);
-                    setError("Error de conexión al procesar el pago.");
+                    if (isMountedRef.current) {
+                        setError("Error de conexión al procesar el pago.");
+                    }
                     reject();
                   });
                 });
               },
               onError: (error: any) => {
-                // Mercado Pago a veces lanza errores genéricos al desmontar o cancelar,
-                // solo los mostramos si son críticos y no estamos navegando.
                 console.warn("Brick Warning:", error);
-                if (brickLoading) { // Solo si falla al cargar
+                if (isMountedRef.current && brickLoading) {
                    setBrickLoading(false);
-                   setError("Ocurrió un error al cargar la pasarela de pagos. Por favor refresca la página.");
+                   setError("Ocurrió un error al cargar la pasarela de pagos.");
                 }
               },
             },
           });
-          brickControllerRef.current = controller;
+          brickControllerRef.current = brickController;
         } catch (e) {
           console.error("Error creating brick:", e);
-          setBrickLoading(false);
-          setError("No se pudo iniciar el componente de pago.");
+          if (isMountedRef.current) {
+              setBrickLoading(false);
+              setError("No se pudo iniciar el componente de pago.");
+          }
         }
       };
       
@@ -217,7 +224,8 @@ const DonatePage: React.FC = () => {
     
     return () => {
         if (brickControllerRef.current) {
-            brickControllerRef.current.unmount().catch(() => {}); 
+            brickControllerRef.current.unmount().catch(() => {});
+            brickControllerRef.current = null;
         }
     };
   }, [showPaymentForm, totalAmount, campaign, mpPublicKey]); 
