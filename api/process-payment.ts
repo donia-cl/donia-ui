@@ -34,6 +34,7 @@ export default async function handler(req: any, res: any) {
       ...paymentData, // Incluye token, amount, installments, etc.
       description: `Donación Donia - Campaña ${campaignId}`,
       payer: {
+        ...(paymentData.payer || {}), // Preservamos identification si viene del brick
         email: metadata.email,
         first_name: metadata.nombre || 'Anónimo'
       },
@@ -42,9 +43,8 @@ export default async function handler(req: any, res: any) {
         donor_user_id: metadata.donorUserId || null,
         donor_comment: metadata.comentario || ''
       },
-      // Forzamos la moneda por seguridad, aunque el brick ya la define
-      currency_id: 'CLP',
-      // Agregamos binary_mode para respuesta inmediata (aprueba o rechaza, sin pendientes largos)
+      // Eliminamos currency_id explícito ya que está causando error en la API v1/payments.
+      // Mercado Pago asumirá CLP basado en la cuenta del Access Token.
       binary_mode: true 
     };
 
