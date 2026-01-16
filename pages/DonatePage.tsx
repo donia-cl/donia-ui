@@ -44,6 +44,21 @@ const DonatePage: React.FC = () => {
 
   const service = CampaignService.getInstance();
 
+  // Resetear estado de redirección al montar o volver atrás
+  useEffect(() => {
+    // 1. Reset inmediato al montar
+    setRedirecting(false);
+
+    // 2. Manejar el evento pageshow (específico para el botón atrás del navegador)
+    const handlePageShow = (event: PageTransitionEvent) => {
+      // persisted es true si la página se cargó desde el cache (back button)
+      setRedirecting(false);
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, [location.pathname]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -128,7 +143,7 @@ const DonatePage: React.FC = () => {
             throw new Error(data.error || "No se pudo preparar la pasarela de pago.");
         }
     } catch (err: any) {
-        console.error("Error creating preference:", err);
+        console.error("Error creando preference:", err);
         setError(`Error al conectar con Mercado Pago: ${err.message}`);
         setRedirecting(false);
     }
