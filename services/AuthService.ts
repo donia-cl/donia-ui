@@ -25,7 +25,7 @@ export class AuthService {
         let url = '';
         let key = '';
 
-        // Prioridad 1: Variables de entorno locales
+        // Prioridad 1: Variables de entorno locales (Vite/React)
         try {
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -49,7 +49,6 @@ export class AuthService {
         // Prioridad 3: Consultar endpoint (Sin AbortController)
         if (!url || !key) {
            try {
-             // Simple fetch, sin signal
              const resp = await fetch('/api/config');
              if (resp.ok) {
                const config = await resp.json();
@@ -68,7 +67,7 @@ export class AuthService {
               autoRefreshToken: true,
               detectSessionInUrl: true,
               storageKey: 'donia-auth-token-v1',
-              flowType: 'implicit'
+              flowType: 'pkce' // CAMBIO CRÍTICO: Usar PKCE
             }
           });
         }
@@ -99,23 +98,32 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
+    // PKCE necesita redirección explicita al origen para saber a dónde volver con el código
     const { data, error } = await (this.client.auth as any).signUp({
       email,
       password: pass,
-      options: { data: { full_name: fullName } }
+      options: { 
+        data: { full_name: fullName },
+        emailRedirectTo: window.location.origin
+      }
     });
 
     if (error) throw error;
+    
     if (data.user) {
+      this.createProfile(data.user.id, fullName).catch(console.error);
+    }
+    return data;
+  }
+
+  private async createProfile(id: string, fullName: string) {
       try {
         await fetch('/api/create-profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: data.user.id, fullName: fullName })
+            body: JSON.stringify({ id, fullName })
         });
       } catch (profileError) { /* ignore */ }
-    }
-    return data;
   }
 
   async signIn(email: string, pass: string) {
@@ -130,6 +138,7 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
+    // PKCE: Redirigir al origen (sin hash) para que Supabase añada ?code=...
     const redirectTo = window.location.origin; 
     
     const { data, error } = await (this.client.auth as any).signInWithOAuth({

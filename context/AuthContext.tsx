@@ -20,17 +20,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false);
   
   const authService = AuthService.getInstance();
   const campaignService = CampaignService.getInstance();
 
-  const fetchProfile = async (userId: string) => {
-    return await authService.fetchProfile(userId);
-  };
-
-  const ensureProfileExists = async (currentUser: any) => {
-    let userProfile = await fetchProfile(currentUser.id);
+  const loadUserProfile = async (currentUser: any) => {
+    if (!currentUser) return null;
+    let userProfile = await authService.fetchProfile(currentUser.id);
+    
     if (!userProfile) {
       try {
           const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Usuario';
@@ -39,9 +36,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ id: currentUser.id, fullName: fullName })
           });
-          userProfile = await fetchProfile(currentUser.id);
+          userProfile = await authService.fetchProfile(currentUser.id);
       } catch (err) {
-          console.error("Error en auto-creación de perfil:", err);
+          console.error("Error creating profile:", err);
       }
     }
     return userProfile;
@@ -49,146 +46,118 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
-      const userProfile = await fetchProfile(user.id);
+      const userProfile = await authService.fetchProfile(user.id);
       if (userProfile) setProfile(userProfile);
     }
   };
 
   useEffect(() => {
     let mounted = true;
-    let oauthSafetyTimeout: any;
 
     const initApp = async () => {
       try {
         await authService.initialize();
         campaignService.initialize().catch(() => {});
-        
         const client = authService.getSupabase();
         
-        // DETECCIÓN DE OAUTH
-        const hash = window.location.hash;
-        const hasAccessToken = hash.includes('access_token=');
-        
-        if (hasAccessToken) {
-          console.log("[AuthContext] Detectado callback de OAuth, esperando procesamiento...");
-          
-          // Timer de seguridad: Si en 8 segundos Supabase no resuelve, forzamos la entrada
-          oauthSafetyTimeout = setTimeout(() => {
-            if (mounted) {
-              console.warn("[AuthContext] OAuth safety timeout. Forcing UI release.");
-              setLoading(false);
-              // CRÍTICO: Si falló el procesamiento automático, limpiamos el hash manualmente
-              // para que el Router no se confunda y muestre la app
-              if (window.location.hash.includes('access_token')) {
-                 window.location.hash = '#/';
-              }
-            }
-          }, 8000);
-        } else {
-          // Si NO es OAuth, UI Optimista inmediata
-          if (mounted) setLoading(false);
-        }
+        // PKCE LOGIC: El código viene en 'search' (?code=...), NO en 'hash' (#)
+        // Esto evita conflicto con HashRouter
+        const searchParams = new URLSearchParams(window.location.search);
+        const hasCode = searchParams.has('code');
 
-        if (!client) {
+        if (client) {
+          // getSession maneja el intercambio de código PKCE internamente
+          const { data: { session } } = await client.auth.getSession();
+          
           if (mounted) {
-             setLoading(false);
-             setIsInitialized(true);
-          }
-          return;
-        }
+            if (session?.user) {
+              setUser(session.user);
+              const p = await loadUserProfile(session.user);
+              if (mounted) setProfile(p);
+            }
 
-        // Carga de sesión
-        const session = await authService.getSession();
-        
-        if (mounted) {
-          const currentUser = session?.user ?? null;
-          setUser(currentUser);
-          
-          if (currentUser) {
-            const p = await ensureProfileExists(currentUser);
-            if (mounted) setProfile(p);
-          }
-        }
+            // LIMPIEZA DE URL (PKCE)
+            // Si la URL tiene ?code=, significa que acabamos de volver de Google/Supabase.
+            // Limpiamos el query string para que se vea bien y evitamos bucles.
+            if (hasCode) {
+               console.log("[AuthContext] PKCE Flow detectado. Limpiando URL...");
+               
+               // Limpiamos la query (?code=...) pero mantenemos el hash (#/ruta)
+               const newUrl = window.location.pathname + window.location.hash;
+               window.history.replaceState({}, document.title, newUrl);
 
-        const { data: { subscription } } = (client.auth as any).onAuthStateChange(async (event: any, session: any) => {
-          if (!mounted) return;
-
-          const currentUser = session?.user ?? null;
-          setUser(currentUser);
-          
-          if (currentUser) {
-             const p = await ensureProfileExists(currentUser);
-             if (mounted) setProfile(p);
-          } else {
-             setProfile(null);
-          }
-
-          if (event === 'SIGNED_IN') {
-            if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
-            setLoading(false);
-            
-            // Limpieza exitosa del hash
-            if (window.location.hash.includes('access_token')) {
-              const savedRedirect = localStorage.getItem('donia_auth_redirect');
-              if (savedRedirect) {
-                localStorage.removeItem('donia_auth_redirect');
-                window.location.hash = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
-              } else {
-                window.location.hash = '#/dashboard';
-              }
+               // Manejo de redirección post-login
+               const savedRedirect = localStorage.getItem('donia_auth_redirect');
+               if (savedRedirect) {
+                 localStorage.removeItem('donia_auth_redirect');
+                 // Navegamos al hash guardado si es diferente al actual
+                 if (window.location.hash !== savedRedirect && window.location.hash !== `#${savedRedirect}`) {
+                    window.location.hash = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
+                 }
+               } else {
+                 // Si no hay redirección específica y estamos en root o login, ir al dashboard
+                 if (window.location.hash === '#/' || window.location.hash === '#/login' || window.location.hash === '') {
+                    window.location.hash = '#/dashboard';
+                 }
+               }
             }
           }
-          
-          if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
-             if (!window.location.hash.includes('access_token')) {
-               setLoading(false);
-             }
-          }
-        });
-        
-        return () => { 
-          if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
-          subscription.unsubscribe(); 
-        };
+
+          // Listener para cambios de sesión en tiempo real
+          const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
+            if (!mounted) return;
+            
+            const currentUser = session?.user ?? null;
+            setUser(currentUser);
+            
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+              if (currentUser) {
+                 const p = await loadUserProfile(currentUser);
+                 if (mounted) setProfile(p);
+              }
+            }
+            
+            if (event === 'SIGNED_OUT') {
+              setUser(null);
+              setProfile(null);
+              window.location.hash = '#/';
+            }
+          });
+
+          return () => subscription.unsubscribe();
+        }
       } catch (error) {
-        console.error("[AuthContext] Fatal init error:", error);
-        if (mounted) setLoading(false);
+        console.error("[AuthContext] Init error:", error);
       } finally {
-        if (mounted) setIsInitialized(true);
+        if (mounted) setLoading(false);
       }
     };
 
     initApp();
-    return () => { 
-      mounted = false; 
-      if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
-    };
+    return () => { mounted = false; };
   }, []);
 
   const signOut = async () => {
     setLoading(true);
-    try {
-      await authService.signOut();
-    } finally {
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
-      localStorage.removeItem('donia_auth_redirect');
-      window.location.hash = '#/';
-    }
+    await authService.signOut();
+    setUser(null);
+    setProfile(null);
+    setLoading(false);
+    window.location.hash = '#/';
   };
 
-  // UI DE BLOQUEO: Solo bloqueamos si hay loading Y hay un token en la URL.
-  // Si loading es false (por éxito o por timeout), mostramos la app.
-  const isBlockedByOAuth = loading && window.location.hash.includes('access_token');
+  // UI DE BLOQUEO (SOLO PARA PKCE)
+  // Solo bloqueamos la pantalla si estamos en medio del intercambio de código (?code=...)
+  // Esto evita que se cuelgue si algo falla, ya que si no hay 'code', entra normal.
+  const isProcessingPKCE = loading && new URLSearchParams(window.location.search).has('code');
 
-  if (isBlockedByOAuth) {
+  if (isProcessingPKCE) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <Loader2 className="w-10 h-10 text-violet-600 animate-spin" />
         <div className="text-center">
-          <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-1">Donia Autenticación</p>
-          <p className="text-slate-900 font-bold text-sm">Validando credenciales...</p>
+          <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-1">Donia</p>
+          <p className="text-slate-900 font-bold text-sm">Validando sesión segura...</p>
         </div>
       </div>
     );

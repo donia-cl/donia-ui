@@ -24,11 +24,12 @@ export class CampaignService {
   public async initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
+    // Inicializar Auth primero
     try {
        await AuthService.getInstance().initialize();
     } catch (e) { /* ignore */ }
 
-    // Fetch de configuración sin AbortController
+    // Fetch de configuración simple
     this.fetchServerConfig().catch(() => { /* Silent fail */ });
 
     this.initPromise = Promise.resolve();
