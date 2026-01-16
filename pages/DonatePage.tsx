@@ -1,6 +1,6 @@
 
-import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   ChevronLeft, 
   Heart, 
@@ -12,56 +12,61 @@ import {
   Receipt, 
   Mail, 
   Check, 
-  CreditCard,
-  ShieldCheck
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
 import { useAuth } from '../context/AuthContext';
 
-declare global {
-  interface Window {
-    MercadoPago: any;
-  }
-}
-
 const DonatePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, profile } = useAuth();
   
   const [campaign, setCampaign] = useState<CampaignData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [brickLoading, setBrickLoading] = useState(false);
   
   const [donationAmount, setDonationAmount] = useState<number>(5000);
   const [tipPercentage, setTipPercentage] = useState<number | 'custom'>(10);
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
   
-  // Estado para controlar el flujo de la pasarela de pago
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
-  const [creatingPreference, setCreatingPreference] = useState(false);
-  const [preferenceId, setPreferenceId] = useState<string | null>(null);
-  
-  const [mpPublicKey, setMpPublicKey] = useState<string>('');
-  
+  const [redirecting, setRedirecting] = useState(false);
   const [donorName, setDonorName] = useState<string>('');
   const [donorEmail, setDonorEmail] = useState<string>('');
   const [donorComment, setDonorComment] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'success' | 'rejected'>('idle');
+  
+  // Detectar éxito desde la URL (Retorno de Mercado Pago)
+  const queryParams = new URLSearchParams(location.search);
+  const paymentStatus = queryParams.get('status'); // 'approved', 'failure', 'pending'
 
-  const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
-  const brickControllerRef = useRef<any>(null);
-  // Ref para evitar doble montaje en React StrictMode o re-renders rápidos
-  const brickMountedRef = useRef(false); 
-  const isMountedRef = useRef(true);
   const service = CampaignService.getInstance();
 
   useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
+    const fetchData = async () => {
+      try {
+        if (id) {
+          const data = await service.getCampaignById(id);
+          setCampaign(data);
+        }
+      } catch (e) {
+        console.error("Error cargando campaña:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [id]);
+
+  // Autocompletar datos del usuario logueado
+  useEffect(() => {
+    if (user || profile) {
+      if (profile?.full_name) setDonorName(profile.full_name);
+      if (user?.email) setDonorEmail(user.email);
+    }
+  }, [user, profile]);
 
   // --- CÁLCULOS FINANCIEROS ---
   const tipGrossAmount = tipPercentage === 'custom' 
@@ -70,11 +75,7 @@ const DonatePage: React.FC = () => {
   
   const tipNetAmount = Math.round(tipGrossAmount / 1.19);
   const ivaAmount = tipGrossAmount - tipNetAmount;
-  
-  // Comisión Mercado Pago: 3.8% (calculado sobre el monto de donación + propina)
   const commissionAmount = Math.round((donationAmount + tipGrossAmount) * 0.038);
-
-  // Total final a pagar
   const totalAmount = donationAmount + tipGrossAmount + commissionAmount;
 
   const handleManualTipChange = (strVal: string) => {
@@ -90,240 +91,7 @@ const DonatePage: React.FC = () => {
     setDonationAmount(numVal);
   };
 
-  const handleBackToForm = () => {
-    // Desmontar el brick si existe para limpiar el estado
-    if (brickControllerRef.current) {
-        try {
-            brickControllerRef.current.unmount();
-        } catch (e) {
-            console.warn("Error desmontando el brick manualmente", e);
-        }
-        brickControllerRef.current = null;
-    }
-    brickMountedRef.current = false;
-    setBrickLoading(false);
-    setError(null);
-    setShowPaymentForm(false);
-    setPreferenceId(null); 
-    window.scrollTo(0, 0);
-  };
-
-  // Autocompletar datos si el usuario está logueado
-  useEffect(() => {
-    if (user || profile) {
-      if (profile?.full_name) setDonorName(profile.full_name);
-      if (user?.email) setDonorEmail(user.email);
-    }
-  }, [user, profile]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        if (id) {
-          const data = await service.getCampaignById(id);
-          if (isMountedRef.current) setCampaign(data);
-        }
-        // Cargar configuración (Llave pública de MP)
-        const configResp = await fetch('/api/config');
-        const configData = await configResp.json();
-        
-        if (isMountedRef.current) {
-            if (configData.mpPublicKey) {
-                setMpPublicKey(configData.mpPublicKey);
-            } else {
-                console.warn("Mercado Pago Public Key no encontrada en la configuración del servidor.");
-            }
-        }
-      } catch (e) {
-        console.error("Error cargando datos de campaña o configuración:", e);
-      } finally {
-        if (isMountedRef.current) setLoading(false);
-      }
-    };
-    fetchData();
-  }, [id]);
-
-  // --- INICIALIZACIÓN DEL PAYMENT BRICK ---
-  useEffect(() => {
-    // Si no hay datos críticos, no hacemos nada
-    if (!showPaymentForm || !preferenceId || !mpPublicKey) return;
-
-    // PREVENCIÓN DE DOBLE INICIALIZACIÓN
-    // Si ya hay un brick montado o inicializándose para este preferenceId, salimos.
-    if (brickMountedRef.current) return;
-
-    if (window.MercadoPago && paymentBrickContainerRef.current && campaign) {
-      setBrickLoading(true);
-      setError(null);
-      brickMountedRef.current = true; // Marcamos como montado inmediatamente
-
-      // Limpieza preventiva del contenedor
-      if (paymentBrickContainerRef.current) {
-          paymentBrickContainerRef.current.innerHTML = '';
-      }
-
-      console.log("[BRICK] Inicializando MercadoPago...");
-
-      // 1. Inicializar SDK de Mercado Pago
-      const mp = new window.MercadoPago(mpPublicKey, {
-        locale: 'es-CL'
-      });
-      
-      // 2. Obtener instancia de Bricks
-      const bricksBuilder = mp.bricks();
-
-      const renderPaymentBrick = async () => {
-        try {
-          console.log("[BRICK] Creando Brick con PreferenceID:", preferenceId);
-          // 3. Configuración del Brick
-          const settings = {
-            initialization: { 
-              preferenceId: preferenceId,
-              amount: totalAmount, // Opcional si viene en preference, pero bueno como fallback
-              payer: {
-                email: donorEmail, 
-                entity_type: 'individual', // CRÍTICO: Requerido para Chile
-              }
-            },
-            customization: {
-              paymentMethods: {
-                creditCard: 'all',      
-                debitCard: 'all',
-                maxInstallments: 1
-              },
-              visual: {
-                style: {
-                  theme: 'default', 
-                },
-                hidePaymentButton: false
-              }
-            },
-            callbacks: {
-              onReady: () => {
-                console.log("[BRICK] Ready");
-                if (isMountedRef.current) setBrickLoading(false);
-              },
-              onSubmit: ({ selectedPaymentMethod, formData }: any) => {
-                // Procesar el pago cuando el usuario hace clic en pagar
-                return new Promise((resolve, reject) => {
-                  if (!isMountedRef.current) {
-                      resolve(void 0);
-                      return;
-                  }
-
-                  fetch("/api/process-payment", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      paymentData: formData, // Datos tokenizados por el Brick
-                      campaignId: campaign.id,
-                      metadata: {
-                        nombre: donorName,
-                        email: donorEmail,
-                        comentario: donorComment,
-                        tip: tipNetAmount,
-                        iva: ivaAmount,
-                        commission: commissionAmount,
-                        donorUserId: user?.id || null
-                      }
-                    })
-                  })
-                  .then((response) => response.json())
-                  .then((response) => {
-                    if (!isMountedRef.current) return;
-                    
-                    if (response.success && (response.status === 'approved' || response.status === 'in_process')) {
-                      setPaymentStatus('success');
-                      resolve(void 0); 
-                    } else {
-                      const msg = response.error || "El pago fue rechazado. Por favor revisa los datos de tu tarjeta.";
-                      setError(msg);
-                      reject(); 
-                    }
-                  })
-                  .catch((error) => {
-                    console.error("Error de red al procesar pago:", error);
-                    if (isMountedRef.current) {
-                        setError("Error de conexión al procesar el pago.");
-                    }
-                    reject();
-                  });
-                });
-              },
-              onError: (error: any) => {
-                console.error("[BRICK] Error Callback:", error);
-                if (isMountedRef.current) {
-                   setBrickLoading(false);
-                   setError("Ocurrió un error al cargar la pasarela de pagos.");
-                   brickMountedRef.current = false; // Permitir reintento si falla
-                }
-              },
-            },
-          };
-
-          const controller = await bricksBuilder.create('payment', 'paymentBrick_container', settings);
-          brickControllerRef.current = controller;
-          
-        } catch (e) {
-          console.error("[BRICK] Error creating instance:", e);
-          if (isMountedRef.current) {
-              setBrickLoading(false);
-              setError("No se pudo iniciar el componente de pago.");
-              brickMountedRef.current = false;
-          }
-        }
-      };
-      
-      renderPaymentBrick();
-    }
-    
-    // Cleanup Effect
-    return () => {
-        if (brickControllerRef.current) {
-            try {
-                brickControllerRef.current.unmount().catch(() => {});
-            } catch (err) { /* ignore */ }
-            brickControllerRef.current = null;
-        }
-        brickMountedRef.current = false;
-    };
-  }, [showPaymentForm, preferenceId, mpPublicKey]); 
-  // Nota: Quitamos totalAmount, campaign, etc de dependencias para evitar re-montajes innecesarios.
-  // El preferenceId cambia si cambian los montos, así que es seguro.
-
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh]">
-      <Loader2 className="w-10 h-10 text-violet-600 animate-spin mb-4" />
-      <span className="text-slate-400 font-bold uppercase tracking-widest text-xs">Cargando...</span>
-    </div>
-  );
-
-  if (!campaign) return <div className="p-20 text-center text-slate-500 font-bold">Causa no encontrada</div>;
-
-  if (paymentStatus === 'success') {
-    return (
-      <div className="max-w-md mx-auto px-6 py-20 text-center animate-in zoom-in duration-300">
-        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm">
-          <Check size={40} />
-        </div>
-        <h1 className="text-3xl font-black text-slate-900 mb-3">¡Donación exitosa!</h1>
-        <p className="text-slate-500 mb-6 font-medium leading-relaxed">
-          Tu aporte voluntario para <span className="text-violet-600 font-bold">{campaign.titulo}</span> ha sido procesado correctamente.
-        </p>
-        <div className="bg-slate-50 p-4 rounded-xl mb-10 text-sm text-slate-600 border border-slate-100">
-           Hemos enviado un comprobante a <strong>{donorEmail}</strong>.
-        </div>
-        <button 
-          onClick={() => navigate(`/campana/${campaign.id}`)} 
-          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black hover:bg-slate-800 transition-colors"
-        >
-          Volver a la campaña
-        </button>
-      </div>
-    );
-  }
-
-  const validateAndContinue = async () => {
+  const handlePaymentRedirect = async () => {
     if (donationAmount < 500) {
       setError("El monto mínimo de donación es $500 CLP");
       return;
@@ -335,39 +103,69 @@ const DonatePage: React.FC = () => {
     }
     
     setError(null);
-    setCreatingPreference(true);
+    setRedirecting(true);
 
     try {
-        // 1. Crear Preferencia en Backend para obtener el ID
         const resp = await fetch('/api/preference?action=preference', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                campaignId: campaign.id,
-                campaignTitle: campaign.titulo,
+                campaignId: campaign?.id,
+                campaignTitle: campaign?.titulo,
                 monto: totalAmount,
                 nombre: donorName,
-                email: donorEmail, // Enviamos el email para pre-configurar el pago
-                comentario: donorComment
+                email: donorEmail,
+                comentario: donorComment,
+                donorUserId: user?.id || null
             })
         });
         const data = await resp.json();
         
-        if (data.success && data.preference_id) {
-            // 2. Establecer ID y mostrar el brick de pago
-            setPreferenceId(data.preference_id);
-            setShowPaymentForm(true);
-            window.scrollTo(0, 0);
+        if (data.success && data.init_point) {
+            // REDIRECCIÓN A MERCADO PAGO
+            window.location.href = data.init_point;
         } else {
-            throw new Error(data.error || "No se pudo inicializar la pasarela de pago.");
+            throw new Error(data.error || "No se pudo preparar la pasarela de pago.");
         }
     } catch (err: any) {
         console.error("Error creating preference:", err);
-        setError(`Error al preparar el pago: ${err.message}`);
-    } finally {
-        setCreatingPreference(false);
+        setError(`Error al conectar con Mercado Pago: ${err.message}`);
+        setRedirecting(false);
     }
   };
+
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh]">
+      <Loader2 className="w-10 h-10 text-violet-600 animate-spin mb-4" />
+      <span className="text-slate-400 font-bold uppercase tracking-widest text-xs">Preparando...</span>
+    </div>
+  );
+
+  if (!campaign) return <div className="p-20 text-center text-slate-500 font-bold">Causa no encontrada</div>;
+
+  // Pantalla de Éxito al volver de Mercado Pago
+  if (paymentStatus === 'approved') {
+    return (
+      <div className="max-w-md mx-auto px-6 py-20 text-center animate-in zoom-in duration-300">
+        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm">
+          <Check size={40} />
+        </div>
+        <h1 className="text-3xl font-black text-slate-900 mb-3">¡Donación exitosa!</h1>
+        <p className="text-slate-500 mb-6 font-medium leading-relaxed">
+          Tu aporte para <span className="text-violet-600 font-bold">{campaign.titulo}</span> ha sido recibido correctamente.
+        </p>
+        <div className="bg-slate-50 p-4 rounded-xl mb-10 text-sm text-slate-600 border border-slate-100">
+           Gracias por usar <strong>Donia</strong> para apoyar causas locales.
+        </div>
+        <button 
+          onClick={() => navigate(`/campana/${campaign.id}`)} 
+          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black hover:bg-slate-800 transition-colors"
+        >
+          Volver a la campaña
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-50 min-h-screen pb-20">
@@ -384,242 +182,198 @@ const DonatePage: React.FC = () => {
                   <Heart size={24} className="fill-current" />
                 </div>
                 <div>
-                   <h1 className="text-2xl font-black text-slate-900 tracking-tight">Estás apoyando a:</h1>
-                   <p className="text-slate-500 font-bold text-sm line-clamp-1">{campaign.titulo}</p>
+                   <h1 className="text-2xl font-black text-slate-900 tracking-tight">Tu donación</h1>
+                   <p className="text-slate-500 font-bold text-sm line-clamp-1">Apoyando a: {campaign.titulo}</p>
                 </div>
               </div>
 
-              {!showPaymentForm ? (
-                // --- PASO 1: DEFINIR MONTO Y DATOS ---
-                <div className="space-y-8">
-                  <div>
-                    <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto de tu donación base</label>
-                    <div className="relative mb-4">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-xl">$</span>
-                      <input 
-                        type="text" 
-                        className="w-full pl-9 pr-4 py-5 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-black text-slate-900 transition-all text-xl"
-                        placeholder="0"
-                        value={donationAmount > 0 ? donationAmount.toLocaleString('es-CL') : ''}
-                        onChange={(e) => handleDonationChange(e.target.value)}
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[3000, 5000, 10000].map(amt => (
+              <div className="space-y-8">
+                {/* Monto de Donación */}
+                <div>
+                  <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto base</label>
+                  <div className="relative mb-4">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-300 text-xl">$</span>
+                    <input 
+                      type="text" 
+                      className="w-full pl-9 pr-4 py-5 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-black text-slate-900 transition-all text-xl"
+                      placeholder="0"
+                      value={donationAmount > 0 ? donationAmount.toLocaleString('es-CL') : ''}
+                      onChange={(e) => handleDonationChange(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    {[3000, 5000, 10000].map(amt => (
+                      <button 
+                        key={amt}
+                        onClick={() => setDonationAmount(amt)}
+                        className={`py-3 rounded-xl text-sm font-black border transition-all ${donationAmount === amt ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500 hover:border-violet-200 shadow-sm'}`}
+                      >
+                        ${amt.toLocaleString('es-CL')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Aporte Donia */}
+                <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                    <Zap size={80} className="text-violet-600" />
+                  </div>
+                  <div className="relative z-10">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 mb-2">
+                       Aporte voluntario a Donia
+                    </h3>
+                    <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6 pr-10">
+                      Donia no cobra comisión al creador. Tu propina permite mantener este sitio 100% gratuito para quienes más lo necesitan.
+                    </p>
+                    
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      {[10, 15, 20].map(pct => (
                         <button 
-                          key={amt}
-                          onClick={() => setDonationAmount(amt)}
-                          className={`py-3 rounded-xl text-sm font-black border transition-all ${donationAmount === amt ? 'bg-violet-600 border-violet-600 text-white shadow-md' : 'bg-white border-slate-100 text-slate-500 hover:border-violet-200 shadow-sm'}`}
+                          key={pct}
+                          onClick={() => setTipPercentage(pct)}
+                          className={`py-3 rounded-xl text-xs font-black border transition-all ${tipPercentage === pct ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
                         >
-                          ${amt.toLocaleString('es-CL')}
+                          {pct}%
                         </button>
                       ))}
                     </div>
-                  </div>
 
-                  <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
-                      <Zap size={80} className="text-violet-600" />
-                    </div>
-                    <div className="relative z-10">
-                      <h3 className="text-sm font-black text-slate-900 flex items-center gap-2 mb-2">
-                         Apoyo a la plataforma Donia
-                      </h3>
-                      <p className="text-slate-500 text-xs font-medium leading-relaxed mb-6 pr-10">
-                        Donia no cobra comisiones a los organizadores. Tu aporte voluntario permite mantener el sitio gratuito.
-                      </p>
-                      
-                      <div className="grid grid-cols-3 gap-2 mb-4">
-                        {[10, 15, 20].map(pct => (
-                          <button 
-                            key={pct}
-                            onClick={() => setTipPercentage(pct)}
-                            className={`py-3 rounded-xl text-xs font-black border transition-all ${tipPercentage === pct ? 'bg-slate-900 border-slate-900 text-white shadow-md' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 shadow-sm'}`}
-                          >
-                            {pct}%
-                          </button>
-                        ))}
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Monto del aporte</label>
-                        <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-sm">$</span>
-                          <input 
-                            type="text"
-                            className={`w-full pl-8 pr-4 py-3 border rounded-xl outline-none font-bold text-slate-700 text-sm focus:border-violet-300 transition-all ${
-                              tipPercentage === 'custom' ? 'bg-white border-violet-200' : 'bg-slate-100 border-transparent text-slate-500'
-                            }`}
-                            placeholder="Monto de aporte (IVA incluido)"
-                            value={tipGrossAmount > 0 ? tipGrossAmount.toLocaleString('es-CL') : ''}
-                            onChange={(e) => handleManualTipChange(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Email (Obligatorio)</label>
-                      <div className="relative">
-                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                        <input 
-                          type="email" 
-                          required
-                          className="w-full pl-11 px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
-                          placeholder="tu@correo.com"
-                          value={donorEmail}
-                          onChange={(e) => setDonorEmail(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5 ml-1">Tu nombre (Opcional)</label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-300 text-sm">$</span>
                       <input 
-                        type="text" 
-                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
-                        placeholder="Ej: Juan Pérez"
-                        value={donorName}
-                        onChange={(e) => setDonorName(e.target.value)}
+                        type="text"
+                        className={`w-full pl-8 pr-4 py-3 border rounded-xl outline-none font-bold text-slate-700 text-sm focus:border-violet-300 transition-all ${
+                          tipPercentage === 'custom' ? 'bg-white border-violet-200' : 'bg-slate-100 border-transparent text-slate-500'
+                        }`}
+                        placeholder="Monto de aporte personalizado"
+                        value={tipGrossAmount > 0 ? tipGrossAmount.toLocaleString('es-CL') : ''}
+                        onChange={(e) => handleManualTipChange(e.target.value)}
                       />
                     </div>
-                    
-                    <textarea 
-                      rows={3}
-                      className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-medium text-slate-600 resize-none transition-all text-sm"
-                      placeholder="Escribe un mensaje de apoyo..."
-                      value={donorComment}
-                      onChange={(e) => setDonorComment(e.target.value)}
+                  </div>
+                </div>
+
+                {/* Datos del Donante */}
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                    <input 
+                      type="email" 
+                      required
+                      className="w-full pl-11 px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
+                      placeholder="Correo electrónico (obligatorio)"
+                      value={donorEmail}
+                      onChange={(e) => setDonorEmail(e.target.value)}
                     />
                   </div>
 
-                  {error && (
-                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 text-rose-700 text-xs font-bold items-center animate-in slide-in-from-top-1">
-                      <AlertCircle size={16} />
-                      <p>{error}</p>
-                    </div>
-                  )}
-
-                  <button 
-                    onClick={validateAndContinue}
-                    disabled={creatingPreference}
-                    className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-violet-100 disabled:opacity-70 disabled:cursor-wait"
-                  >
-                    {creatingPreference ? (
-                        <>
-                            <Loader2 className="animate-spin" size={20} />
-                            Preparando pago...
-                        </>
-                    ) : (
-                        <>
-                            Continuar al pago <ArrowRight size={20} />
-                        </>
-                    )}
-                  </button>
+                  <input 
+                    type="text" 
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-bold text-slate-900 transition-all text-sm"
+                    placeholder="Tu nombre (opcional)"
+                    value={donorName}
+                    onChange={(e) => setDonorName(e.target.value)}
+                  />
+                  
+                  <textarea 
+                    rows={3}
+                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 focus:border-violet-200 focus:bg-white rounded-xl outline-none font-medium text-slate-600 resize-none transition-all text-sm"
+                    placeholder="Escribe un mensaje de apoyo..."
+                    value={donorComment}
+                    onChange={(e) => setDonorComment(e.target.value)}
+                  />
                 </div>
-              ) : (
-                // --- PASO 2: PAYMENT BRICK (MERCADO PAGO) ---
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center">
-                            <CreditCard size={20} />
-                        </div>
-                        <h2 className="text-xl font-black text-slate-900">Detalles del pago</h2>
-                    </div>
-                    <button 
-                      onClick={handleBackToForm}
-                      className="text-violet-600 font-bold text-xs uppercase tracking-widest hover:underline"
-                    >
-                      Editar datos
-                    </button>
-                  </div>
-                  
-                  {/* Container de Mercado Pago */}
-                  <div className="relative min-h-[400px]">
-                    {brickLoading && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-10 rounded-[32px]">
-                         <Loader2 className="w-8 h-8 text-violet-600 animate-spin mb-3" />
-                         <p className="text-xs font-black uppercase tracking-widest text-slate-400">Cargando pasarela...</p>
-                      </div>
-                    )}
-                    <div id="paymentBrick_container" ref={paymentBrickContainerRef}></div>
-                  </div>
-                  
-                  {error && (
-                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 text-rose-700 text-xs font-bold items-center">
-                      <AlertCircle size={16} />
-                      <p>{error}</p>
-                    </div>
-                  )}
 
-                  <div className="pt-6 border-t border-slate-50 flex flex-col items-center justify-center gap-2">
+                {error && (
+                  <div className="p-4 bg-rose-50 border border-rose-100 rounded-xl flex gap-3 text-rose-700 text-xs font-bold items-center animate-in slide-in-from-top-1">
+                    <AlertCircle size={16} />
+                    <p>{error}</p>
+                  </div>
+                )}
+
+                <button 
+                  onClick={handlePaymentRedirect}
+                  disabled={redirecting}
+                  className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-violet-100 disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {redirecting ? (
+                    <>
+                      <Loader2 className="animate-spin" size={20} />
+                      Conectando con Mercado Pago...
+                    </>
+                  ) : (
+                    <>
+                      Continuar al pago seguro <ArrowRight size={20} />
+                    </>
+                  )}
+                </button>
+                
+                <div className="flex flex-col items-center justify-center gap-2 pt-4 opacity-50">
                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                      <Lock size={12} /> Procesado de forma segura por
+                      <Lock size={12} /> Zona de pago segura
                     </p>
                     <img 
                       src="https://http2.mlstatic.com/frontend-assets/mp-web-navigation/ui-navigation/5.104.0/mercadopago/logo__large.png" 
                       alt="Mercado Pago" 
-                      className="h-8 object-contain opacity-80 hover:opacity-100 transition-opacity"
-                      referrerPolicy="no-referrer"
+                      className="h-6 grayscale object-contain"
                     />
-                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
           <div className="lg:col-span-5 h-fit sticky top-24">
-             {/* Resumen Lateral */}
-            <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-violet-100 overflow-hidden relative">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50/50 rounded-bl-[100px] -z-0 pointer-events-none"></div>
+            <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-violet-100 relative">
+              <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                <Receipt className="text-violet-600" size={24} />
+                Resumen del aporte
+              </h2>
               
-              <div className="relative z-10">
-                <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
-                  <Receipt className="text-violet-600" size={24} />
-                  Resumen de tu aporte
-                </h2>
+              <div className="space-y-5 mb-10">
+                <div className="flex justify-between items-center group">
+                  <div className="flex flex-col">
+                    <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Donación Causa</span>
+                    <span className="text-slate-600 text-sm font-bold">100% íntegro para la historia</span>
+                  </div>
+                  <span className="font-black text-slate-900 text-lg">${donationAmount.toLocaleString('es-CL')}</span>
+                </div>
                 
-                <div className="space-y-5 mb-10">
-                  <div className="flex justify-between items-center group">
-                    <div className="flex flex-col">
-                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Aporte a la Causa</span>
-                      <span className="text-slate-600 text-sm font-bold">100% para el beneficiario</span>
-                    </div>
-                    <span className="font-black text-slate-900 text-lg">${donationAmount.toLocaleString('es-CL')}</span>
+                <div className="flex justify-between items-center group">
+                  <div className="flex flex-col">
+                    <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Apoyo Donia</span>
+                    <span className="text-slate-600 text-sm font-bold">Operación de la plataforma</span>
                   </div>
-                  
-                  <div className="flex justify-between items-center group">
-                    <div className="flex flex-col">
-                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Aporte Donia</span>
-                      <span className="text-slate-600 text-sm font-bold">Ayuda a mantener el sitio</span>
-                    </div>
-                    <span className="font-black text-slate-900 text-lg">${tipGrossAmount.toLocaleString('es-CL')}</span>
-                  </div>
+                  <span className="font-black text-slate-900 text-lg">${tipGrossAmount.toLocaleString('es-CL')}</span>
+                </div>
 
-                  <div className="flex justify-between items-center group">
-                    <div className="flex flex-col">
-                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Comisión Mercado Pago</span>
-                      <span className="text-slate-600 text-sm font-bold">Procesamiento seguro</span>
-                    </div>
-                    <span className="font-black text-slate-900 text-lg">${commissionAmount.toLocaleString('es-CL')}</span>
+                <div className="flex justify-between items-center group">
+                  <div className="flex flex-col">
+                    <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Comisión de red</span>
+                    <span className="text-slate-600 text-sm font-bold">Transbank y Mercado Pago</span>
+                  </div>
+                  <span className="font-black text-slate-900 text-lg">${commissionAmount.toLocaleString('es-CL')}</span>
+                </div>
+              </div>
+              
+              <div className="pt-8 border-t-2 border-dashed border-slate-100 mb-8">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <span className="font-black text-slate-400 uppercase text-[11px] tracking-[0.2em] mb-1 block">Total final</span>
+                    <span className="text-4xl font-black text-slate-900 tracking-tighter">${totalAmount.toLocaleString('es-CL')}</span>
+                  </div>
+                  <div className="bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-2">
+                     <ShieldCheck size={14} className="text-emerald-600" />
+                     <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Protegido</span>
                   </div>
                 </div>
-                
-                <div className="pt-8 border-t-2 border-dashed border-slate-100 mb-8">
-                  <div className="flex justify-between items-end">
-                    <div>
-                      <span className="font-black text-slate-400 uppercase text-[11px] tracking-[0.2em] mb-1 block">Total a pagar</span>
-                      <span className="text-4xl font-black text-slate-900 tracking-tighter">${totalAmount.toLocaleString('es-CL')}</span>
-                    </div>
-                    <div className="bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-2">
-                       <ShieldCheck size={14} className="text-emerald-600" />
-                       <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seguro</span>
-                    </div>
-                  </div>
-                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-2xl flex items-start gap-3">
+                 <AlertCircle size={16} className="text-slate-400 shrink-0 mt-0.5" />
+                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                   Al hacer clic en pagar, serás redirigido al servidor de Mercado Pago para procesar tu transacción de forma segura. Al finalizar, volverás automáticamente a Donia.
+                 </p>
               </div>
             </div>
           </div>

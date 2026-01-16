@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { logger } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -9,11 +10,9 @@ export default async function handler(req: any, res: any) {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  // Solo procesamos pagos
   if (type !== 'payment') return res.status(200).end();
 
   try {
-    // 1. Obtener detalles del pago desde Mercado Pago
     const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${data.id}`, {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
@@ -26,16 +25,15 @@ export default async function handler(req: any, res: any) {
       if (!supabaseUrl || !serviceRoleKey) throw new Error("Configuración DB ausente");
       const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-      // 2. Verificar si ya existe (idempotencia simple)
       const { data: existing } = await supabase
         .from('donations')
         .select('id')
         .eq('payment_id', String(payment.id))
-        .single();
+        .maybeSingle();
 
       if (!existing) {
-        // 3. Registrar la donación
-        const { error: dError } = await supabase
+        // Registrar donación
+        await supabase
           .from('donations')
           .insert([{
             campaign_id: campaign_id,
@@ -45,12 +43,10 @@ export default async function handler(req: any, res: any) {
             donor_user_id: donor_user_id || null,
             comentario: donor_comment,
             payment_provider: 'mercado_pago',
-            payment_id: String(payment.id)
+            payment_id: String(payment.id),
+            status: 'completed'
           }]);
 
-        if (dError) throw dError;
-
-        // 4. Actualizar totales de la campaña
         const { data: campaign } = await supabase
           .from('campaigns')
           .select('recaudado, donantes_count')
@@ -71,7 +67,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).send('OK');
   } catch (error: any) {
-    console.error("[Webhook Error]:", error.message);
+    logger.error("WEBHOOK_ERROR", error);
     return res.status(500).json({ error: error.message });
   }
 }

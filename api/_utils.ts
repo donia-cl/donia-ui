@@ -33,7 +33,7 @@ export const logger = {
   }
 };
 
-// 2. VALIDADOR DE INPUTS (ZERO-DEPENDENCY)
+// 2. VALIDADOR DE INPUTS
 export class Validator {
   static required(value: any, fieldName: string) {
     if (value === undefined || value === null || value === '') {
@@ -44,7 +44,6 @@ export class Validator {
   static string(value: any, minLength: number, fieldName: string) {
     if (typeof value !== 'string') throw new Error(`${fieldName} debe ser texto.`);
     if (value.length < minLength) throw new Error(`${fieldName} es muy corto (mínimo ${minLength} caracteres).`);
-    // Basic sanitization check
     if (value.includes('<script>')) throw new Error(`${fieldName} contiene caracteres no permitidos.`);
   }
 
@@ -65,7 +64,7 @@ export class Validator {
   }
 }
 
-// 3. RATE LIMITER (IN-MEMORY FOR WARM LAMBDAS)
+// 3. RATE LIMITER (IN-MEMORY)
 const rateLimitMap = new Map<string, { count: number, lastReset: number }>();
 
 export const checkRateLimit = (ip: string, limit: number = 10, windowMs: number = 60000) => {

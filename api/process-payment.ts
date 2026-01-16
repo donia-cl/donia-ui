@@ -13,20 +13,16 @@ export default async function handler(req: any, res: any) {
   try {
     const { paymentData, campaignId, metadata } = req.body;
     
-    // DEBUG LOG
     logger.info('PROCESS_PAYMENT_INIT', { 
         campaignId, 
         email: metadata.email, 
-        receivedAmount: paymentData.transaction_amount,
-        paymentMethodId: paymentData.payment_method_id
+        receivedAmount: paymentData.transaction_amount
     });
     
-    // Validaciones básicas
     Validator.required(paymentData, 'paymentData');
     Validator.uuid(campaignId, 'campaignId');
     Validator.email(metadata.email);
 
-    // Obtenemos variables de entorno del servidor
     const accessToken = process.env.MP_ACCESS_TOKEN;
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -35,14 +31,11 @@ export default async function handler(req: any, res: any) {
         throw new Error('Error de configuración del servidor (Credenciales faltantes).');
     }
 
-    // Procesamos el pago con Mercado Pago
-    // Importante: El brick envía un objeto con token, issuer_id, payment_method_id, etc.
-    // Nosotros debemos construir el payload final.
     const paymentPayload = {
-      ...paymentData, // Incluye token, amount, installments, etc.
+      ...paymentData,
       description: `Donación Donia - Campaña ${campaignId}`,
       payer: {
-        ...(paymentData.payer || {}), // Preservamos identification si viene del brick
+        ...(paymentData.payer || {}),
         email: metadata.email,
         first_name: metadata.nombre || 'Anónimo'
       },
@@ -51,8 +44,6 @@ export default async function handler(req: any, res: any) {
         donor_user_id: metadata.donorUserId || null,
         donor_comment: metadata.comentario || ''
       },
-      // Eliminamos currency_id explícito ya que está causando error en la API v1/payments.
-      // Mercado Pago asumirá CLP basado en la cuenta del Access Token.
       binary_mode: true 
     };
 
@@ -70,28 +61,18 @@ export default async function handler(req: any, res: any) {
 
     if (!mpResponse.ok) {
       logger.error('MP_API_ERROR', paymentResult);
-      // Extraemos mensaje de error legible si existe
-      const msg = paymentResult.message || 'Error procesando el pago en la pasarela.';
-      throw new Error(msg);
+      throw new Error(paymentResult.message || 'Error procesando el pago en la pasarela.');
     }
 
-    logger.info('PAYMENT_PROCESSED', { id: paymentResult.id, status: paymentResult.status });
-
-    // Guardamos la donación si fue aprobada O está en proceso/pendiente
-    // Esto asegura que si sale "in_process", quede registro en la BD
     const isSuccess = paymentResult.status === 'approved';
     const isPending = paymentResult.status === 'in_process' || paymentResult.status === 'pending';
 
     if (isSuccess || isPending) {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         const amount = paymentResult.transaction_amount;
-        
-        // Mapeamos el estado de MP a nuestro estado interno
-        // approved -> completed
-        // in_process/pending -> pending
         const dbStatus = isSuccess ? 'completed' : 'pending';
 
-        // Insertar Donación
+        // Registrar en DB
         await supabase.from('donations').insert([{
           campaign_id: campaignId,
           monto: amount,
@@ -104,12 +85,12 @@ export default async function handler(req: any, res: any) {
           status: dbStatus
         }]);
 
-        // Actualizar Campaña (Solo sumamos al recaudado si está aprobado realmente)
-        // Opcional: Podrías sumar los pendientes si quisieras mostrar "comprometido", 
-        // pero por seguridad financiera usualmente solo sumamos lo 'completed'.
         if (isSuccess) {
+            // Obtener título para actualizar métricas
             const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
+            
             if (campaign) {
+              // 1. Actualizar métricas
               await supabase.from('campaigns').update({
                 recaudado: (Number(campaign.recaudado) || 0) + amount,
                 donantes_count: (Number(campaign.donantes_count) || 0) + 1
