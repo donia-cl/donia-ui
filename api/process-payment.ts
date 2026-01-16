@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { Validator, logger } from './_utils.js';
+import { Validator, logger, Mailer } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -41,7 +41,10 @@ export default async function handler(req: any, res: any) {
       },
       metadata: {
         campaign_id: campaignId,
+        campaign_title: metadata.campaignTitle || 'Campaña Donia',
         donor_user_id: metadata.donorUserId || null,
+        donor_name: metadata.nombre || 'Anónimo',
+        donor_email: metadata.email,
         donor_comment: metadata.comentario || ''
       },
       binary_mode: true 
@@ -86,15 +89,23 @@ export default async function handler(req: any, res: any) {
         }]);
 
         if (isSuccess) {
-            // Obtener título para actualizar métricas
-            const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
+            const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count, titulo').eq('id', campaignId).single();
             
             if (campaign) {
-              // 1. Actualizar métricas
               await supabase.from('campaigns').update({
                 recaudado: (Number(campaign.recaudado) || 0) + amount,
                 donantes_count: (Number(campaign.donantes_count) || 0) + 1
               }).eq('id', campaignId);
+
+              // ENVIAR EMAIL DESDE EL PROCESO MANUAL TAMBIÉN
+              if (metadata.email) {
+                await Mailer.sendDonationReceipt(
+                  metadata.email,
+                  metadata.nombre || 'Amigo de Donia',
+                  amount,
+                  campaign.titulo || 'una causa'
+                );
+              }
             }
         }
     }

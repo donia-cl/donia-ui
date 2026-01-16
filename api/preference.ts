@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { Mailer, logger } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,7 +24,7 @@ export default async function handler(req: any, res: any) {
       const payment = await mpResp.json();
       
       if (payment.status === 'approved') {
-        const { campaign_id, donor_name, donor_comment, donor_email, donor_user_id } = payment.metadata;
+        const { campaign_id, donor_name, donor_comment, donor_email, donor_user_id, campaign_title } = payment.metadata;
         const amount = payment.transaction_amount;
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         
@@ -34,7 +35,7 @@ export default async function handler(req: any, res: any) {
           await supabase.from('donations').insert([{ 
             campaign_id, 
             monto: amount, 
-            nombre_donante: donor_name, 
+            nombre_donante: donor_name || 'Anónimo', 
             donor_email: donor_email,
             donor_user_id: donor_user_id || null,
             comentario: donor_comment,
@@ -50,10 +51,23 @@ export default async function handler(req: any, res: any) {
               donantes_count: (Number(campaign.donantes_count) || 0) + 1 
             }).eq('id', campaign_id);
           }
+
+          // ENVÍO DE EMAIL DE AGRADECIMIENTO
+          if (donor_email) {
+            await Mailer.sendDonationReceipt(
+              donor_email, 
+              donor_name || 'Amigo de Donia', 
+              amount, 
+              campaign_title || 'una causa'
+            );
+          }
         }
       }
       return res.status(200).send('OK');
-    } catch (e) { return res.status(500).send('Error'); }
+    } catch (e) { 
+      logger.error('WEBHOOK_PROCESS_ERROR', e);
+      return res.status(500).send('Error'); 
+    }
   }
 
   // CREAR PREFERENCIA (Checkout Pro)
@@ -77,12 +91,13 @@ export default async function handler(req: any, res: any) {
       },
       payment_methods: {
         excluded_payment_types: [
-            { id: "ticket" } // Excluimos pagos en efectivo (Sencillito/Servipag) para evitar campañas "pendientes" eternamente
+            { id: "ticket" } 
         ],
-        installments: 1 // Forzamos 1 cuota para donaciones
+        installments: 1 
       },
       metadata: { 
         campaign_id: campaignId, 
+        campaign_title: campaignTitle,
         donor_name: nombre, 
         donor_comment: comentario,
         donor_email: email,
@@ -94,7 +109,7 @@ export default async function handler(req: any, res: any) {
         pending: returnUrl
       }, 
       auto_return: 'approved',
-      binary_mode: true // Solo aprobados o rechazados, sin estados intermedios raros
+      binary_mode: true 
     };
 
     try {
@@ -113,7 +128,6 @@ export default async function handler(req: any, res: any) {
           return res.status(500).json({ success: false, error: data.message });
       }
 
-      // init_point es la URL de producción, sandbox_init_point es para pruebas
       return res.status(200).json({ 
         success: true, 
         preference_id: data.id,
