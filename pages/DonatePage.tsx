@@ -169,28 +169,35 @@ const DonatePage: React.FC = () => {
       setBrickLoading(true);
       setError(null);
 
+      // Limpieza preventiva del contenedor
       if (paymentBrickContainerRef.current) {
           paymentBrickContainerRef.current.innerHTML = '';
       }
 
+      // 1. Inicializar Mercado Pago
       const mp = new window.MercadoPago(mpPublicKey, {
         locale: 'es-CL'
       });
+      
+      // 2. Obtener Bricks Builder
       const bricksBuilder = mp.bricks();
 
       const renderPaymentBrick = async () => {
         try {
+          // 3. Configuración del Brick (Con payer.email)
           const settings = {
             initialization: { 
               preferenceId: preferenceId,
-              amount: totalAmount, // Opcional, pero ayuda en ciertos flujos
+              amount: totalAmount,
+              payer: {
+                email: donorEmail, // CRITICO: Email del pagador
+              }
             },
             customization: {
               paymentMethods: {
                 creditCard: 'all',      
                 debitCard: 'all',
                 maxInstallments: 1
-                // NOTA: Se eliminaron ticket, bankTransfer, atm y mercadoPago(wallet) para limpieza
               },
               visual: {
                 style: {
@@ -253,7 +260,7 @@ const DonatePage: React.FC = () => {
                 });
               },
               onError: (error: any) => {
-                console.warn("Brick Warning/Error:", error);
+                console.error("Brick Error Callback:", error);
                 if (isMountedRef.current && !isCancelled) {
                    setBrickLoading(false);
                    setError("Ocurrió un error al cargar la pasarela de pagos.");
@@ -262,7 +269,7 @@ const DonatePage: React.FC = () => {
             },
           };
 
-          console.log("[DEBUG] Brick Settings:", settings);
+          console.log("[DEBUG] Creating Brick with settings:", settings);
           const controller = await bricksBuilder.create('payment', 'paymentBrick_container', settings);
 
           if (isCancelled) {
@@ -272,7 +279,7 @@ const DonatePage: React.FC = () => {
 
           brickControllerRef.current = controller;
         } catch (e) {
-          console.error("Error creating brick:", e);
+          console.error("Error creating brick instance:", e);
           if (isMountedRef.current && !isCancelled) {
               setBrickLoading(false);
               setError("No se pudo iniciar el componente de pago.");
