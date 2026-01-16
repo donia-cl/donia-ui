@@ -20,7 +20,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Ref para evitar doble ejecución crítica en StrictMode
+  // Ref para evitar doble ejecución crítica en StrictMode (Causa del AbortError)
   const initRef = useRef(false);
   
   const authService = AuthService.getInstance();
@@ -54,21 +54,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const cleanUrlAndRedirect = () => {
-     // Con BrowserRouter, los parámetros de OAuth están en la URL principal.
-     // Esta función limpia esos parámetros y redirige al usuario.
+     // Con BrowserRouter, los parámetros de OAuth están en la URL principal (?code=...).
      const currentParams = new URLSearchParams(window.location.search);
      if (currentParams.has('code')) {
         console.log("[AuthContext] Sesión confirmada. Limpiando URL y redirigiendo...");
         const newUrl = window.location.pathname;
+        
+        // Limpiamos la URL visualmente sin recargar
         window.history.replaceState({}, document.title, newUrl);
 
-        // Redirección guardada desde el flujo de creación, por ejemplo.
+        // Redirección guardada desde el flujo de creación o dashboard
         const savedRedirect = localStorage.getItem('donia_auth_redirect');
         if (savedRedirect) {
             localStorage.removeItem('donia_auth_redirect');
-            window.location.assign(savedRedirect); // Navega a la ruta guardada
+            window.location.assign(savedRedirect); 
         } else {
-            // Redirección por defecto al panel principal.
             window.location.assign('/dashboard');
         }
      }
@@ -91,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const hasCode = searchParams.has('code');
 
         if (client) {
-          // 1. Suscribirse ANTES de getSession para no perder eventos si el intercambio es muy rápido
+          // 1. Suscribirse ANTES de getSession
           const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
             if (!mounted) return;
             
@@ -103,7 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (currentUser) {
                  const p = await loadUserProfile(currentUser);
                  if (mounted) setProfile(p);
-                 // CRÍTICO: Limpiar URL solo cuando confirmamos que estamos logueados
+                 // Limpiar URL solo cuando confirmamos que estamos logueados
                  cleanUrlAndRedirect(); 
               }
               if (mounted) setLoading(false);
@@ -116,7 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           });
 
-          // 2. Obtener sesión actual (puede desencadenar el intercambio de código internamente)
+          // 2. Obtener sesión actual
           const { data: { session } } = await client.auth.getSession();
           
           if (mounted) {
@@ -124,21 +124,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(session.user);
               const p = await loadUserProfile(session.user);
               if (mounted) setProfile(p);
-              // Si ya tenemos sesión (ej: recarga de página o intercambio síncrono rápido), limpiamos
               cleanUrlAndRedirect();
             }
           }
 
           // 3. Manejo del estado de carga para PKCE
+          // Si hay un código en la URL, esperamos a que onAuthStateChange dispare SIGNED_IN
           if (hasCode && !session?.user) {
-              // Si hay código pero aún no hay sesión, esperamos al evento SIGNED_IN.
-              // Pero ponemos un timeout de seguridad por si falla.
+              // Timeout de seguridad por si el intercambio falla
               setTimeout(() => {
                   if (mounted && loading) {
                       console.warn("[AuthContext] Timeout esperando intercambio PKCE. Liberando UI.");
                       setLoading(false);
                   }
-              }, 4000);
+              }, 5000);
           } else {
               setLoading(false);
           }
