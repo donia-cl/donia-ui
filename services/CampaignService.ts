@@ -1,4 +1,3 @@
-
 import { SupabaseClient } from '@supabase/supabase-js';
 import { CampaignData, Donation, FinancialSummary, Withdrawal, CampaignStatus } from '../types';
 import { AuthService } from './AuthService';
@@ -24,12 +23,13 @@ export class CampaignService {
   public async initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
-    // Inicializar Auth primero
+    console.log("[CampaignService] Inicializando...");
+
+    // Inicializar Auth primero si es necesario
     try {
        await AuthService.getInstance().initialize();
     } catch (e) { /* ignore */ }
 
-    // Fetch de configuración simple
     this.fetchServerConfig().catch(() => { /* Silent fail */ });
 
     this.initPromise = Promise.resolve();
@@ -46,6 +46,7 @@ export class CampaignService {
         if (resp.ok) {
           const config = await resp.json();
           this.aiEnabled = !!config.aiEnabled;
+          console.log("[CampaignService] Configuración del servidor cargada. AI:", this.aiEnabled);
         }
       } catch (netError: any) {
         this.aiEnabled = false; 

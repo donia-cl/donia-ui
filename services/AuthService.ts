@@ -1,4 +1,3 @@
-
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Profile } from '../types';
 
@@ -20,12 +19,14 @@ export class AuthService {
     if (this.client) return;
     if (this.initPromise) return this.initPromise;
 
+    console.log("[AuthService] Iniciando inicialización de cliente Supabase...");
+
     this.initPromise = (async () => {
       try {
         let url = '';
         let key = '';
 
-        // Prioridad 1: Variables de entorno locales (Vite/React)
+        // Intentar obtener de variables de entorno primero
         try {
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -36,27 +37,21 @@ export class AuthService {
           }
         } catch (e) { /* ignore */ }
 
-        // Prioridad 2: Fallback a process.env
+        // Si no hay en entorno, pedimos al servidor
         if (!url || !key) {
-          try {
-            if (typeof process !== 'undefined' && process.env) {
-              url = process.env.REACT_APP_SUPABASE_URL || '';
-              key = process.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
-            }
-          } catch (e) { /* ignore */ }
-        }
-
-        // Prioridad 3: Consultar endpoint (Sin AbortController)
-        if (!url || !key) {
+           console.log("[AuthService] Sin credenciales locales, solicitando a /api/config...");
            try {
              const resp = await fetch('/api/config');
              if (resp.ok) {
                const config = await resp.json();
                url = config.supabaseUrl || url;
                key = config.supabaseKey || key;
+               console.log("[AuthService] Credenciales obtenidas del servidor.");
+             } else {
+               console.error("[AuthService] Falló respuesta de /api/config:", resp.status);
              }
            } catch (e: any) {
-             console.warn("[AuthService] Config fetch failed (using defaults/env only)");
+             console.warn("[AuthService] Error de red consultando /api/config:", e.message);
            }
         }
           
@@ -65,14 +60,17 @@ export class AuthService {
             auth: {
               persistSession: true,
               autoRefreshToken: true,
-              detectSessionInUrl: true,
+              detectSessionInUrl: true, 
               storageKey: 'donia-auth-token-v1',
-              flowType: 'pkce' // CAMBIO CRÍTICO: Usar PKCE
+              flowType: 'pkce'
             }
           });
+          console.log("[AuthService] Cliente Supabase creado correctamente.");
+        } else {
+          console.error("[AuthService] No se pudieron determinar las credenciales de Supabase.");
         }
       } catch (e) {
-        console.error("[AuthService] Initialization failed:", e);
+        console.error("[AuthService] Error fatal en initialize():", e);
       }
     })();
 
@@ -98,7 +96,6 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
-    // PKCE necesita redirección explicita al origen para saber a dónde volver con el código
     const { data, error } = await (this.client.auth as any).signUp({
       email,
       password: pass,
@@ -138,8 +135,8 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
-    // PKCE: Redirigir al origen (sin hash) para que Supabase añada ?code=...
     const redirectTo = window.location.origin; 
+    console.log("[AuthService] Iniciando OAuth Google hacia:", redirectTo);
     
     const { data, error } = await (this.client.auth as any).signInWithOAuth({
       provider: 'google',
