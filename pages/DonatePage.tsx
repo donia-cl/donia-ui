@@ -53,6 +53,8 @@ const DonatePage: React.FC = () => {
 
   const paymentBrickContainerRef = useRef<HTMLDivElement>(null);
   const brickControllerRef = useRef<any>(null);
+  // Ref para evitar doble montaje en React StrictMode o re-renders rápidos
+  const brickMountedRef = useRef(false); 
   const isMountedRef = useRef(true);
   const service = CampaignService.getInstance();
 
@@ -98,6 +100,7 @@ const DonatePage: React.FC = () => {
         }
         brickControllerRef.current = null;
     }
+    brickMountedRef.current = false;
     setBrickLoading(false);
     setError(null);
     setShowPaymentForm(false);
@@ -142,24 +145,24 @@ const DonatePage: React.FC = () => {
 
   // --- INICIALIZACIÓN DEL PAYMENT BRICK ---
   useEffect(() => {
-    let isCancelled = false;
+    // Si no hay datos críticos, no hacemos nada
+    if (!showPaymentForm || !preferenceId || !mpPublicKey) return;
 
-    // Solo iniciamos si debemos mostrar el form y TENEMOS un preferenceId generado
-    if (!showPaymentForm || !preferenceId) return;
-
-    if (!mpPublicKey) {
-        setError("Error de configuración: No se encontró la llave pública de Mercado Pago.");
-        return;
-    }
+    // PREVENCIÓN DE DOBLE INICIALIZACIÓN
+    // Si ya hay un brick montado o inicializándose para este preferenceId, salimos.
+    if (brickMountedRef.current) return;
 
     if (window.MercadoPago && paymentBrickContainerRef.current && campaign) {
       setBrickLoading(true);
       setError(null);
+      brickMountedRef.current = true; // Marcamos como montado inmediatamente
 
       // Limpieza preventiva del contenedor
       if (paymentBrickContainerRef.current) {
           paymentBrickContainerRef.current.innerHTML = '';
       }
+
+      console.log("[BRICK] Inicializando MercadoPago...");
 
       // 1. Inicializar SDK de Mercado Pago
       const mp = new window.MercadoPago(mpPublicKey, {
@@ -171,13 +174,15 @@ const DonatePage: React.FC = () => {
 
       const renderPaymentBrick = async () => {
         try {
+          console.log("[BRICK] Creando Brick con PreferenceID:", preferenceId);
           // 3. Configuración del Brick
           const settings = {
             initialization: { 
               preferenceId: preferenceId,
-              amount: totalAmount,
+              amount: totalAmount, // Opcional si viene en preference, pero bueno como fallback
               payer: {
-                email: donorEmail, // Importante: Asociar el pago al email del donante
+                email: donorEmail, 
+                entity_type: 'individual', // CRÍTICO: Requerido para Chile
               }
             },
             customization: {
@@ -188,19 +193,20 @@ const DonatePage: React.FC = () => {
               },
               visual: {
                 style: {
-                  theme: 'default', // Tema por defecto de MP
+                  theme: 'default', 
                 },
                 hidePaymentButton: false
               }
             },
             callbacks: {
               onReady: () => {
-                if (isMountedRef.current && !isCancelled) setBrickLoading(false);
+                console.log("[BRICK] Ready");
+                if (isMountedRef.current) setBrickLoading(false);
               },
               onSubmit: ({ selectedPaymentMethod, formData }: any) => {
                 // Procesar el pago cuando el usuario hace clic en pagar
                 return new Promise((resolve, reject) => {
-                  if (!isMountedRef.current || isCancelled) {
+                  if (!isMountedRef.current) {
                       resolve(void 0);
                       return;
                   }
@@ -224,7 +230,7 @@ const DonatePage: React.FC = () => {
                   })
                   .then((response) => response.json())
                   .then((response) => {
-                    if (!isMountedRef.current || isCancelled) return;
+                    if (!isMountedRef.current) return;
                     
                     if (response.success && (response.status === 'approved' || response.status === 'in_process')) {
                       setPaymentStatus('success');
@@ -237,7 +243,7 @@ const DonatePage: React.FC = () => {
                   })
                   .catch((error) => {
                     console.error("Error de red al procesar pago:", error);
-                    if (isMountedRef.current && !isCancelled) {
+                    if (isMountedRef.current) {
                         setError("Error de conexión al procesar el pago.");
                     }
                     reject();
@@ -245,28 +251,25 @@ const DonatePage: React.FC = () => {
                 });
               },
               onError: (error: any) => {
-                console.error("Brick Error Callback:", error);
-                if (isMountedRef.current && !isCancelled) {
+                console.error("[BRICK] Error Callback:", error);
+                if (isMountedRef.current) {
                    setBrickLoading(false);
                    setError("Ocurrió un error al cargar la pasarela de pagos.");
+                   brickMountedRef.current = false; // Permitir reintento si falla
                 }
               },
             },
           };
 
           const controller = await bricksBuilder.create('payment', 'paymentBrick_container', settings);
-
-          if (isCancelled) {
-              if (controller) controller.unmount();
-              return;
-          }
-
           brickControllerRef.current = controller;
+          
         } catch (e) {
-          console.error("Error creating brick instance:", e);
-          if (isMountedRef.current && !isCancelled) {
+          console.error("[BRICK] Error creating instance:", e);
+          if (isMountedRef.current) {
               setBrickLoading(false);
               setError("No se pudo iniciar el componente de pago.");
+              brickMountedRef.current = false;
           }
         }
       };
@@ -274,17 +277,19 @@ const DonatePage: React.FC = () => {
       renderPaymentBrick();
     }
     
-    // Cleanup: Desmontar el brick si el componente se desmonta o cambian las dependencias
+    // Cleanup Effect
     return () => {
-        isCancelled = true;
         if (brickControllerRef.current) {
             try {
                 brickControllerRef.current.unmount().catch(() => {});
             } catch (err) { /* ignore */ }
             brickControllerRef.current = null;
         }
+        brickMountedRef.current = false;
     };
-  }, [showPaymentForm, preferenceId, totalAmount, campaign, mpPublicKey]); 
+  }, [showPaymentForm, preferenceId, mpPublicKey]); 
+  // Nota: Quitamos totalAmount, campaign, etc de dependencias para evitar re-montajes innecesarios.
+  // El preferenceId cambia si cambian los montos, así que es seguro.
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">

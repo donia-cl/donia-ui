@@ -43,7 +43,7 @@ export default async function handler(req: any, res: any) {
 
   // CREAR PREFERENCIA (Checkout Pro / Bricks)
   if (action === 'preference') {
-    const { campaignId, monto, nombre, comentario, campaignTitle, email } = req.body; // Added email to body destructuring
+    const { campaignId, monto, nombre, comentario, campaignTitle, email } = req.body; 
     
     const preference = { 
       items: [{ 
@@ -54,8 +54,8 @@ export default async function handler(req: any, res: any) {
         currency_id: 'CLP' 
       }], 
       payer: {
-        email: email || 'donor@donia.cl', // Email es requerido
-        entity_type: 'individual', // OBLIGATORIO PARA BRICKS
+        email: email || 'donor@donia.cl', 
+        entity_type: 'individual', // OBLIGATORIO PARA BRICKS EN CHILE
       },
       payment_methods: {
         excluded_payment_types: [
@@ -63,7 +63,7 @@ export default async function handler(req: any, res: any) {
             { id: "bank_transfer" },
             { id: "atm" }
         ],
-        installments: 1 // Forzar 1 cuota por defecto si se desea
+        installments: 1
       },
       metadata: { 
         campaign_id: campaignId, 
