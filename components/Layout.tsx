@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const isWizard = location.pathname.startsWith('/crear');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -30,6 +30,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       <Link to="/acerca" onClick={() => setIsMobileMenuOpen(false)} className={`font-bold transition-colors ${location.pathname === '/acerca' ? 'text-violet-600' : 'text-slate-600 hover:text-violet-600'}`}>Cómo funciona</Link>
     </>
   );
+
+  // Fuente de verdad para el nombre: Perfil > Metadata de Auth > Email
+  const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Mi Perfil';
+  const displayInitial = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
@@ -58,10 +62,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         className="flex items-center gap-2 px-3 py-2 rounded-2xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100"
                       >
                         <div className="w-8 h-8 bg-violet-100 text-violet-600 rounded-xl flex items-center justify-center font-black text-xs">
-                          {user.user_metadata?.full_name?.charAt(0) || user.email?.charAt(0).toUpperCase()}
+                          {displayInitial}
                         </div>
                         <span className="text-sm font-black text-slate-700 max-w-[120px] truncate">
-                          {user.user_metadata?.full_name || 'Mi Perfil'}
+                          {displayName}
                         </span>
                         <ChevronDown size={14} className={`text-slate-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
                       </button>

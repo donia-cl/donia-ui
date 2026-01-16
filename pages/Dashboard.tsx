@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -205,6 +204,10 @@ const Dashboard: React.FC = () => {
   };
 
   const isProfileIncomplete = !profile?.rut || !profile?.phone;
+  
+  // Consistencia de nombre en el Dashboard
+  const dashboardName = profile?.full_name || user?.user_metadata?.full_name || 'Usuario';
+  const dashboardInitial = dashboardName.charAt(0).toUpperCase();
 
   if (authLoading || loading) {
     return (
@@ -223,12 +226,12 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div className="flex items-center gap-5">
               <div className="w-16 h-16 bg-slate-900 text-white rounded-[24px] flex items-center justify-center text-2xl font-black shadow-2xl shadow-slate-200">
-                {user?.user_metadata?.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+                {dashboardInitial}
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mi Panel de Control</p>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                  Hola, {profile?.full_name?.split(' ')[0] || 'Usuario'}
+                  Hola, {dashboardName.split(' ')[0]}
                 </h1>
               </div>
             </div>
@@ -657,6 +660,7 @@ const Dashboard: React.FC = () => {
                               type="text"
                               className="w-full p-4 bg-white border-2 border-slate-100 focus:border-violet-200 focus:bg-slate-50 rounded-2xl outline-none font-bold text-slate-900 transition-all"
                               value={profileForm.full_name}
+                              {/* FIXED: Using correct state setter setProfileForm instead of setFormData */}
                               onChange={(e) => setProfileForm({...profileForm, full_name: e.target.value})}
                               placeholder="Tu nombre legal"
                            />
