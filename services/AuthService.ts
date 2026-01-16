@@ -25,7 +25,7 @@ export class AuthService {
         let url = '';
         let key = '';
 
-        // Prioridad 1: Variables de entorno locales (Vite/React)
+        // Prioridad 1: Intentar obtener de variables de entorno (Vite/React)
         try {
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -46,21 +46,24 @@ export class AuthService {
           } catch (e) { /* ignore */ }
         }
 
-        // Prioridad 3: Consultar endpoint de configuración (Sin AbortController para evitar AbortError)
+        // Prioridad 3: Consultar endpoint de configuración si todo falla (Aumentamos timeout a 5s)
         if (!url || !key) {
            try {
-             const resp = await fetch('/api/config');
+             const controller = new AbortController();
+             const timeoutId = setTimeout(() => controller.abort(), 5000);
+             const resp = await fetch('/api/config', { signal: controller.signal });
+             clearTimeout(timeoutId);
              if (resp.ok) {
                const config = await resp.json();
                url = config.supabaseUrl || url;
                key = config.supabaseKey || key;
              }
            } catch (e: any) {
-             console.warn("[AuthService] No se pudo obtener la configuración desde /api/config");
+             console.warn("[AuthService] Config fetch skipped or timed out");
            }
         }
           
-        if (url && key && url.startsWith('http')) {
+        if (url && key) {
           this.client = createClient(url, key, {
             auth: {
               persistSession: true,
@@ -70,9 +73,6 @@ export class AuthService {
               flowType: 'implicit'
             }
           });
-          console.log("[AuthService] Supabase client initialized successfully.");
-        } else {
-          console.warn("[AuthService] Supabase credentials missing or invalid. Auth will be disabled.");
         }
       } catch (e) {
         console.error("[AuthService] Initialization failed:", e);
@@ -100,7 +100,7 @@ export class AuthService {
 
   async signUp(email: string, pass: string, fullName: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible (Configuración faltante).");
+    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
     const { data, error } = await (this.client.auth as any).signUp({
       email,
