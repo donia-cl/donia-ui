@@ -38,7 +38,7 @@ const DonatePage: React.FC = () => {
   const [tipPercentage, setTipPercentage] = useState<number | 'custom'>(10);
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
   
-  // Nuevo estado para controlar el flujo de preferencia
+  // Estado para controlar el flujo de la pasarela de pago
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [creatingPreference, setCreatingPreference] = useState(false);
   const [preferenceId, setPreferenceId] = useState<string | null>(null);
@@ -72,22 +72,8 @@ const DonatePage: React.FC = () => {
   // Comisión Mercado Pago: 3.8% (calculado sobre el monto de donación + propina)
   const commissionAmount = Math.round((donationAmount + tipGrossAmount) * 0.038);
 
-  // Total final
+  // Total final a pagar
   const totalAmount = donationAmount + tipGrossAmount + commissionAmount;
-
-  // Debugging de montos
-  useEffect(() => {
-    if (showPaymentForm) {
-      console.log("[DEBUG] Montos calculados:", {
-        donation: donationAmount,
-        tip: tipGrossAmount,
-        subtotal: donationAmount + tipGrossAmount,
-        commission: commissionAmount,
-        total: totalAmount,
-        preferenceId
-      });
-    }
-  }, [donationAmount, tipGrossAmount, commissionAmount, totalAmount, showPaymentForm, preferenceId]);
 
   const handleManualTipChange = (strVal: string) => {
     const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
@@ -103,22 +89,23 @@ const DonatePage: React.FC = () => {
   };
 
   const handleBackToForm = () => {
-    console.log("[DEBUG] Regresando al formulario, desmontando Brick.");
+    // Desmontar el brick si existe para limpiar el estado
     if (brickControllerRef.current) {
         try {
             brickControllerRef.current.unmount();
         } catch (e) {
-            console.warn("Error unmounting brick manually", e);
+            console.warn("Error desmontando el brick manualmente", e);
         }
         brickControllerRef.current = null;
     }
     setBrickLoading(false);
     setError(null);
     setShowPaymentForm(false);
-    setPreferenceId(null); // Reset preference
+    setPreferenceId(null); 
     window.scrollTo(0, 0);
   };
 
+  // Autocompletar datos si el usuario está logueado
   useEffect(() => {
     if (user || profile) {
       if (profile?.full_name) setDonorName(profile.full_name);
@@ -133,18 +120,19 @@ const DonatePage: React.FC = () => {
           const data = await service.getCampaignById(id);
           if (isMountedRef.current) setCampaign(data);
         }
+        // Cargar configuración (Llave pública de MP)
         const configResp = await fetch('/api/config');
         const configData = await configResp.json();
-        console.log("[DEBUG] Config Loaded. MP Key present:", !!configData.mpPublicKey);
+        
         if (isMountedRef.current) {
             if (configData.mpPublicKey) {
                 setMpPublicKey(configData.mpPublicKey);
             } else {
-                console.warn("Mercado Pago Public Key not found in server config.");
+                console.warn("Mercado Pago Public Key no encontrada en la configuración del servidor.");
             }
         }
       } catch (e) {
-        console.error("Error cargando datos:", e);
+        console.error("Error cargando datos de campaña o configuración:", e);
       } finally {
         if (isMountedRef.current) setLoading(false);
       }
@@ -152,11 +140,11 @@ const DonatePage: React.FC = () => {
     fetchData();
   }, [id]);
 
-  // --- INICIALIZACIÓN DEL BRICK ---
+  // --- INICIALIZACIÓN DEL PAYMENT BRICK ---
   useEffect(() => {
     let isCancelled = false;
 
-    // Solo iniciamos si debemos mostrar el form y TENEMOS preferenceId
+    // Solo iniciamos si debemos mostrar el form y TENEMOS un preferenceId generado
     if (!showPaymentForm || !preferenceId) return;
 
     if (!mpPublicKey) {
@@ -165,7 +153,6 @@ const DonatePage: React.FC = () => {
     }
 
     if (window.MercadoPago && paymentBrickContainerRef.current && campaign) {
-      console.log("[DEBUG] Inicializando Payment Brick con Preference ID:", preferenceId);
       setBrickLoading(true);
       setError(null);
 
@@ -174,23 +161,23 @@ const DonatePage: React.FC = () => {
           paymentBrickContainerRef.current.innerHTML = '';
       }
 
-      // 1. Inicializar Mercado Pago
+      // 1. Inicializar SDK de Mercado Pago
       const mp = new window.MercadoPago(mpPublicKey, {
         locale: 'es-CL'
       });
       
-      // 2. Obtener Bricks Builder
+      // 2. Obtener instancia de Bricks
       const bricksBuilder = mp.bricks();
 
       const renderPaymentBrick = async () => {
         try {
-          // 3. Configuración del Brick (Con payer.email)
+          // 3. Configuración del Brick
           const settings = {
             initialization: { 
               preferenceId: preferenceId,
               amount: totalAmount,
               payer: {
-                email: donorEmail, // CRITICO: Email del pagador
+                email: donorEmail, // Importante: Asociar el pago al email del donante
               }
             },
             customization: {
@@ -201,18 +188,17 @@ const DonatePage: React.FC = () => {
               },
               visual: {
                 style: {
-                  theme: 'default',
+                  theme: 'default', // Tema por defecto de MP
                 },
                 hidePaymentButton: false
               }
             },
             callbacks: {
               onReady: () => {
-                console.log("[DEBUG] Brick Ready");
                 if (isMountedRef.current && !isCancelled) setBrickLoading(false);
               },
               onSubmit: ({ selectedPaymentMethod, formData }: any) => {
-                console.log("[DEBUG] Brick Submit:", selectedPaymentMethod);
+                // Procesar el pago cuando el usuario hace clic en pagar
                 return new Promise((resolve, reject) => {
                   if (!isMountedRef.current || isCancelled) {
                       resolve(void 0);
@@ -223,7 +209,7 @@ const DonatePage: React.FC = () => {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      paymentData: formData,
+                      paymentData: formData, // Datos tokenizados por el Brick
                       campaignId: campaign.id,
                       metadata: {
                         nombre: donorName,
@@ -238,20 +224,19 @@ const DonatePage: React.FC = () => {
                   })
                   .then((response) => response.json())
                   .then((response) => {
-                    console.log("[DEBUG] Payment Response:", response);
                     if (!isMountedRef.current || isCancelled) return;
                     
                     if (response.success && (response.status === 'approved' || response.status === 'in_process')) {
                       setPaymentStatus('success');
                       resolve(void 0); 
                     } else {
-                      const msg = response.error || "El pago fue rechazado. Revisa los datos de tu tarjeta.";
+                      const msg = response.error || "El pago fue rechazado. Por favor revisa los datos de tu tarjeta.";
                       setError(msg);
                       reject(); 
                     }
                   })
                   .catch((error) => {
-                    console.error("Error de red:", error);
+                    console.error("Error de red al procesar pago:", error);
                     if (isMountedRef.current && !isCancelled) {
                         setError("Error de conexión al procesar el pago.");
                     }
@@ -269,7 +254,6 @@ const DonatePage: React.FC = () => {
             },
           };
 
-          console.log("[DEBUG] Creating Brick with settings:", settings);
           const controller = await bricksBuilder.create('payment', 'paymentBrick_container', settings);
 
           if (isCancelled) {
@@ -290,6 +274,7 @@ const DonatePage: React.FC = () => {
       renderPaymentBrick();
     }
     
+    // Cleanup: Desmontar el brick si el componente se desmonta o cambian las dependencias
     return () => {
         isCancelled = true;
         if (brickControllerRef.current) {
@@ -348,7 +333,7 @@ const DonatePage: React.FC = () => {
     setCreatingPreference(true);
 
     try {
-        // 1. Crear Preferencia en Backend
+        // 1. Crear Preferencia en Backend para obtener el ID
         const resp = await fetch('/api/preference?action=preference', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -357,14 +342,14 @@ const DonatePage: React.FC = () => {
                 campaignTitle: campaign.titulo,
                 monto: totalAmount,
                 nombre: donorName,
-                email: donorEmail, // Enviamos el email del donante
+                email: donorEmail, // Enviamos el email para pre-configurar el pago
                 comentario: donorComment
             })
         });
         const data = await resp.json();
         
         if (data.success && data.preference_id) {
-            // 2. Establecer ID y mostrar brick
+            // 2. Establecer ID y mostrar el brick de pago
             setPreferenceId(data.preference_id);
             setShowPaymentForm(true);
             window.scrollTo(0, 0);
@@ -400,6 +385,7 @@ const DonatePage: React.FC = () => {
               </div>
 
               {!showPaymentForm ? (
+                // --- PASO 1: DEFINIR MONTO Y DATOS ---
                 <div className="space-y-8">
                   <div>
                     <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto de tu donación base</label>
@@ -529,6 +515,7 @@ const DonatePage: React.FC = () => {
                   </button>
                 </div>
               ) : (
+                // --- PASO 2: PAYMENT BRICK (MERCADO PAGO) ---
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
