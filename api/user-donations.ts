@@ -19,12 +19,27 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // 1. Obtener donaciones del usuario
-    const { data: donationsData, error: dError } = await supabase
-      .from('donations')
-      .select('*')
-      .eq('donor_user_id', userId)
-      .order('fecha', { ascending: false }); // CORREGIDO: Usar 'fecha' en lugar de 'created_at'
+    // 1. Obtener los datos del usuario desde Auth para tener su email verificado
+    const { data: { user }, error: authError } = await (supabase.auth as any).admin.getUserById(userId);
+    
+    if (authError || !user) {
+      throw new Error("No se pudo verificar la identidad del usuario.");
+    }
+
+    const userEmail = user.email;
+
+    // 2. Obtener donaciones del usuario
+    // Filtramos por ID de usuario O por Email para capturar donaciones hechas como invitado
+    let query = supabase.from('donations').select('*');
+    
+    if (userEmail) {
+      // La sintaxis .or() de PostgREST permite combinar condiciones
+      query = query.or(`donor_user_id.eq.${userId},donor_email.eq.${userEmail}`);
+    } else {
+      query = query.eq('donor_user_id', userId);
+    }
+
+    const { data: donationsData, error: dError } = await query.order('fecha', { ascending: false });
 
     if (dError) throw dError;
 
@@ -32,8 +47,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    // 2. Obtener IDs únicos de campañas para hacer un "Join Manual" seguro
-    // Esto evita errores 500 si la Foreign Key no está perfectamente configurada en Supabase
+    // 3. Obtener IDs únicos de campañas para hacer un "Join Manual" seguro
     const campaignIds = [...new Set(donationsData.map((d: any) => d.campaign_id).filter(Boolean))];
 
     let campaignsMap: Record<string, any> = {};
@@ -51,7 +65,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 3. Combinar datos manualmente
+    // 4. Combinar datos manualmente y formatear para el frontend
     const donations = donationsData.map((d: any) => {
       const campaign = campaignsMap[d.campaign_id] || {};
       
@@ -59,7 +73,7 @@ export default async function handler(req: any, res: any) {
         id: d.id,
         campaignId: d.campaign_id,
         monto: d.monto,
-        fecha: d.fecha || d.created_at, // Soporte para ambos
+        fecha: d.fecha || d.created_at,
         nombreDonante: d.nombre_donante,
         emailDonante: d.donor_email,
         comentario: d.comentario,
@@ -75,7 +89,6 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ success: true, data: donations });
   } catch (error: any) {
     console.error("[API/user-donations] Fatal Error:", error.message);
-    // Retornamos array vacío en caso de error grave para no romper el frontend
     return res.status(200).json({ success: false, error: error.message, data: [] });
   }
 }
