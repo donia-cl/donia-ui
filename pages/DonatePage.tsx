@@ -65,9 +65,9 @@ const DonatePage: React.FC = () => {
   const tipNetAmount = Math.round(tipGrossAmount / 1.19);
   const ivaAmount = tipGrossAmount - tipNetAmount;
   
-  // Comisión Mercado Pago: 3.8% (calculado sobre el monto de donación base)
-  // Nota: Si se requiere calcular sobre el total, ajustar aquí.
-  const commissionAmount = Math.round(donationAmount * 0.038);
+  // Comisión Mercado Pago: 3.8% (calculado sobre el monto de donación + propina)
+  // Ejemplo: ($5000 + $500) * 0.038 = $209
+  const commissionAmount = Math.round((donationAmount + tipGrossAmount) * 0.038);
 
   // Total final
   const totalAmount = donationAmount + tipGrossAmount + commissionAmount;
@@ -78,6 +78,7 @@ const DonatePage: React.FC = () => {
       console.log("[DEBUG] Montos calculados:", {
         donation: donationAmount,
         tip: tipGrossAmount,
+        subtotal: donationAmount + tipGrossAmount,
         commission: commissionAmount,
         total: totalAmount
       });
@@ -183,7 +184,7 @@ const DonatePage: React.FC = () => {
             },
             customization: {
               paymentMethods: {
-                wallet_purchase: 'all', // Habilita Wallet
+                mercadoPago: 'all', // Habilita Wallet (Login con Mercado Pago)
                 creditCard: 'all',      // Habilita Crédito
                 debitCard: 'all',       // Habilita Débito
                 ticket: [],             // Deshabilita Efectivo/Ticket
