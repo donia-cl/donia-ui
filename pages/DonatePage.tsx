@@ -491,9 +491,10 @@ const DonatePage: React.FC = () => {
                       <Lock size={12} /> Procesado de forma segura por
                     </p>
                     <img 
-                      src="https://upload.wikimedia.org/wikipedia/commons/0/04/Mercado_Pago_Logo.png" 
+                      src="https://http2.mlstatic.com/frontend-assets/mp-web-navigation/ui-navigation/5.104.0/mercadopago/logo__large.png" 
                       alt="Mercado Pago" 
                       className="h-8 object-contain opacity-80 hover:opacity-100 transition-opacity"
+                      referrerPolicy="no-referrer"
                     />
                   </div>
                 </div>
