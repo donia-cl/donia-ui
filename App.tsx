@@ -4,6 +4,7 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { CampaignProvider } from './context/CampaignContext';
 import { AuthProvider } from './context/AuthContext';
 import { Layout } from './components/Layout';
+import ScrollToTop from './components/ScrollToTop';
 import Landing from './pages/Landing';
 import Explore from './pages/Explore';
 import About from './pages/About';
@@ -26,6 +27,7 @@ const App: React.FC = () => {
     <AuthProvider>
       <CampaignProvider>
         <Router>
+          <ScrollToTop />
           <Layout>
             <Routes>
               {/* Ruta Principal: Landing Page */}

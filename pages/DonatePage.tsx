@@ -89,6 +89,7 @@ const DonatePage: React.FC = () => {
     setBrickLoading(false);
     setError(null);
     setShowPaymentForm(false);
+    window.scrollTo(0, 0); // Scroll arriba al volver
   };
 
   useEffect(() => {
@@ -308,6 +309,7 @@ const DonatePage: React.FC = () => {
     }
     setError(null);
     setShowPaymentForm(true);
+    window.scrollTo(0, 0); // Scroll arriba al continuar
   };
 
   return (
