@@ -19,14 +19,11 @@ export class AuthService {
     if (this.client) return;
     if (this.initPromise) return this.initPromise;
 
-    console.log("[AuthService] Iniciando inicialización de cliente Supabase...");
-
     this.initPromise = (async () => {
       try {
         let url = '';
         let key = '';
 
-        // Intentar obtener de variables de entorno primero
         try {
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -37,25 +34,22 @@ export class AuthService {
           }
         } catch (e) { /* ignore */ }
 
-        // Si no hay en entorno, pedimos al servidor
         if (!url || !key) {
-           console.log("[AuthService] Sin credenciales locales, solicitando a /api/config...");
            try {
              const resp = await fetch('/api/config');
              if (resp.ok) {
                const config = await resp.json();
                url = config.supabaseUrl || url;
                key = config.supabaseKey || key;
-               console.log("[AuthService] Credenciales obtenidas del servidor.");
-             } else {
-               console.error("[AuthService] Falló respuesta de /api/config:", resp.status);
              }
            } catch (e: any) {
-             console.warn("[AuthService] Error de red consultando /api/config:", e.message);
+             console.warn("[AuthService] Error consultando /api/config");
            }
         }
           
         if (url && key) {
+          // Fix: Removed the non-existent 'lockLimit' property from the auth configuration object
+          // and ensured it strictly adheres to the Supported Auth settings for Supabase client.
           this.client = createClient(url, key, {
             auth: {
               persistSession: true,
@@ -65,9 +59,6 @@ export class AuthService {
               flowType: 'pkce'
             }
           });
-          console.log("[AuthService] Cliente Supabase creado correctamente.");
-        } else {
-          console.error("[AuthService] No se pudieron determinar las credenciales de Supabase.");
         }
       } catch (e) {
         console.error("[AuthService] Error fatal en initialize():", e);
@@ -108,7 +99,7 @@ export class AuthService {
     if (error) throw error;
     
     if (data.user) {
-      this.createProfile(data.user.id, fullName).catch(console.error);
+      this.createProfile(data.user.id, fullName).catch(() => {});
     }
     return data;
   }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 import { CampaignService } from '../services/CampaignService';
 import { Profile } from '../types';
@@ -35,11 +35,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserProfile = async (currentUser: any) => {
     if (!currentUser || !mountedRef.current) return null;
-    logStep("Iniciando carga de perfil", currentUser.id);
     try {
       let userProfile = await authService.fetchProfile(currentUser.id);
       if (!userProfile && mountedRef.current) {
-        logStep("Perfil inexistente, gatillando auto-creación...");
         const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Usuario';
         await fetch('/api/create-profile', {
             method: 'POST',
@@ -50,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return userProfile;
     } catch (err) {
-      console.error("[AUTH_ERROR] Fallo carga perfil:", err);
+      console.error("[AUTH_ERROR] Error perfil:", err);
       return null;
     }
   };
@@ -61,17 +59,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
      
      if (code && !codeHandled.current) {
         codeHandled.current = true;
-        logStep("Código PKCE detectado. Limpiando URL para evitar re-procesamiento.");
+        logStep("Limpiando URL de retorno...");
         const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
         const savedRedirect = localStorage.getItem('donia_auth_redirect');
         if (savedRedirect) {
-            logStep("Redirigiendo a ruta guardada post-auth:", savedRedirect);
             localStorage.removeItem('donia_auth_redirect');
             window.location.assign(savedRedirect); 
         } else if (window.location.pathname === '/' || window.location.pathname === '/login') {
-            logStep("Sin ruta guardada, redirigiendo al dashboard.");
             window.location.assign('/dashboard');
         }
      }
@@ -79,44 +75,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     mountedRef.current = true;
-    if (initStarted.current) {
-        logStep("Inicialización ya en curso o completada. Ignorando re-ejecución.");
-        return;
-    }
+    if (initStarted.current) return;
     initStarted.current = true;
 
     const initApp = async () => {
-      logStep("Arrancando InitApp principal...");
+      logStep("Iniciando flujo resiliente...");
+      
+      // Failsafe global: Si en 7 segundos seguimos cargando, forzamos entrada como invitado
+      const failsafeTimer = setTimeout(() => {
+        if (mountedRef.current && loading) {
+          logStep("TIMEOUT CRÍTICO: Forzando desactivación de loader.");
+          setLoading(false);
+          setDebugError("La validación de sesión tardó demasiado. Entrando como invitado.");
+        }
+      }, 7000);
+
       try {
-        logStep("Paso 1: Inicializando AuthService (Fetch de Config)...");
         await authService.initialize();
-        
-        logStep("Paso 2: Inicializando CampaignService...");
-        campaignService.initialize().catch(e => console.warn("CampaignService init non-critical fail:", e));
+        campaignService.initialize().catch(() => {});
         
         const client = authService.getSupabase();
         if (!client) {
-          logStep("Error Crítico: Supabase Client no se pudo instanciar.");
+          clearTimeout(failsafeTimer);
           if (mountedRef.current) setLoading(false);
           return;
         }
 
-        // Suscribirse a cambios antes de pedir la sesión para no perder eventos
-        logStep("Paso 3: Suscribiendo a onAuthStateChange...");
+        // Suscripción temprana
         const { data: { subscription } } = (client.auth as any).onAuthStateChange(async (event: any, session: any) => {
           if (!mountedRef.current) return;
+          logStep(`Evento: ${event}`, session?.user?.email);
           
-          logStep(`Evento Auth detectado: ${event}`, session?.user?.email);
           const currentUser = session?.user ?? null;
+          setUser(currentUser);
           
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            setUser(currentUser);
             if (currentUser) {
               const p = await loadUserProfile(currentUser);
               if (mountedRef.current) setProfile(p);
               cleanUrlAndRedirect();
             }
-            if (mountedRef.current) setLoading(false);
+            if (mountedRef.current) {
+                clearTimeout(failsafeTimer);
+                setLoading(false);
+            }
           }
           
           if (event === 'SIGNED_OUT') {
@@ -126,50 +128,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
-        logStep("Paso 4: Verificando sesión inicial (getSession)...");
-        try {
-            const { data: { session }, error: sessionError } = await client.auth.getSession();
-            
-            if (sessionError) {
-                logStep("Error en getSession detectado", sessionError.message);
-                if (sessionError.message.includes("Abort")) {
-                    setDebugError("Conexión interrumpida por el navegador. Reintentando...");
-                }
-            }
+        // REGLA ORO: Delay para evitar colisión de locks de navegador con el proceso interno de Supabase
+        await new Promise(r => setTimeout(r, 800));
 
-            if (mountedRef.current) {
-              if (session?.user) {
-                logStep("Sesión recuperada con éxito para:", session.user.email);
-                setUser(session.user);
-                const p = await loadUserProfile(session.user);
-                if (mountedRef.current) setProfile(p);
-                cleanUrlAndRedirect();
-              } else {
-                const hasCode = new URLSearchParams(window.location.search).has('code');
-                if (!hasCode) {
-                    logStep("No hay sesión ni código PKCE pendiente. Carga completa.");
-                    setLoading(false);
-                } else {
-                    logStep("Código detectado pero sesión aún no lista. Esperando evento SIGNED_IN...");
-                    // Failsafe: si en 10 segs no pasa nada, quitamos el loader
-                    setTimeout(() => { if (mountedRef.current && loading) setLoading(false); }, 10000);
-                }
-              }
-            }
-        } catch (innerError: any) {
-            if (innerError.name === 'AbortError') {
-                logStep("AbortError capturado en getSession (Esperado en re-render). Ignorando.");
+        logStep("Pidiendo sesión al servidor...");
+        const { data: { session }, error: sessionError } = await client.auth.getSession().catch(e => ({ data: { session: null }, error: e }));
+        
+        if (sessionError) {
+            logStep("Error capturado en getSession", sessionError.message);
+        }
+
+        if (mountedRef.current) {
+          if (session?.user) {
+            logStep("Sesión activa encontrada.");
+            setUser(session.user);
+            const p = await loadUserProfile(session.user);
+            if (mountedRef.current) setProfile(p);
+            cleanUrlAndRedirect();
+            clearTimeout(failsafeTimer);
+            setLoading(false);
+          } else {
+            const hasCode = new URLSearchParams(window.location.search).has('code');
+            if (!hasCode) {
+                logStep("Sin sesión ni código. Flujo regular.");
+                clearTimeout(failsafeTimer);
+                setLoading(false);
             } else {
-                throw innerError;
+                logStep("Código detectado. Esperando intercambio PKCE...");
+                // No quitamos el loading aquí, dejamos que onAuthStateChange SIGNED_IN lo haga
             }
+          }
         }
 
         return () => {
           mountedRef.current = false;
           subscription.unsubscribe();
+          clearTimeout(failsafeTimer);
         };
       } catch (error: any) {
-        logStep("FALLO CRÍTICO EN FLUJO INIT", error.message);
+        logStep("Error fatal en initApp", error.message);
+        clearTimeout(failsafeTimer);
         if (mountedRef.current) setLoading(false);
       }
     };
@@ -178,7 +176,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signOut = async () => {
-    logStep("Iniciando cierre de sesión manual...");
     setLoading(true);
     await authService.signOut();
     setUser(null);
@@ -205,13 +202,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 <div className="w-2 h-2 bg-violet-600 rounded-full animate-ping"></div>
             </div>
         </div>
-        <div className="text-center">
+        <div className="text-center px-6">
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-2">Seguridad Donia</p>
-          <p className="text-slate-900 font-black text-lg">Verificando tu sesión...</p>
+          <p className="text-slate-900 font-black text-lg">Confirmando tu identidad...</p>
+          <p className="mt-4 text-xs text-slate-400 font-medium max-w-xs mx-auto leading-relaxed">
+            Estamos sincronizando tu sesión con los servidores de seguridad. Esto suele tomar un par de segundos.
+          </p>
           {debugError && (
-              <p className="mt-4 text-[10px] text-rose-500 font-bold bg-rose-50 px-4 py-2 rounded-full flex items-center gap-2">
-                  <AlertTriangle size={14} /> {debugError}
-              </p>
+              <div className="mt-8 flex flex-col items-center gap-3">
+                <p className="text-[10px] text-amber-600 font-bold bg-amber-50 px-4 py-2 rounded-full flex items-center gap-2">
+                    <AlertTriangle size={14} /> {debugError}
+                </p>
+                <button onClick={() => window.location.reload()} className="flex items-center gap-2 text-violet-600 font-black text-xs uppercase tracking-widest hover:underline">
+                    <RefreshCw size={14} /> Reintentar ahora
+                </button>
+              </div>
           )}
         </div>
       </div>
