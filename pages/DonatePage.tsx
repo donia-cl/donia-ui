@@ -183,20 +183,14 @@ const DonatePage: React.FC = () => {
           const settings = {
             initialization: { 
               preferenceId: preferenceId,
-              amount: totalAmount, // Optional with preferenceId but good for fallback
-              payer: {
-                email: donorEmail || undefined,
-              }
+              amount: totalAmount, // Opcional, pero ayuda en ciertos flujos
             },
             customization: {
               paymentMethods: {
                 creditCard: 'all',      
-                debitCard: 'all',       
-                ticket: 'all',             
-                bankTransfer: 'all',       
-                atm: 'all',
-                wallet_purchase: 'all', // Ahora sí podemos habilitar Wallet porque tenemos preferenceId
+                debitCard: 'all',
                 maxInstallments: 1
+                // NOTA: Se eliminaron ticket, bankTransfer, atm y mercadoPago(wallet) para limpieza
               },
               visual: {
                 style: {
@@ -356,6 +350,7 @@ const DonatePage: React.FC = () => {
                 campaignTitle: campaign.titulo,
                 monto: totalAmount,
                 nombre: donorName,
+                email: donorEmail, // Enviamos el email del donante
                 comentario: donorComment
             })
         });
@@ -367,11 +362,11 @@ const DonatePage: React.FC = () => {
             setShowPaymentForm(true);
             window.scrollTo(0, 0);
         } else {
-            throw new Error("No se pudo inicializar la pasarela de pago.");
+            throw new Error(data.error || "No se pudo inicializar la pasarela de pago.");
         }
-    } catch (err) {
+    } catch (err: any) {
         console.error("Error creating preference:", err);
-        setError("Error de conexión al preparar el pago. Intenta nuevamente.");
+        setError(`Error al preparar el pago: ${err.message}`);
     } finally {
         setCreatingPreference(false);
     }

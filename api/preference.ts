@@ -41,21 +41,55 @@ export default async function handler(req: any, res: any) {
     } catch (e) { return res.status(500).send('Error'); }
   }
 
-  // CREAR PREFERENCIA (Checkout Pro)
+  // CREAR PREFERENCIA (Checkout Pro / Bricks)
   if (action === 'preference') {
-    const { campaignId, monto, nombre, comentario, campaignTitle } = req.body;
+    const { campaignId, monto, nombre, comentario, campaignTitle, email } = req.body; // Added email to body destructuring
+    
     const preference = { 
-      items: [{ id: campaignId, title: `Donación: ${campaignTitle}`, quantity: 1, unit_price: Number(monto), currency_id: 'CLP' }], 
-      metadata: { campaign_id: campaignId, donor_name: nombre, donor_comment: comentario }, 
-      back_urls: { success: `${req.headers.referer}?status=success` }, 
-      auto_return: 'approved' 
+      items: [{ 
+        id: campaignId, 
+        title: `Donación: ${campaignTitle}`, 
+        quantity: 1, 
+        unit_price: Number(monto), 
+        currency_id: 'CLP' 
+      }], 
+      payer: {
+        email: email || 'donor@donia.cl', // Email es requerido
+        entity_type: 'individual', // OBLIGATORIO PARA BRICKS
+      },
+      payment_methods: {
+        excluded_payment_types: [
+            { id: "ticket" },
+            { id: "bank_transfer" },
+            { id: "atm" }
+        ],
+        installments: 1 // Forzar 1 cuota por defecto si se desea
+      },
+      metadata: { 
+        campaign_id: campaignId, 
+        donor_name: nombre, 
+        donor_comment: comentario 
+      }, 
+      back_urls: { 
+        success: `${req.headers.referer}?status=success` 
+      }, 
+      auto_return: 'approved',
+      binary_mode: true
     };
+
     const resp = await fetch('https://api.mercadopago.com/checkout/preferences', { 
       method: 'POST', 
       headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, 
       body: JSON.stringify(preference) 
     });
+    
     const data = await resp.json();
+    
+    if (!resp.ok) {
+        console.error("MP Preference Error:", data);
+        return res.status(500).json({ success: false, error: data.message });
+    }
+
     return res.status(200).json({ success: true, preference_id: data.id });
   }
 
