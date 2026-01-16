@@ -484,9 +484,16 @@ const DonatePage: React.FC = () => {
                     </div>
                   )}
 
-                  <p className="text-center text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                    <Lock size={12} /> Pago seguro vía Mercado Pago
-                  </p>
+                  <div className="pt-6 border-t border-slate-50 flex flex-col items-center justify-center gap-2">
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                      <Lock size={12} /> Procesado de forma segura por
+                    </p>
+                    <img 
+                      src="https://upload.wikimedia.org/wikipedia/commons/0/04/Mercado_Pago_Logo.png" 
+                      alt="Mercado Pago" 
+                      className="h-8 object-contain opacity-80 hover:opacity-100 transition-opacity"
+                    />
+                  </div>
                 </div>
               )}
             </div>
