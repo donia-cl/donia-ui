@@ -6,13 +6,13 @@ import {
   Heart, 
   Loader2, 
   Lock, 
-  ArrowRight,
-  AlertCircle,
-  Zap,
-  Receipt,
-  Mail,
-  Check,
-  CreditCard
+  ArrowRight, 
+  AlertCircle, 
+  Zap, 
+  Receipt, 
+  Mail, 
+  Check, 
+  CreditCard 
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
@@ -163,9 +163,10 @@ const DonatePage: React.FC = () => {
             },
             customization: {
               paymentMethods: {
+                wallet_purchase: 'all', // Opción Mercado Pago Wallet
                 creditCard: 'all',
                 debitCard: 'all',
-                mercadoPago: 'all',
+                maxInstallments: 1 // Una sola cuota
               },
               visual: {
                 style: {
@@ -176,7 +177,6 @@ const DonatePage: React.FC = () => {
             },
             callbacks: {
               onReady: () => {
-                // Solo actualizamos estado si el componente sigue montado y en esta vista
                 if (isMountedRef.current && !isCancelled) setBrickLoading(false);
               },
               onSubmit: ({ selectedPaymentMethod, formData }: any) => {
@@ -206,7 +206,7 @@ const DonatePage: React.FC = () => {
                   .then((response) => {
                     if (!isMountedRef.current || isCancelled) return;
                     
-                    if (response.success && response.status === 'approved') {
+                    if (response.success && (response.status === 'approved' || response.status === 'in_process')) {
                       setPaymentStatus('success');
                       resolve(void 0); 
                     } else {
@@ -234,7 +234,6 @@ const DonatePage: React.FC = () => {
             },
           });
 
-          // Si el usuario canceló (hizo click en Editar) MIENTRAS se creaba el brick:
           if (isCancelled) {
               if (controller) controller.unmount();
               return;
@@ -253,13 +252,12 @@ const DonatePage: React.FC = () => {
       renderPaymentBrick();
     }
     
-    // Cleanup function del useEffect
     return () => {
-        isCancelled = true; // Cancelar cualquier promesa pendiente
+        isCancelled = true;
         if (brickControllerRef.current) {
             try {
                 brickControllerRef.current.unmount().catch(() => {});
-            } catch (err) { /* ignore cleanup errors */ }
+            } catch (err) { /* ignore */ }
             brickControllerRef.current = null;
         }
     };
@@ -309,7 +307,7 @@ const DonatePage: React.FC = () => {
     }
     setError(null);
     setShowPaymentForm(true);
-    window.scrollTo(0, 0); // Scroll arriba al continuar
+    window.scrollTo(0, 0);
   };
 
   return (

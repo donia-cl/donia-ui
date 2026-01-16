@@ -69,10 +69,19 @@ export default async function handler(req: any, res: any) {
 
     logger.info('PAYMENT_PROCESSED', { id: paymentResult.id, status: paymentResult.status });
 
-    // Si el pago fue aprobado, guardamos en Supabase
-    if (paymentResult.status === 'approved') {
+    // Guardamos la donación si fue aprobada O está en proceso/pendiente
+    // Esto asegura que si sale "in_process", quede registro en la BD
+    const isSuccess = paymentResult.status === 'approved';
+    const isPending = paymentResult.status === 'in_process' || paymentResult.status === 'pending';
+
+    if (isSuccess || isPending) {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         const amount = paymentResult.transaction_amount;
+        
+        // Mapeamos el estado de MP a nuestro estado interno
+        // approved -> completed
+        // in_process/pending -> pending
+        const dbStatus = isSuccess ? 'completed' : 'pending';
 
         // Insertar Donación
         await supabase.from('donations').insert([{
@@ -84,16 +93,20 @@ export default async function handler(req: any, res: any) {
           comentario: metadata.comentario || '',
           payment_provider: 'mercado_pago',
           payment_id: String(paymentResult.id),
-          status: 'completed'
+          status: dbStatus
         }]);
 
-        // Actualizar Campaña
-        const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
-        if (campaign) {
-          await supabase.from('campaigns').update({
-            recaudado: (Number(campaign.recaudado) || 0) + amount,
-            donantes_count: (Number(campaign.donantes_count) || 0) + 1
-          }).eq('id', campaignId);
+        // Actualizar Campaña (Solo sumamos al recaudado si está aprobado realmente)
+        // Opcional: Podrías sumar los pendientes si quisieras mostrar "comprometido", 
+        // pero por seguridad financiera usualmente solo sumamos lo 'completed'.
+        if (isSuccess) {
+            const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
+            if (campaign) {
+              await supabase.from('campaigns').update({
+                recaudado: (Number(campaign.recaudado) || 0) + amount,
+                donantes_count: (Number(campaign.donantes_count) || 0) + 1
+              }).eq('id', campaignId);
+            }
         }
     }
 
