@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -154,16 +155,13 @@ const Dashboard: React.FC = () => {
 
     setProfileSaving(true);
     try {
-      // Usamos la respuesta directa del servidor para actualizar el estado global inmediatamente
       const updatedProfile = await authService.updateProfile(user.id, {
         full_name: profileForm.full_name,
         rut: profileForm.rut,
         phone: profileForm.phone
       });
       
-      // Actualización inmediata del estado global (Evita race conditions de fetch)
       setProfile(updatedProfile);
-      
       setIsEditingProfile(false);
       setShowSuccessToast(true);
       setTimeout(() => setShowSuccessToast(false), 5000);
@@ -205,7 +203,6 @@ const Dashboard: React.FC = () => {
 
   const isProfileIncomplete = !profile?.rut || !profile?.phone;
   
-  // Consistencia de nombre en el Dashboard
   const dashboardName = profile?.full_name || user?.user_metadata?.full_name || 'Usuario';
   const dashboardInitial = dashboardName.charAt(0).toUpperCase();
 
@@ -220,7 +217,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="bg-slate-50/50 min-h-screen pb-20">
-      {/* HEADER PRINCIPAL */}
       <div className="bg-white border-b border-slate-100 pt-16 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -660,7 +656,6 @@ const Dashboard: React.FC = () => {
                               type="text"
                               className="w-full p-4 bg-white border-2 border-slate-100 focus:border-violet-200 focus:bg-slate-50 rounded-2xl outline-none font-bold text-slate-900 transition-all"
                               value={profileForm.full_name}
-                              {/* FIXED: Using correct state setter setProfileForm instead of setFormData */}
                               onChange={(e) => setProfileForm({...profileForm, full_name: e.target.value})}
                               placeholder="Tu nombre legal"
                            />
