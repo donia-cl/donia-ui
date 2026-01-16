@@ -25,7 +25,7 @@ export class AuthService {
         let url = '';
         let key = '';
 
-        // Prioridad 1: Intentar obtener de variables de entorno (Vite/React)
+        // Prioridad 1: Variables de entorno locales
         try {
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -46,20 +46,18 @@ export class AuthService {
           } catch (e) { /* ignore */ }
         }
 
-        // Prioridad 3: Consultar endpoint de configuración si todo falla (Aumentamos timeout a 5s)
+        // Prioridad 3: Consultar endpoint (Sin AbortController)
         if (!url || !key) {
            try {
-             const controller = new AbortController();
-             const timeoutId = setTimeout(() => controller.abort(), 5000);
-             const resp = await fetch('/api/config', { signal: controller.signal });
-             clearTimeout(timeoutId);
+             // Simple fetch, sin signal
+             const resp = await fetch('/api/config');
              if (resp.ok) {
                const config = await resp.json();
                url = config.supabaseUrl || url;
                key = config.supabaseKey || key;
              }
            } catch (e: any) {
-             console.warn("[AuthService] Config fetch skipped or timed out");
+             console.warn("[AuthService] Config fetch failed (using defaults/env only)");
            }
         }
           
@@ -93,7 +91,6 @@ export class AuthService {
       const json = await response.json();
       return json.success ? json.data : null;
     } catch (e) {
-      console.error("Error fetching profile via API:", e);
       return null;
     }
   }
@@ -116,9 +113,7 @@ export class AuthService {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: data.user.id, fullName: fullName })
         });
-      } catch (profileError) {
-        console.warn("[AuthService] Error auto-creación perfil:", profileError);
-      }
+      } catch (profileError) { /* ignore */ }
     }
     return data;
   }

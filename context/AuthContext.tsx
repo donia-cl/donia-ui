@@ -71,20 +71,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (hasAccessToken) {
           console.log("[AuthContext] Detectado callback de OAuth, esperando procesamiento...");
-          // Timer de seguridad aumentado para dar margen a la red
+          
+          // Timer de seguridad: Si en 8 segundos Supabase no resuelve, forzamos la entrada
           oauthSafetyTimeout = setTimeout(() => {
-            if (mounted && loading) {
-              console.warn("[AuthContext] OAuth safety timeout triggered. Releasing UI.");
+            if (mounted) {
+              console.warn("[AuthContext] OAuth safety timeout. Forcing UI release.");
               setLoading(false);
+              // CRÍTICO: Si falló el procesamiento automático, limpiamos el hash manualmente
+              // para que el Router no se confunda y muestre la app
+              if (window.location.hash.includes('access_token')) {
+                 window.location.hash = '#/';
+              }
             }
-          }, 10000);
+          }, 8000);
         } else {
-          // Si NO es OAuth, liberamos el loading UI inmediatamente (optimistic UI)
-          // La sesión se cargará en background.
+          // Si NO es OAuth, UI Optimista inmediata
           if (mounted) setLoading(false);
         }
 
-        // Si no hay cliente, terminamos la inicialización
         if (!client) {
           if (mounted) {
              setLoading(false);
@@ -93,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        // Carga de sesión en background
+        // Carga de sesión
         const session = await authService.getSession();
         
         if (mounted) {
@@ -123,7 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
             setLoading(false);
             
-            // LIMPIEZA CRÍTICA DEL HASH PARA HASHROUTER
+            // Limpieza exitosa del hash
             if (window.location.hash.includes('access_token')) {
               const savedRedirect = localStorage.getItem('donia_auth_redirect');
               if (savedRedirect) {
@@ -174,9 +178,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // UI DE BLOQUEO: Solo si estamos esperando OAuth activamente (Hash en URL)
-  // Eliminamos !isInitialized para que la Landing cargue inmediatamente mientras se verifica la sesión
-  const isBlockedByOAuth = window.location.hash.includes('access_token');
+  // UI DE BLOQUEO: Solo bloqueamos si hay loading Y hay un token en la URL.
+  // Si loading es false (por éxito o por timeout), mostramos la app.
+  const isBlockedByOAuth = loading && window.location.hash.includes('access_token');
 
   if (isBlockedByOAuth) {
     return (

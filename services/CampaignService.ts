@@ -24,16 +24,12 @@ export class CampaignService {
   public async initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
 
-    // Inicializamos Auth primero (esto es rápido si las llaves están locales)
     try {
        await AuthService.getInstance().initialize();
-    } catch (e) {
-       console.warn("[CampaignService] Auth init warning:", e);
-    }
+    } catch (e) { /* ignore */ }
 
-    // CRITICO: No bloqueamos la inicialización esperando la configuración del servidor.
-    // Lanzamos la petición en segundo plano. Si falla o demora, la app ya cargó.
-    this.fetchServerConfig().catch(() => { /* Silent catch for abort/timeout */ });
+    // Fetch de configuración sin AbortController
+    this.fetchServerConfig().catch(() => { /* Silent fail */ });
 
     this.initPromise = Promise.resolve();
     return this.initPromise;
@@ -41,28 +37,16 @@ export class CampaignService {
 
   private async fetchServerConfig() {
      try {
-        const controller = new AbortController();
-        // Timeout corto para no dejar conexiones colgadas en background
-        const timeoutId = setTimeout(() => controller.abort(new Error("ConfigTimeout")), 5000);
-
         const resp = await fetch('/api/config', { 
           method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal
+          headers: { 'Content-Type': 'application/json' }
         });
         
-        clearTimeout(timeoutId);
-
         if (resp.ok) {
           const config = await resp.json();
           this.aiEnabled = !!config.aiEnabled;
         }
       } catch (netError: any) {
-        // Silencioso: Si falla, asumimos configuración por defecto (sin IA)
-        // Solo logueamos si NO es un abort/timeout para mantener limpia la consola
-        if (netError.name !== 'AbortError' && netError.message !== 'ConfigTimeout') {
-            // console.warn("CampaignService config skipped.");
-        }
         this.aiEnabled = false; 
       }
   }
@@ -140,7 +124,6 @@ export class CampaignService {
       if (!json.success || !json.data) return null;
       return this.mapCampaign(json.data);
     } catch (e) { 
-      console.error(e);
       return null; 
     }
   }
@@ -195,8 +178,7 @@ export class CampaignService {
         try {
             json = JSON.parse(text);
         } catch (e) {
-            console.error("Respuesta no-JSON del servidor:", text.substring(0, 100));
-            throw new Error(`Error del servidor (${response.status}): Es posible que la imagen sea muy pesada.`);
+            throw new Error(`Error del servidor (${response.status})`);
         }
 
         if (!json.success) throw new Error(json.error || 'Error uploading image');
@@ -208,7 +190,6 @@ export class CampaignService {
   }
 
   async polishStory(story: string): Promise<string> {
-      // Intentamos inicializar pero no bloqueamos si falla la config AI
       await this.initialize();
       if (!this.aiEnabled) return story;
       try {
@@ -220,7 +201,6 @@ export class CampaignService {
           const json = await response.json();
           return json.text || story;
       } catch (e) {
-          console.error("AI Polish failed", e);
           return story;
       }
   }
