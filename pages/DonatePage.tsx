@@ -37,7 +37,11 @@ const DonatePage: React.FC = () => {
   const [donationAmount, setDonationAmount] = useState<number>(5000);
   const [tipPercentage, setTipPercentage] = useState<number | 'custom'>(10);
   const [customTipAmount, setCustomTipAmount] = useState<number>(0);
+  
+  // Nuevo estado para controlar el flujo de preferencia
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [creatingPreference, setCreatingPreference] = useState(false);
+  const [preferenceId, setPreferenceId] = useState<string | null>(null);
   
   const [mpPublicKey, setMpPublicKey] = useState<string>('');
   
@@ -66,7 +70,6 @@ const DonatePage: React.FC = () => {
   const ivaAmount = tipGrossAmount - tipNetAmount;
   
   // Comisión Mercado Pago: 3.8% (calculado sobre el monto de donación + propina)
-  // Ejemplo: ($5000 + $500) * 0.038 = $209
   const commissionAmount = Math.round((donationAmount + tipGrossAmount) * 0.038);
 
   // Total final
@@ -80,10 +83,11 @@ const DonatePage: React.FC = () => {
         tip: tipGrossAmount,
         subtotal: donationAmount + tipGrossAmount,
         commission: commissionAmount,
-        total: totalAmount
+        total: totalAmount,
+        preferenceId
       });
     }
-  }, [donationAmount, tipGrossAmount, commissionAmount, totalAmount, showPaymentForm]);
+  }, [donationAmount, tipGrossAmount, commissionAmount, totalAmount, showPaymentForm, preferenceId]);
 
   const handleManualTipChange = (strVal: string) => {
     const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
@@ -111,6 +115,7 @@ const DonatePage: React.FC = () => {
     setBrickLoading(false);
     setError(null);
     setShowPaymentForm(false);
+    setPreferenceId(null); // Reset preference
     window.scrollTo(0, 0);
   };
 
@@ -151,7 +156,8 @@ const DonatePage: React.FC = () => {
   useEffect(() => {
     let isCancelled = false;
 
-    if (!showPaymentForm) return;
+    // Solo iniciamos si debemos mostrar el form y TENEMOS preferenceId
+    if (!showPaymentForm || !preferenceId) return;
 
     if (!mpPublicKey) {
         setError("Error de configuración: No se encontró la llave pública de Mercado Pago.");
@@ -159,7 +165,7 @@ const DonatePage: React.FC = () => {
     }
 
     if (window.MercadoPago && paymentBrickContainerRef.current && campaign) {
-      console.log("[DEBUG] Inicializando Payment Brick...");
+      console.log("[DEBUG] Inicializando Payment Brick con Preference ID:", preferenceId);
       setBrickLoading(true);
       setError(null);
 
@@ -176,21 +182,20 @@ const DonatePage: React.FC = () => {
         try {
           const settings = {
             initialization: { 
-              amount: totalAmount,
+              preferenceId: preferenceId,
+              amount: totalAmount, // Optional with preferenceId but good for fallback
               payer: {
                 email: donorEmail || undefined,
-                entityType: 'individual'
               }
             },
             customization: {
               paymentMethods: {
-                // NOTA: Deshabilitamos 'mercadoPago' (Wallet) porque requiere 'preferenceId' en initialization.
-                // Al usar 'amount' directo, solo soportamos tarjetas por ahora.
                 creditCard: 'all',      
                 debitCard: 'all',       
-                ticket: [],             
-                bankTransfer: [],       
-                atm: [],                
+                ticket: 'all',             
+                bankTransfer: 'all',       
+                atm: 'all',
+                wallet_purchase: 'all', // Ahora sí podemos habilitar Wallet porque tenemos preferenceId
                 maxInstallments: 1
               },
               visual: {
@@ -293,7 +298,7 @@ const DonatePage: React.FC = () => {
             brickControllerRef.current = null;
         }
     };
-  }, [showPaymentForm, totalAmount, campaign, mpPublicKey]); 
+  }, [showPaymentForm, preferenceId, totalAmount, campaign, mpPublicKey]); 
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[60vh]">
@@ -327,7 +332,7 @@ const DonatePage: React.FC = () => {
     );
   }
 
-  const validateAndContinue = () => {
+  const validateAndContinue = async () => {
     if (donationAmount < 500) {
       setError("El monto mínimo de donación es $500 CLP");
       return;
@@ -337,9 +342,39 @@ const DonatePage: React.FC = () => {
       setError("Por favor ingresa un correo electrónico válido.");
       return;
     }
+    
     setError(null);
-    setShowPaymentForm(true);
-    window.scrollTo(0, 0);
+    setCreatingPreference(true);
+
+    try {
+        // 1. Crear Preferencia en Backend
+        const resp = await fetch('/api/preference?action=preference', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                campaignId: campaign.id,
+                campaignTitle: campaign.titulo,
+                monto: totalAmount,
+                nombre: donorName,
+                comentario: donorComment
+            })
+        });
+        const data = await resp.json();
+        
+        if (data.success && data.preference_id) {
+            // 2. Establecer ID y mostrar brick
+            setPreferenceId(data.preference_id);
+            setShowPaymentForm(true);
+            window.scrollTo(0, 0);
+        } else {
+            throw new Error("No se pudo inicializar la pasarela de pago.");
+        }
+    } catch (err) {
+        console.error("Error creating preference:", err);
+        setError("Error de conexión al preparar el pago. Intenta nuevamente.");
+    } finally {
+        setCreatingPreference(false);
+    }
   };
 
   return (
@@ -476,9 +511,19 @@ const DonatePage: React.FC = () => {
 
                   <button 
                     onClick={validateAndContinue}
-                    className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-violet-100"
+                    disabled={creatingPreference}
+                    className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-violet-100 disabled:opacity-70 disabled:cursor-wait"
                   >
-                    Continuar al pago <ArrowRight size={20} />
+                    {creatingPreference ? (
+                        <>
+                            <Loader2 className="animate-spin" size={20} />
+                            Preparando pago...
+                        </>
+                    ) : (
+                        <>
+                            Continuar al pago <ArrowRight size={20} />
+                        </>
+                    )}
                   </button>
                 </div>
               ) : (
