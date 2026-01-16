@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ChevronLeft, 
   CheckCircle, 
@@ -76,6 +75,7 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const location = useLocation();
   
   const [formData, setFormData] = useState({ email: '', password: '', fullName: '' });
   
@@ -104,7 +104,7 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
 
   const handleGoogle = async () => {
     // Guardamos la ubicación actual para volver aquí tras la redirección de Google
-    localStorage.setItem('donia_auth_redirect', window.location.hash);
+    localStorage.setItem('donia_auth_redirect', location.pathname + location.search);
     
     setGoogleLoading(true);
     try {

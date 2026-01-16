@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CampaignProvider } from './context/CampaignContext';
 import { AuthProvider } from './context/AuthContext';
 import { Layout } from './components/Layout';

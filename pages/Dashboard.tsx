@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -192,7 +191,7 @@ const Dashboard: React.FC = () => {
   };
 
   const copyLink = (id: string) => {
-    const url = `${window.location.origin}/#/campana/${id}`;
+    const url = `${window.location.origin}/campana/${id}`;
     navigator.clipboard.writeText(url);
     alert("¡Enlace copiado!");
   };

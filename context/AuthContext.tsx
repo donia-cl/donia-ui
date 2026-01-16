@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
@@ -55,25 +54,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const cleanUrlAndRedirect = () => {
-     // Solo limpiamos si hay algo que limpiar
+     // Con BrowserRouter, los parámetros de OAuth están en la URL principal.
+     // Esta función limpia esos parámetros y redirige al usuario.
      const currentParams = new URLSearchParams(window.location.search);
      if (currentParams.has('code')) {
-        console.log("[AuthContext] Sesión confirmada. Limpiando URL de PKCE...");
-        const newUrl = window.location.pathname + window.location.hash;
+        console.log("[AuthContext] Sesión confirmada. Limpiando URL y redirigiendo...");
+        const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
-        // Redirección guardada
+        // Redirección guardada desde el flujo de creación, por ejemplo.
         const savedRedirect = localStorage.getItem('donia_auth_redirect');
         if (savedRedirect) {
             localStorage.removeItem('donia_auth_redirect');
-            if (window.location.hash !== savedRedirect && window.location.hash !== `#${savedRedirect}`) {
-               window.location.hash = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
-            }
+            window.location.assign(savedRedirect); // Navega a la ruta guardada
         } else {
-            // Default a dashboard si estamos en login
-            if (window.location.hash === '#/' || window.location.hash === '#/login' || window.location.hash === '') {
-               window.location.hash = '#/dashboard';
-            }
+            // Redirección por defecto al panel principal.
+            window.location.assign('/dashboard');
         }
      }
   };
@@ -165,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setProfile(null);
     setLoading(false);
-    window.location.hash = '#/';
+    window.location.assign('/');
   };
 
   // Solo mostramos loader de bloqueo si estamos procesando el código

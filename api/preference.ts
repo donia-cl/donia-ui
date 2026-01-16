@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Mailer, logger } from './_utils.js';
 
@@ -74,9 +73,9 @@ export default async function handler(req: any, res: any) {
   if (action === 'preference') {
     const { campaignId, monto, nombre, comentario, campaignTitle, email, donorUserId } = req.body; 
     
-    // URL de retorno forzada para evitar redirecciones al home
+    // URL de retorno compatible con BrowserRouter (sin hash)
     const baseUrl = req.headers.origin || 'https://donia.cl';
-    const returnUrl = `${baseUrl}/#/campana/${campaignId}/donar`;
+    const returnUrl = `${baseUrl}/campana/${campaignId}/donar`;
 
     const preference = { 
       items: [{ 
