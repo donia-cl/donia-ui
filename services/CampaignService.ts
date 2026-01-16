@@ -43,7 +43,7 @@ export class CampaignService {
      try {
         const controller = new AbortController();
         // Timeout corto para no dejar conexiones colgadas en background
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(new Error("ConfigTimeout")), 5000);
 
         const resp = await fetch('/api/config', { 
           method: 'GET',
@@ -57,8 +57,12 @@ export class CampaignService {
           const config = await resp.json();
           this.aiEnabled = !!config.aiEnabled;
         }
-      } catch (netError) {
+      } catch (netError: any) {
         // Silencioso: Si falla, asumimos configuración por defecto (sin IA)
+        // Solo logueamos si NO es un abort/timeout para mantener limpia la consola
+        if (netError.name !== 'AbortError' && netError.message !== 'ConfigTimeout') {
+            // console.warn("CampaignService config skipped.");
+        }
         this.aiEnabled = false; 
       }
   }

@@ -46,9 +46,10 @@ export class AuthService {
 
         if (!url || !key) {
            try {
-             // Usamos AbortController para evitar que este fetch se quede colgado
+             // Usamos AbortController para evitar que este fetch se quede colgado.
+             // REDUCIDO: 1500ms para mejorar la experiencia de usuario en carga inicial.
              const controller = new AbortController();
-             const timeoutId = setTimeout(() => controller.abort(), 3000);
+             const timeoutId = setTimeout(() => controller.abort(new Error("AuthInitTimeout")), 1500);
              
              const resp = await fetch('/api/config', { signal: controller.signal });
              clearTimeout(timeoutId);
@@ -59,9 +60,9 @@ export class AuthService {
                key = config.supabaseKey || key;
              }
            } catch (e: any) {
-             // Ignoramos errores de red/abort en la config dinámica
-             if (e.name !== 'AbortError') {
-                console.warn("[AuthService] Runtime config fetch failed.", e.message);
+             // Ignoramos errores de red/abort/timeout silenciosamente para limpiar la consola
+             if (e.name !== 'AbortError' && e.message !== 'AuthInitTimeout') {
+                console.warn("[AuthService] Config check skipped:", e.message);
              }
            }
         }
@@ -78,7 +79,7 @@ export class AuthService {
           });
         } else {
           // No bloqueamos, pero logueamos advertencia
-          console.warn("[AuthService] No se encontraron llaves de Supabase. La autenticación estará deshabilitada.");
+          console.warn("[AuthService] No se encontraron llaves de Supabase. Modo offline/limitado.");
         }
       } catch (e) {
         console.error("[AuthService] Initialization failed:", e);
