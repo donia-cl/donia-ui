@@ -16,8 +16,8 @@ export const logger = {
       level: 'ERROR',
       timestamp: new Date().toISOString(),
       action,
-      error: error.message || error,
-      stack: error.stack,
+      error: error?.message || error,
+      stack: error?.stack,
       ...meta
     }));
   },
@@ -35,16 +35,17 @@ export const logger = {
 
 // 2. SERVICIO DE CORREO (RESEND)
 export class Mailer {
-  private static resend = new Resend(process.env.RESEND_API_KEY);
+  private static getResend() {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY no configurada en el servidor');
+    }
+    return new Resend(process.env.RESEND_API_KEY);
+  }
 
   static async sendDonationReceipt(to: string, donorName: string, amount: number, campaignTitle: string) {
-    if (!process.env.RESEND_API_KEY) {
-      logger.error('MAILER_ERROR', new Error('RESEND_API_KEY missing'));
-      return;
-    }
-
     try {
-      const { data, error } = await this.resend.emails.send({
+      const resend = this.getResend();
+      const { data, error } = await resend.emails.send({
         from: 'Donia <comprobantes@donia.cl>',
         to: [to],
         subject: `¡Gracias por tu apoyo a ${campaignTitle}! 💜`,
@@ -84,7 +85,7 @@ export class Mailer {
       if (error) {
         logger.error('MAILER_SEND_FAILED', error);
       } else {
-        logger.info('MAILER_SENT_SUCCESS', { to, campaignTitle });
+        logger.info('MAILER_SENT_SUCCESS', { to, campaignTitle, emailId: data?.id });
       }
     } catch (e) {
       logger.error('MAILER_CRITICAL_ERROR', e);
@@ -92,10 +93,9 @@ export class Mailer {
   }
 
   static async sendProfileUpdateNotification(to: string, userName: string) {
-    if (!process.env.RESEND_API_KEY) return;
-
     try {
-      await this.resend.emails.send({
+      const resend = this.getResend();
+      const { data, error } = await resend.emails.send({
         from: 'Donia Seguridad <seguridad@donia.cl>',
         to: [to],
         subject: `Tu perfil en Donia ha sido actualizado 🛡️`,
@@ -131,7 +131,12 @@ export class Mailer {
           </div>
         `,
       });
-      logger.info('PROFILE_UPDATE_EMAIL_SENT', { to });
+
+      if (error) {
+        logger.error('PROFILE_UPDATE_EMAIL_FAILED', error);
+      } else {
+        logger.info('PROFILE_UPDATE_EMAIL_SENT', { to, emailId: data?.id });
+      }
     } catch (e) {
       logger.error('PROFILE_UPDATE_EMAIL_ERROR', e);
     }

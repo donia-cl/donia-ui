@@ -41,15 +41,22 @@ export default async function handler(req: any, res: any) {
     if (error) throw error;
 
     // 3. Obtener el email del usuario desde Auth para enviar la notificación
-    // Usamos el cliente admin para acceder a auth.users
-    const { data: { user }, error: authError } = await (supabase.auth as any).admin.getUserById(id);
+    // Usamos el cliente admin para acceder a auth.users (corregido el acceso seguro a data)
+    const { data: authData, error: authError } = await (supabase.auth as any).admin.getUserById(id);
+    const user = authData?.user;
     
-    if (!authError && user && user.email) {
+    if (authError) {
+      logger.error('AUTH_GET_USER_ERROR', authError, { userId: id });
+    }
+
+    if (user && user.email) {
       logger.info('TRIGGERING_PROFILE_UPDATE_EMAIL', { email: user.email });
-      // Enviamos el correo de notificación (Asíncrono, no bloqueamos la respuesta al cliente)
+      // Enviamos el correo de notificación (Asíncrono)
       Mailer.sendProfileUpdateNotification(user.email, data.full_name || 'Usuario Donia').catch(e => {
         logger.error('ASYNC_MAILER_PROFILE_ERROR', e);
       });
+    } else {
+      logger.info('SKIP_PROFILE_UPDATE_EMAIL', { reason: 'No user or email found', userId: id });
     }
 
     return res.status(200).json({ success: true, data });
