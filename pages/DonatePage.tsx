@@ -11,7 +11,8 @@ import {
   Zap,
   Receipt,
   Mail,
-  Check
+  Check,
+  CreditCard
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
@@ -75,6 +76,21 @@ const DonatePage: React.FC = () => {
     setDonationAmount(numVal);
   };
 
+  const handleBackToForm = () => {
+    // Limpieza agresiva antes de cambiar el estado visual
+    if (brickControllerRef.current) {
+        try {
+            brickControllerRef.current.unmount();
+        } catch (e) {
+            console.warn("Error unmounting brick manually", e);
+        }
+        brickControllerRef.current = null;
+    }
+    setBrickLoading(false);
+    setError(null);
+    setShowPaymentForm(false);
+  };
+
   useEffect(() => {
     if (user || profile) {
       if (profile?.full_name) setDonorName(profile.full_name);
@@ -108,18 +124,26 @@ const DonatePage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    if (!showPaymentForm) return;
+    // Bandera para cancelar la ejecución asíncrona si el usuario sale de esta vista
+    let isCancelled = false;
+
+    if (!showPaymentForm) {
+        return;
+    }
 
     if (!mpPublicKey) {
         setError("Error de configuración: No se encontró la llave pública de Mercado Pago.");
         return;
     }
 
-    let brickController: any = null;
-
     if (window.MercadoPago && paymentBrickContainerRef.current && campaign) {
       setBrickLoading(true);
       setError(null);
+
+      // Limpiar contenedor previo por seguridad
+      if (paymentBrickContainerRef.current) {
+          paymentBrickContainerRef.current.innerHTML = '';
+      }
 
       const mp = new window.MercadoPago(mpPublicKey, {
         locale: 'es-CL'
@@ -127,10 +151,8 @@ const DonatePage: React.FC = () => {
       const bricksBuilder = mp.bricks();
 
       const renderPaymentBrick = async () => {
-        if (paymentBrickContainerRef.current) paymentBrickContainerRef.current.innerHTML = '';
-        
         try {
-          brickController = await bricksBuilder.create('payment', 'paymentBrick_container', {
+          const controller = await bricksBuilder.create('payment', 'paymentBrick_container', {
             initialization: { 
               amount: totalAmount,
               payer: {
@@ -153,11 +175,12 @@ const DonatePage: React.FC = () => {
             },
             callbacks: {
               onReady: () => {
-                if (isMountedRef.current) setBrickLoading(false);
+                // Solo actualizamos estado si el componente sigue montado y en esta vista
+                if (isMountedRef.current && !isCancelled) setBrickLoading(false);
               },
               onSubmit: ({ selectedPaymentMethod, formData }: any) => {
                 return new Promise((resolve, reject) => {
-                  if (!isMountedRef.current) {
+                  if (!isMountedRef.current || isCancelled) {
                       resolve(void 0);
                       return;
                   }
@@ -180,7 +203,7 @@ const DonatePage: React.FC = () => {
                   })
                   .then((response) => response.json())
                   .then((response) => {
-                    if (!isMountedRef.current) return;
+                    if (!isMountedRef.current || isCancelled) return;
                     
                     if (response.success && response.status === 'approved') {
                       setPaymentStatus('success');
@@ -193,7 +216,7 @@ const DonatePage: React.FC = () => {
                   })
                   .catch((error) => {
                     console.error("Error de red:", error);
-                    if (isMountedRef.current) {
+                    if (isMountedRef.current && !isCancelled) {
                         setError("Error de conexión al procesar el pago.");
                     }
                     reject();
@@ -202,17 +225,24 @@ const DonatePage: React.FC = () => {
               },
               onError: (error: any) => {
                 console.warn("Brick Warning:", error);
-                if (isMountedRef.current && brickLoading) {
+                if (isMountedRef.current && !isCancelled) {
                    setBrickLoading(false);
                    setError("Ocurrió un error al cargar la pasarela de pagos.");
                 }
               },
             },
           });
-          brickControllerRef.current = brickController;
+
+          // Si el usuario canceló (hizo click en Editar) MIENTRAS se creaba el brick:
+          if (isCancelled) {
+              if (controller) controller.unmount();
+              return;
+          }
+
+          brickControllerRef.current = controller;
         } catch (e) {
           console.error("Error creating brick:", e);
-          if (isMountedRef.current) {
+          if (isMountedRef.current && !isCancelled) {
               setBrickLoading(false);
               setError("No se pudo iniciar el componente de pago.");
           }
@@ -222,9 +252,13 @@ const DonatePage: React.FC = () => {
       renderPaymentBrick();
     }
     
+    // Cleanup function del useEffect
     return () => {
+        isCancelled = true; // Cancelar cualquier promesa pendiente
         if (brickControllerRef.current) {
-            brickControllerRef.current.unmount().catch(() => {});
+            try {
+                brickControllerRef.current.unmount().catch(() => {});
+            } catch (err) { /* ignore cleanup errors */ }
             brickControllerRef.current = null;
         }
     };
@@ -418,9 +452,14 @@ const DonatePage: React.FC = () => {
               ) : (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-black text-slate-900">Método de pago</h2>
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center">
+                            <CreditCard size={20} />
+                        </div>
+                        <h2 className="text-xl font-black text-slate-900">Detalles del pago</h2>
+                    </div>
                     <button 
-                      onClick={() => setShowPaymentForm(false)}
+                      onClick={handleBackToForm}
                       className="text-violet-600 font-bold text-xs uppercase tracking-widest hover:underline"
                     >
                       Editar datos
@@ -430,7 +469,7 @@ const DonatePage: React.FC = () => {
                   {/* Container de Mercado Pago */}
                   <div className="relative min-h-[400px]">
                     {brickLoading && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-10">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-10 rounded-[32px]">
                          <Loader2 className="w-8 h-8 text-violet-600 animate-spin mb-3" />
                          <p className="text-xs font-black uppercase tracking-widest text-slate-400">Cargando pasarela...</p>
                       </div>
