@@ -26,29 +26,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const campaignService = CampaignService.getInstance();
 
   const fetchProfile = async (userId: string) => {
-    const client = authService.getSupabase();
-    if (!client) return null;
-    
-    try {
-      const { data, error } = await client
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-        
-      if (error) {
-        // Ignorar errores de cancelación (AbortError) para evitar ruido en consola
-        if (error.message?.includes('aborted') || error.code === 'ABORT') {
-          return null;
-        }
-        console.error("Error fetching profile:", error);
-        return null;
-      }
-      return data as Profile;
-    } catch (e: any) {
-      if (e.name === 'AbortError') return null;
-      return null;
-    }
+    // Usamos el servicio de autenticación que ahora consulta vía API segura (Service Role)
+    return await authService.fetchProfile(userId);
   };
 
   const ensureProfileExists = async (currentUser: any) => {

@@ -46,8 +46,6 @@ export class AuthService {
 
         if (!url || !key) {
            try {
-             // Usamos AbortController para evitar que este fetch se quede colgado.
-             // OPTIMIZACIÓN: Reducido a 800ms para evitar esperas largas en carga inicial si la API está fría.
              const controller = new AbortController();
              const timeoutId = setTimeout(() => controller.abort(new Error("AuthInitTimeout")), 800);
              
@@ -60,7 +58,6 @@ export class AuthService {
                key = config.supabaseKey || key;
              }
            } catch (e: any) {
-             // Ignoramos errores de red/abort/timeout silenciosamente para limpiar la consola
              if (e.name !== 'AbortError' && e.message !== 'AuthInitTimeout') {
                 console.warn("[AuthService] Config check skipped:", e.message);
              }
@@ -77,9 +74,6 @@ export class AuthService {
               flowType: 'implicit'
             }
           });
-        } else {
-          // No bloqueamos, pero logueamos advertencia
-          console.warn("[AuthService] No se encontraron llaves de Supabase. Modo offline/limitado.");
         }
       } catch (e) {
         console.error("[AuthService] Initialization failed:", e);
@@ -93,43 +87,41 @@ export class AuthService {
     return this.client;
   }
 
+  async fetchProfile(userId: string): Promise<Profile | null> {
+    try {
+      const response = await fetch(`/api/get-profile?userId=${userId}`);
+      if (!response.ok) return null;
+      const json = await response.json();
+      return json.success ? json.data : null;
+    } catch (e) {
+      console.error("Error fetching profile via API:", e);
+      return null;
+    }
+  }
+
   async signUp(email: string, pass: string, fullName: string) {
     await this.initialize();
+    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
-    if (!this.client) {
-        throw new Error("Servicio de autenticación no disponible.");
-    }
-    
-    // 1. Crear usuario en Auth
     const { data, error } = await (this.client.auth as any).signUp({
       email,
       password: pass,
-      options: { 
-        data: { full_name: fullName }
-      }
+      options: { data: { full_name: fullName } }
     });
 
-    if (error) {
-        console.error("Supabase SignUp Error:", error);
-        throw error;
-    }
+    if (error) throw error;
 
-    // 2. Crear perfil vía API Backend (para saltar RLS policy que da error 403)
     if (data.user) {
       try {
         await fetch('/api/create-profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                id: data.user.id,
-                fullName: fullName
-            })
+            body: JSON.stringify({ id: data.user.id, fullName: fullName })
         });
       } catch (profileError) {
-        console.warn("[AuthService] Error conectando con api/create-profile", profileError);
+        console.warn("[AuthService] Error auto-creación perfil:", profileError);
       }
     }
-
     return data;
   }
 
@@ -144,15 +136,10 @@ export class AuthService {
   async signInWithGoogle() {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
-    
     const redirectTo = window.location.origin;
-    
     const { data, error } = await (this.client.auth as any).signInWithOAuth({
       provider: 'google',
-      options: { 
-        redirectTo,
-        skipBrowserRedirect: false
-      }
+      options: { redirectTo, skipBrowserRedirect: false }
     });
     if (error) throw error;
     return data;
@@ -170,11 +157,7 @@ export class AuthService {
       const { data: { session } } = await (this.client.auth as any).getSession();
       return session;
     } catch (e: any) {
-      // FIX: Ignorar AbortError para no ensuciar la consola
-      if (e.name === 'AbortError' || e.message?.includes('aborted')) {
-        return null;
-      }
-      console.error("Error getting session:", e);
+      if (e.name === 'AbortError' || e.message?.includes('aborted')) return null;
       return null;
     }
   }
