@@ -57,7 +57,7 @@ const DonatePage: React.FC = () => {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  // Cálculos financieros
+  // --- CÁLCULOS FINANCIEROS ---
   const tipGrossAmount = tipPercentage === 'custom' 
     ? customTipAmount 
     : Math.round(donationAmount * (Number(tipPercentage) / 100));
@@ -65,10 +65,24 @@ const DonatePage: React.FC = () => {
   const tipNetAmount = Math.round(tipGrossAmount / 1.19);
   const ivaAmount = tipGrossAmount - tipNetAmount;
   
-  // Comisión Mercado Pago: 3.8% sobre el monto de la donación
+  // Comisión Mercado Pago: 3.8% (calculado sobre el monto de donación base)
+  // Nota: Si se requiere calcular sobre el total, ajustar aquí.
   const commissionAmount = Math.round(donationAmount * 0.038);
 
+  // Total final
   const totalAmount = donationAmount + tipGrossAmount + commissionAmount;
+
+  // Debugging de montos
+  useEffect(() => {
+    if (showPaymentForm) {
+      console.log("[DEBUG] Montos calculados:", {
+        donation: donationAmount,
+        tip: tipGrossAmount,
+        commission: commissionAmount,
+        total: totalAmount
+      });
+    }
+  }, [donationAmount, tipGrossAmount, commissionAmount, totalAmount, showPaymentForm]);
 
   const handleManualTipChange = (strVal: string) => {
     const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
@@ -84,6 +98,7 @@ const DonatePage: React.FC = () => {
   };
 
   const handleBackToForm = () => {
+    console.log("[DEBUG] Regresando al formulario, desmontando Brick.");
     if (brickControllerRef.current) {
         try {
             brickControllerRef.current.unmount();
@@ -114,6 +129,7 @@ const DonatePage: React.FC = () => {
         }
         const configResp = await fetch('/api/config');
         const configData = await configResp.json();
+        console.log("[DEBUG] Config Loaded. MP Key present:", !!configData.mpPublicKey);
         if (isMountedRef.current) {
             if (configData.mpPublicKey) {
                 setMpPublicKey(configData.mpPublicKey);
@@ -130,6 +146,7 @@ const DonatePage: React.FC = () => {
     fetchData();
   }, [id]);
 
+  // --- INICIALIZACIÓN DEL BRICK ---
   useEffect(() => {
     let isCancelled = false;
 
@@ -141,6 +158,7 @@ const DonatePage: React.FC = () => {
     }
 
     if (window.MercadoPago && paymentBrickContainerRef.current && campaign) {
+      console.log("[DEBUG] Inicializando Payment Brick...");
       setBrickLoading(true);
       setError(null);
 
@@ -155,7 +173,7 @@ const DonatePage: React.FC = () => {
 
       const renderPaymentBrick = async () => {
         try {
-          const controller = await bricksBuilder.create('payment', 'paymentBrick_container', {
+          const settings = {
             initialization: { 
               amount: totalAmount,
               payer: {
@@ -166,11 +184,11 @@ const DonatePage: React.FC = () => {
             customization: {
               paymentMethods: {
                 wallet_purchase: 'all', // Habilita Wallet
-                creditCard: 'all',
-                debitCard: 'all',
-                ticket: [], // Deshabilita ticket
-                bankTransfer: [], // Deshabilita transferencia
-                atm: [], // Deshabilita ATM
+                creditCard: 'all',      // Habilita Crédito
+                debitCard: 'all',       // Habilita Débito
+                ticket: [],             // Deshabilita Efectivo/Ticket
+                bankTransfer: [],       // Deshabilita Transferencia
+                atm: [],                // Deshabilita Cajero
                 maxInstallments: 1
               },
               visual: {
@@ -182,9 +200,11 @@ const DonatePage: React.FC = () => {
             },
             callbacks: {
               onReady: () => {
+                console.log("[DEBUG] Brick Ready");
                 if (isMountedRef.current && !isCancelled) setBrickLoading(false);
               },
               onSubmit: ({ selectedPaymentMethod, formData }: any) => {
+                console.log("[DEBUG] Brick Submit:", selectedPaymentMethod);
                 return new Promise((resolve, reject) => {
                   if (!isMountedRef.current || isCancelled) {
                       resolve(void 0);
@@ -210,6 +230,7 @@ const DonatePage: React.FC = () => {
                   })
                   .then((response) => response.json())
                   .then((response) => {
+                    console.log("[DEBUG] Payment Response:", response);
                     if (!isMountedRef.current || isCancelled) return;
                     
                     if (response.success && (response.status === 'approved' || response.status === 'in_process')) {
@@ -231,14 +252,17 @@ const DonatePage: React.FC = () => {
                 });
               },
               onError: (error: any) => {
-                console.warn("Brick Warning:", error);
+                console.warn("Brick Warning/Error:", error);
                 if (isMountedRef.current && !isCancelled) {
                    setBrickLoading(false);
                    setError("Ocurrió un error al cargar la pasarela de pagos.");
                 }
               },
             },
-          });
+          };
+
+          console.log("[DEBUG] Brick Settings:", settings);
+          const controller = await bricksBuilder.create('payment', 'paymentBrick_container', settings);
 
           if (isCancelled) {
               if (controller) controller.unmount();

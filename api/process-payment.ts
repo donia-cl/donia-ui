@@ -13,6 +13,14 @@ export default async function handler(req: any, res: any) {
   try {
     const { paymentData, campaignId, metadata } = req.body;
     
+    // DEBUG LOG
+    logger.info('PROCESS_PAYMENT_INIT', { 
+        campaignId, 
+        email: metadata.email, 
+        receivedAmount: paymentData.transaction_amount,
+        paymentMethodId: paymentData.payment_method_id
+    });
+    
     // Validaciones básicas
     Validator.required(paymentData, 'paymentData');
     Validator.uuid(campaignId, 'campaignId');
