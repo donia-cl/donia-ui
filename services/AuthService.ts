@@ -25,6 +25,7 @@ export class AuthService {
         let url = '';
         let key = '';
 
+        // Prioridad 1: Intentar obtener de variables de entorno (Vite/React)
         try {
           // @ts-ignore
           if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -35,6 +36,7 @@ export class AuthService {
           }
         } catch (e) { /* ignore */ }
 
+        // Prioridad 2: Fallback a process.env
         if (!url || !key) {
           try {
             if (typeof process !== 'undefined' && process.env) {
@@ -44,23 +46,20 @@ export class AuthService {
           } catch (e) { /* ignore */ }
         }
 
+        // Prioridad 3: Consultar endpoint de configuración si todo falla
         if (!url || !key) {
            try {
              const controller = new AbortController();
-             const timeoutId = setTimeout(() => controller.abort(new Error("AuthInitTimeout")), 800);
-             
+             const timeoutId = setTimeout(() => controller.abort(new Error("AuthInitTimeout")), 1000);
              const resp = await fetch('/api/config', { signal: controller.signal });
              clearTimeout(timeoutId);
-
              if (resp.ok) {
                const config = await resp.json();
                url = config.supabaseUrl || url;
                key = config.supabaseKey || key;
              }
            } catch (e: any) {
-             if (e.name !== 'AbortError' && e.message !== 'AuthInitTimeout') {
-                console.warn("[AuthService] Config check skipped:", e.message);
-             }
+             console.warn("[AuthService] Config check skipped:", e.message);
            }
         }
           
@@ -69,7 +68,7 @@ export class AuthService {
             auth: {
               persistSession: true,
               autoRefreshToken: true,
-              detectSessionInUrl: true,
+              detectSessionInUrl: true, // Crítico para OAuth
               storageKey: 'donia-auth-token-v1',
               flowType: 'implicit'
             }
@@ -110,7 +109,6 @@ export class AuthService {
     });
 
     if (error) throw error;
-
     if (data.user) {
       try {
         await fetch('/api/create-profile', {
@@ -136,11 +134,21 @@ export class AuthService {
   async signInWithGoogle() {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
-    const redirectTo = window.location.origin;
+    
+    // El origin debe coincidir exactamente con lo configurado en Supabase Dashboard
+    const redirectTo = window.location.origin; 
+    
     const { data, error } = await (this.client.auth as any).signInWithOAuth({
       provider: 'google',
-      options: { redirectTo, skipBrowserRedirect: false }
+      options: { 
+        redirectTo,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        }
+      }
     });
+    
     if (error) throw error;
     return data;
   }
@@ -157,7 +165,6 @@ export class AuthService {
       const { data: { session } } = await (this.client.auth as any).getSession();
       return session;
     } catch (e: any) {
-      if (e.name === 'AbortError' || e.message?.includes('aborted')) return null;
       return null;
     }
   }
