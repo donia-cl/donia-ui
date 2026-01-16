@@ -96,14 +96,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const currentUser = session?.user ?? null;
           setUser(currentUser);
           
-          if (currentUser) {
-            // No bloqueamos el renderizado inicial por el perfil si es posible, 
-            // pero para consistencia lo esperamos brevemente
-            const userProfile = await ensureProfileExists(currentUser);
-            setProfile(userProfile);
-          }
-          
+          // OPTIMIZACIÓN DE RENDIMIENTO:
+          // No esperamos (await) a que el perfil cargue para quitar el loading screen.
+          // Permitimos que la app cargue y el perfil aparezca asíncronamente (Optimistic UI).
           setLoading(false);
+
+          if (currentUser) {
+            ensureProfileExists(currentUser).then((userProfile) => {
+                if (mounted && userProfile) {
+                    setProfile(userProfile);
+                }
+            });
+          }
         }
 
         if (client) {
@@ -112,21 +116,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const currentUser = session?.user ?? null;
               setUser(currentUser);
               
+              // Si hay usuario, iniciamos la carga del perfil en background
               if (currentUser) {
-                 const userProfile = await ensureProfileExists(currentUser);
-                 setProfile(userProfile);
+                 ensureProfileExists(currentUser).then(p => {
+                     if (mounted) setProfile(p);
+                 });
               } else {
                  setProfile(null);
               }
 
               if (event === 'SIGNED_IN') {
+                // En login explícito también quitamos loading rápido
                 setLoading(false);
                 
-                // LÓGICA DE REDIRECCIÓN INTELIGENTE
                 const savedRedirect = localStorage.getItem('donia_auth_redirect');
                 if (savedRedirect) {
                   localStorage.removeItem('donia_auth_redirect');
-                  // Aseguramos formato hash para HashRouter
                   const target = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
                   window.location.hash = target;
                 } else if (window.location.hash.includes('access_token')) {
@@ -149,6 +154,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
+        // En caso de error crítico, quitamos el loading para no dejar la app pegada
+        if (mounted) setLoading(false);
       } finally {
         if (mounted) {
           setIsInitialized(true);
@@ -167,11 +174,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.error("Error al cerrar sesión (se forzará cierre local):", e);
     } finally {
-      // Limpieza forzada del estado local independientemente del resultado del servidor
       setUser(null);
       setProfile(null);
       setLoading(false);
-      localStorage.removeItem('donia_auth_redirect'); // Limpiamos cualquier redirección pendiente
+      localStorage.removeItem('donia_auth_redirect');
       window.location.hash = '#/';
     }
   };
