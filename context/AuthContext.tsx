@@ -66,16 +66,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const client = authService.getSupabase();
         
         // DETECCIÓN DE OAUTH
-        const hasAccessToken = window.location.hash.includes('access_token=');
+        const hash = window.location.hash;
+        const hasAccessToken = hash.includes('access_token=');
+        
         if (hasAccessToken) {
           console.log("[AuthContext] Detectado callback de OAuth, esperando procesamiento...");
-          // Timer de seguridad: Si en 8 segundos no ha logueado, liberamos la pantalla
+          // Timer de seguridad aumentado para dar margen a la red
           oauthSafetyTimeout = setTimeout(() => {
             if (mounted && loading) {
               console.warn("[AuthContext] OAuth safety timeout triggered. Releasing UI.");
               setLoading(false);
             }
-          }, 8000);
+          }, 10000);
+        }
+
+        // Si no hay cliente, no podemos hacer nada de auth, liberamos UI
+        if (!client) {
+          if (mounted) setLoading(false);
+          return;
         }
 
         const session = await authService.getSession();
@@ -89,54 +97,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (mounted) setProfile(p);
           }
 
+          // Si llegamos aquí y no hay hash de token, ya cargamos
           if (!hasAccessToken) {
             setLoading(false);
           }
         }
 
-        if (client) {
-          const { data: { subscription } } = (client.auth as any).onAuthStateChange(async (event: any, session: any) => {
-            if (!mounted) return;
+        const { data: { subscription } } = (client.auth as any).onAuthStateChange(async (event: any, session: any) => {
+          if (!mounted) return;
 
-            const currentUser = session?.user ?? null;
-            setUser(currentUser);
+          const currentUser = session?.user ?? null;
+          setUser(currentUser);
+          
+          if (currentUser) {
+             const p = await ensureProfileExists(currentUser);
+             if (mounted) setProfile(p);
+          } else {
+             setProfile(null);
+          }
+
+          if (event === 'SIGNED_IN') {
+            if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
+            setLoading(false);
             
-            if (currentUser) {
-               const p = await ensureProfileExists(currentUser);
-               if (mounted) setProfile(p);
-            } else {
-               setProfile(null);
-            }
-
-            if (event === 'SIGNED_IN') {
-              if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
-              setLoading(false);
-              
+            // LIMPIEZA CRÍTICA DEL HASH PARA HASHROUTER
+            if (window.location.hash.includes('access_token')) {
               const savedRedirect = localStorage.getItem('donia_auth_redirect');
               if (savedRedirect) {
                 localStorage.removeItem('donia_auth_redirect');
                 window.location.hash = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
               } else {
-                if (window.location.hash.includes('access_token')) {
-                  window.location.hash = '#/dashboard';
-                }
+                // Redirigir a dashboard por defecto si venimos de OAuth
+                window.location.hash = '#/dashboard';
               }
             }
-            
-            if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
-               // En INITIAL_SESSION si no hay token de acceso, ya podemos mostrar la app
-               if (!window.location.hash.includes('access_token')) {
-                 setLoading(false);
-               }
-            }
-          });
+          }
           
-          return () => { 
-            if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
-            subscription.unsubscribe(); 
-          };
-        }
+          if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+             if (!window.location.hash.includes('access_token')) {
+               setLoading(false);
+             }
+          }
+        });
+        
+        return () => { 
+          if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
+          subscription.unsubscribe(); 
+        };
       } catch (error) {
+        console.error("[AuthContext] Fatal init error:", error);
         if (mounted) setLoading(false);
       } finally {
         if (mounted) setIsInitialized(true);
@@ -163,14 +172,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Solo bloqueamos con el loader si estamos inicializando O si estamos procesando un token de OAuth activamente
+  // UI DE BLOQUEO: Solo si estamos esperando OAuth activamente
   const isBlockedByOAuth = loading && window.location.hash.includes('access_token');
 
   if (!isInitialized || isBlockedByOAuth) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <Loader2 className="w-10 h-10 text-violet-600 animate-spin" />
-        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Iniciando sesión segura...</p>
+        <div className="text-center">
+          <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-1">Donia Autenticación</p>
+          <p className="text-slate-900 font-bold text-sm">Iniciando sesión segura...</p>
+        </div>
       </div>
     );
   }
