@@ -71,7 +71,7 @@ const VistoBuenoCheckbox = ({ checked, onChange, label }: { checked: boolean, on
 
 // --- AUTH MODAL COMPONENT (UPDATED) ---
 const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) => {
-  const [isLogin, setIsLogin] = useState(false); // Default to Register for context of publishing
+  const [isLogin, setIsLogin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,16 +94,13 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
       }
       onSuccess();
     } catch (err: any) {
-      let msg = err.message || "Error de autenticación.";
-      if (msg.includes("already registered")) msg = "Este correo ya existe. Por favor inicia sesión.";
-      if (msg.includes("Invalid login")) msg = "Credenciales incorrectas.";
-      setError(msg);
+      setError(err.message || "Error de autenticación.");
       setLoading(false);
     }
   };
 
   const handleGoogle = async () => {
-    // Guardamos la ubicación actual para volver aquí tras la redirección de Google
+    // Guardamos la ubicación actual limpia (sin hash #) para volver tras la autenticación de Google
     localStorage.setItem('donia_auth_redirect', location.pathname + location.search);
     
     setGoogleLoading(true);
@@ -131,29 +128,9 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
               {isLogin ? 'Bienvenido de vuelta' : 'Antes de publicar...'}
             </h3>
             <p className="text-slate-500 font-medium text-sm mt-2 leading-relaxed">
-              {isLogin 
-                ? 'Ingresa para firmar y lanzar tu campaña.' 
-                : 'Crea una cuenta gratuita para asegurar el control total de tu causa.'}
+              Crea una cuenta para gestionar y retirar tus fondos de manera segura.
             </p>
           </div>
-
-          {/* Value Proposition - Friction Point */}
-          {!isLogin && (
-            <div className="mb-8 bg-slate-50 p-5 rounded-2xl border border-slate-100 space-y-3">
-              <div className="flex items-center gap-3">
-                 <div className="bg-white p-1.5 rounded-lg text-violet-600 shadow-sm border border-slate-100"><HeartHandshake size={16}/></div>
-                 <span className="text-xs font-bold text-slate-600">Gestionar donaciones y mensajes</span>
-              </div>
-              <div className="flex items-center gap-3">
-                 <div className="bg-white p-1.5 rounded-lg text-emerald-600 shadow-sm border border-slate-100"><Wallet size={16}/></div>
-                 <span className="text-xs font-bold text-slate-600">Retirar los fondos recaudados</span>
-              </div>
-              <div className="flex items-center gap-3">
-                 <div className="bg-white p-1.5 rounded-lg text-sky-600 shadow-sm border border-slate-100"><Edit3 size={16}/></div>
-                 <span className="text-xs font-bold text-slate-600">Editar y actualizar tu historia</span>
-              </div>
-            </div>
-          )}
 
           {error && (
             <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-700 text-xs font-bold">
@@ -187,7 +164,7 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
                 <input
                   type="text"
                   required
-                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 text-sm transition-all placeholder:text-slate-300"
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 text-sm transition-all"
                   placeholder="Nombre completo"
                   value={formData.fullName}
                   onChange={(e) => setFormData({...formData, fullName: e.target.value})}
@@ -199,7 +176,7 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
               <input
                 type="email"
                 required
-                className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 text-sm transition-all placeholder:text-slate-300"
+                className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 text-sm transition-all"
                 placeholder="Correo electrónico"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -210,7 +187,7 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
               <input
                 type="password"
                 required
-                className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 text-sm transition-all placeholder:text-slate-300"
+                className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border-2 border-transparent focus:border-violet-200 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 text-sm transition-all"
                 placeholder="Contraseña"
                 value={formData.password}
                 onChange={(e) => setFormData({...formData, password: e.target.value})}
@@ -220,7 +197,7 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
             <button
               type="submit"
               disabled={loading || googleLoading}
-              className="w-full py-4 bg-violet-600 text-white rounded-2xl font-black text-base hover:bg-violet-700 shadow-xl shadow-violet-100 transition-all flex items-center justify-center gap-2 group disabled:opacity-50 mt-2"
+              className="w-full py-4 bg-violet-600 text-white rounded-2xl font-black text-base hover:bg-violet-700 shadow-xl flex items-center justify-center gap-2 group disabled:opacity-50 mt-2"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : (
                 <>
@@ -268,10 +245,8 @@ const CreateReview: React.FC = () => {
     }
 
     if (!user) {
-      // Si no hay usuario, mostramos el modal de Auth (Punto de fricción)
       setShowAuthModal(true);
     } else {
-      // Si hay usuario, procedemos a publicar
       handleSubmit();
     }
   };
@@ -279,8 +254,7 @@ const CreateReview: React.FC = () => {
   const handleSubmit = async () => {
     if (isSubmitting) return;
     
-    // Obtenemos sesión fresca para asegurar el ID del usuario
-    // Esto es crítico porque el estado 'user' de useAuth puede estar "stale" en el cierre de esta función
+    // Obtener sesión fresca para evitar estados "stale"
     const session = await AuthService.getInstance().getSession();
     const currentUser = session?.user;
 
@@ -352,7 +326,7 @@ const CreateReview: React.FC = () => {
           onClose={() => setShowAuthModal(false)} 
           onSuccess={() => {
             setShowAuthModal(false);
-            // Pequeño delay para que el contexto de Auth se actualice antes de enviar
+            // Pequeña espera para que el contexto de Auth se actualice internamente
             setTimeout(() => handleSubmit(), 500); 
           }} 
         />
@@ -371,9 +345,7 @@ const CreateReview: React.FC = () => {
         </div>
 
         <div className="space-y-6">
-          {/* SECCIÓN SUPERIOR: 2 COLUMNAS (Detalles e Imagen) */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Columna Izquierda: Detalles */}
             <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 flex flex-col justify-center">
               <div className="flex items-center gap-2 mb-4">
                  <Tag size={16} className="text-violet-600" />
@@ -407,7 +379,6 @@ const CreateReview: React.FC = () => {
               </div>
             </div>
 
-            {/* Columna Derecha: Imagen */}
             <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden group relative aspect-video lg:aspect-auto">
               {campaign.imagenUrl ? (
                 <img src={campaign.imagenUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Portada" />
@@ -428,7 +399,6 @@ const CreateReview: React.FC = () => {
             </div>
           </div>
 
-          {/* SECCIÓN MEDIA: RELATO (Ancho completo) */}
           <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-2">
@@ -449,7 +419,6 @@ const CreateReview: React.FC = () => {
             </div>
           </div>
 
-          {/* SECCIÓN COMPROMISO: Ancho completo, vertical */}
           <div className="bg-slate-50 border border-slate-200 rounded-[32px] p-8 md:p-10 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-24 h-24 bg-violet-100/30 rounded-bl-full pointer-events-none"></div>
             
@@ -484,7 +453,6 @@ const CreateReview: React.FC = () => {
             </div>
           </div>
 
-          {/* Errores de API */}
           {error && (
             <div className={`p-5 ${isSchemaError ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-rose-50 border-rose-100 text-rose-900'} border-2 rounded-2xl flex flex-col md:flex-row gap-4 items-center animate-in slide-in-from-top-4 shadow-sm`}>
               <div className={`w-8 h-8 bg-white rounded-lg flex items-center justify-center ${isSchemaError ? 'text-amber-500' : 'text-rose-500'} shadow-sm shrink-0`}>
@@ -503,7 +471,6 @@ const CreateReview: React.FC = () => {
             </div>
           )}
 
-          {/* BOTÓN FINAL */}
           {!isSuccess && (
             <button 
               onClick={handlePublishClick}

@@ -29,10 +29,7 @@ const App: React.FC = () => {
           <ScrollToTop />
           <Layout>
             <Routes>
-              {/* Ruta Principal: Landing Page */}
               <Route path="/" element={<Landing />} />
-              
-              {/* Rutas de la App */}
               <Route path="/login" element={<Auth />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/campana/:id/editar" element={<EditCampaign />} />
@@ -44,14 +41,10 @@ const App: React.FC = () => {
               <Route path="/soporte" element={<Support />} />
               <Route path="/campana/:id" element={<CampaignDetail />} />
               <Route path="/campana/:id/donar" element={<DonatePage />} />
-
-              {/* Wizard Routes */}
               <Route path="/crear" element={<CreateIntro />} />
               <Route path="/crear/historia" element={<CreateStory />} />
               <Route path="/crear/detalles" element={<CreateDetails />} />
               <Route path="/crear/revisar" element={<CreateReview />} />
-
-              {/* Fallback: Cualquier ruta desconocida lleva al inicio */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Layout>

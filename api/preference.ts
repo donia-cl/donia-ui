@@ -13,7 +13,7 @@ export default async function handler(req: any, res: any) {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-  // WEBHOOK: Mercado Pago envía notificaciones aquí
+  // WEBHOOK: Mercado Pago envía notificaciones aquí cuando se confirma un pago
   if (req.method === 'POST' && req.body.type === 'payment' && !action) {
     const { data } = req.body;
     try {
@@ -27,7 +27,7 @@ export default async function handler(req: any, res: any) {
         const amount = payment.transaction_amount;
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         
-        // Evitar duplicados verificando si el payment_id ya existe
+        // Evitar registros duplicados mediante idempotencia con payment_id
         const { data: existing } = await supabase.from('donations').select('id').eq('payment_id', String(payment.id)).maybeSingle();
         
         if (!existing) {
@@ -51,7 +51,7 @@ export default async function handler(req: any, res: any) {
             }).eq('id', campaign_id);
           }
 
-          // ENVÍO DE EMAIL DE AGRADECIMIENTO
+          // Notificación por correo electrónico
           if (donor_email) {
             await Mailer.sendDonationReceipt(
               donor_email, 
@@ -73,7 +73,7 @@ export default async function handler(req: any, res: any) {
   if (action === 'preference') {
     const { campaignId, monto, nombre, comentario, campaignTitle, email, donorUserId } = req.body; 
     
-    // URL de retorno compatible con BrowserRouter (sin hash)
+    // URL de retorno compatible con el sistema de rutas BrowserRouter (sin hash #)
     const baseUrl = req.headers.origin || 'https://donia.cl';
     const returnUrl = `${baseUrl}/campana/${campaignId}/donar`;
 

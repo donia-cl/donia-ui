@@ -20,30 +20,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Ref para evitar doble ejecución crítica en StrictMode (Causa del AbortError)
-  const initRef = useRef(false);
+  // Ref para evitar que el flujo de inicialización corra dos veces (evita el AbortError de fetch en StrictMode)
+  const initStarted = useRef(false);
   
   const authService = AuthService.getInstance();
   const campaignService = CampaignService.getInstance();
 
   const loadUserProfile = async (currentUser: any) => {
     if (!currentUser) return null;
-    let userProfile = await authService.fetchProfile(currentUser.id);
-    
-    if (!userProfile) {
-      try {
-          const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Usuario';
-          await fetch('/api/create-profile', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: currentUser.id, fullName: fullName })
-          });
-          userProfile = await authService.fetchProfile(currentUser.id);
-      } catch (err) {
-          console.error("Error creating profile:", err);
+    try {
+      let userProfile = await authService.fetchProfile(currentUser.id);
+      if (!userProfile) {
+        const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Usuario';
+        await fetch('/api/create-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: currentUser.id, fullName: fullName })
+        });
+        userProfile = await authService.fetchProfile(currentUser.id);
       }
+      return userProfile;
+    } catch (err) {
+      console.error("Error loading/creating profile:", err);
+      return null;
     }
-    return userProfile;
   };
 
   const refreshProfile = async () => {
@@ -54,104 +54,103 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const cleanUrlAndRedirect = () => {
-     // Con BrowserRouter, los parámetros de OAuth están en la URL principal (?code=...).
-     const currentParams = new URLSearchParams(window.location.search);
-     if (currentParams.has('code')) {
-        console.log("[AuthContext] Sesión confirmada. Limpiando URL y redirigiendo...");
-        const newUrl = window.location.pathname;
+     const searchParams = new URLSearchParams(window.location.search);
+     if (searchParams.has('code')) {
+        console.log("[AuthContext] Sesión confirmada. Limpiando URL...");
         
-        // Limpiamos la URL visualmente sin recargar
+        // Limpiamos los parámetros de la URL sin recargar la página para una experiencia fluida
+        const newUrl = window.location.pathname;
         window.history.replaceState({}, document.title, newUrl);
 
-        // Redirección guardada desde el flujo de creación o dashboard
+        // Recuperar redirección guardada si existe (ej: desde el wizard de creación)
         const savedRedirect = localStorage.getItem('donia_auth_redirect');
         if (savedRedirect) {
             localStorage.removeItem('donia_auth_redirect');
             window.location.assign(savedRedirect); 
         } else {
-            window.location.assign('/dashboard');
+            // Si el usuario está en la página de login o raíz, lo llevamos al dashboard
+            if (window.location.pathname === '/' || window.location.pathname === '/login') {
+                window.location.assign('/dashboard');
+            }
         }
      }
   };
 
   useEffect(() => {
+    // Evitar doble ejecución en React 18 Strict Mode que causa el AbortError
+    if (initStarted.current) return;
+    initStarted.current = true;
+
     let mounted = true;
-    
-    // Evitar doble inicialización en React Strict Mode
-    if (initRef.current) return;
-    initRef.current = true;
 
     const initApp = async () => {
       try {
         await authService.initialize();
         campaignService.initialize().catch(() => {});
-        const client = authService.getSupabase();
         
-        const searchParams = new URLSearchParams(window.location.search);
-        const hasCode = searchParams.has('code');
+        const client = authService.getSupabase();
+        if (!client) {
+          if (mounted) setLoading(false);
+          return;
+        }
 
-        if (client) {
-          // 1. Suscribirse ANTES de getSession
-          const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
-            if (!mounted) return;
-            
-            console.log("[AuthContext] Event:", event);
-            const currentUser = session?.user ?? null;
-            setUser(currentUser);
-            
-            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-              if (currentUser) {
-                 const p = await loadUserProfile(currentUser);
-                 if (mounted) setProfile(p);
-                 // Limpiar URL solo cuando confirmamos que estamos logueados
-                 cleanUrlAndRedirect(); 
-              }
-              if (mounted) setLoading(false);
-            }
-            
-            if (event === 'SIGNED_OUT') {
-              setUser(null);
-              setProfile(null);
-              if (mounted) setLoading(false);
-            }
-          });
-
-          // 2. Obtener sesión actual
-          const { data: { session } } = await client.auth.getSession();
+        // 1. Escuchar cambios de estado de autenticación
+        const { data: { subscription } } = (client.auth as any).onAuthStateChange(async (event: any, session: any) => {
+          if (!mounted) return;
           
-          if (mounted) {
-            if (session?.user) {
-              setUser(session.user);
-              const p = await loadUserProfile(session.user);
+          console.log("[AuthContext] Auth Event:", event);
+          const currentUser = session?.user ?? null;
+          setUser(currentUser);
+          
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (currentUser) {
+              const p = await loadUserProfile(currentUser);
               if (mounted) setProfile(p);
               cleanUrlAndRedirect();
             }
+            if (mounted) setLoading(false);
           }
-
-          // 3. Manejo del estado de carga para PKCE
-          // Si hay un código en la URL, esperamos a que onAuthStateChange dispare SIGNED_IN
-          if (hasCode && !session?.user) {
-              // Timeout de seguridad por si el intercambio falla
-              setTimeout(() => {
-                  if (mounted && loading) {
-                      console.warn("[AuthContext] Timeout esperando intercambio PKCE. Liberando UI.");
-                      setLoading(false);
-                  }
-              }, 5000);
-          } else {
-              setLoading(false);
+          
+          if (event === 'SIGNED_OUT') {
+            setUser(null);
+            setProfile(null);
+            if (mounted) setLoading(false);
           }
+        });
 
-          return () => subscription.unsubscribe();
+        // 2. Obtener sesión actual de forma robusta
+        const { data: { session } } = await client.auth.getSession();
+        if (mounted) {
+          if (session?.user) {
+            setUser(session.user);
+            const p = await loadUserProfile(session.user);
+            if (mounted) setProfile(p);
+            cleanUrlAndRedirect();
+          }
+          
+          // Desactivar estado de carga si no hay código pendiente de procesar
+          const hasCode = new URLSearchParams(window.location.search).has('code');
+          if (!session && !hasCode) {
+            setLoading(false);
+          }
+          
+          // Timeout de seguridad por si el intercambio de código tarda demasiado
+          if (hasCode && !session) {
+            setTimeout(() => { if (mounted && loading) setLoading(false); }, 6000);
+          }
         }
+
+        return () => {
+          mounted = false;
+          subscription.unsubscribe();
+        };
       } catch (error) {
         console.error("[AuthContext] Init error:", error);
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     initApp();
-    return () => { mounted = false; };
   }, []);
 
   const signOut = async () => {
@@ -163,16 +162,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     window.location.assign('/');
   };
 
-  // Solo mostramos loader de bloqueo si estamos procesando el código
-  const isProcessingPKCE = loading && new URLSearchParams(window.location.search).has('code');
+  // Pantalla de carga persistente durante el procesamiento de OAuth/PKCE
+  const isProcessingAuth = loading && new URLSearchParams(window.location.search).has('code');
 
-  if (isProcessingPKCE) {
+  if (isProcessingAuth) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <Loader2 className="w-10 h-10 text-violet-600 animate-spin" />
         <div className="text-center">
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-1">Donia</p>
-          <p className="text-slate-900 font-bold text-sm">Validando credenciales...</p>
+          <p className="text-slate-900 font-bold text-sm">Validando tu cuenta...</p>
         </div>
       </div>
     );

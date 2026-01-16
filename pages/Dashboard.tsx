@@ -191,6 +191,7 @@ const Dashboard: React.FC = () => {
   };
 
   const copyLink = (id: string) => {
+    // Usamos window.location.origin para construir una URL limpia sin el hash #
     const url = `${window.location.origin}/campana/${id}`;
     navigator.clipboard.writeText(url);
     alert("¡Enlace copiado!");
