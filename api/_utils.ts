@@ -45,9 +45,11 @@ export class Mailer {
   static async sendDonationReceipt(to: string, donorName: string, amount: number, campaignTitle: string) {
     try {
       const resend = this.getResend();
+      // IMPORTANTE: El dominio verificado es notifications.donia.cl
       const { data, error } = await resend.emails.send({
-        from: 'Donia <comprobantes@donia.cl>',
+        from: 'Donia <comprobantes@notifications.donia.cl>',
         to: [to],
+        replyTo: 'soporte@donia.cl',
         subject: `¡Gracias por tu apoyo a ${campaignTitle}! 💜`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #f8fafc; border-radius: 32px;">
@@ -95,9 +97,11 @@ export class Mailer {
   static async sendProfileUpdateNotification(to: string, userName: string) {
     try {
       const resend = this.getResend();
+      // IMPORTANTE: El dominio verificado es notifications.donia.cl
       const { data, error } = await resend.emails.send({
-        from: 'Donia Seguridad <seguridad@donia.cl>',
+        from: 'Donia Seguridad <seguridad@notifications.donia.cl>',
         to: [to],
+        replyTo: 'soporte@donia.cl',
         subject: `Tu perfil en Donia ha sido actualizado 🛡️`,
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #f8fafc; border-radius: 32px;">
