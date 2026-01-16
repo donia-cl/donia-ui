@@ -42,30 +42,26 @@ import { formatRut, validateRut, formatPhone, validateChileanPhone } from '../ut
 type TabType = 'resumen' | 'donaciones' | 'finanzas' | 'seguridad' | 'perfil';
 
 const Dashboard: React.FC = () => {
-  const { user, profile, loading: authLoading, signOut, refreshProfile } = useAuth();
+  const { user, profile, setProfile, loading: authLoading, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('resumen');
   
-  // Estados de datos
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [financials, setFinancials] = useState<FinancialSummary | null>(null);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   
-  // Estado para edición de perfil
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileForm, setProfileForm] = useState({
     full_name: '',
     rut: '',
     phone: ''
   });
-  // Estados de error específicos para validación
+  
   const [rutError, setRutError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
-
   const [profileSaving, setProfileSaving] = useState(false);
-  
   const [loading, setLoading] = useState(true);
   
   const service = CampaignService.getInstance();
@@ -78,15 +74,19 @@ const Dashboard: React.FC = () => {
     }
     if (user) {
       loadAllData();
-      if (profile) {
-        setProfileForm({
-          full_name: profile.full_name || '',
-          rut: profile.rut || '',
-          phone: profile.phone || ''
-        });
-      }
     }
-  }, [user, authLoading, profile]);
+  }, [user, authLoading]);
+
+  // Sincronizar formulario con el perfil cuando este cargue
+  useEffect(() => {
+    if (profile) {
+      setProfileForm({
+        full_name: profile.full_name || '',
+        rut: profile.rut || '',
+        phone: profile.phone || ''
+      });
+    }
+  }, [profile]);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -122,12 +122,8 @@ const Dashboard: React.FC = () => {
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
-    // Permitir solo números y +, espacio
     if (!/^[0-9+\s]*$/.test(val)) return;
-
     setProfileForm(prev => ({ ...prev, phone: val }));
-    
-    // Validación laxa durante tipeo, estricta al final
     if (val.length > 8 && !validateChileanPhone(val)) {
         setPhoneError('Formato: +56 9 XXXXXXXX');
     } else {
@@ -136,7 +132,6 @@ const Dashboard: React.FC = () => {
   };
 
   const handlePhoneBlur = () => {
-    // Auto-formato al perder foco
     const formatted = formatPhone(profileForm.phone);
     setProfileForm(prev => ({ ...prev, phone: formatted }));
     if (!validateChileanPhone(formatted) && formatted.length > 0) {
@@ -149,7 +144,6 @@ const Dashboard: React.FC = () => {
   const handleUpdateProfile = async () => {
     if (!user) return;
     
-    // Validaciones finales antes de guardar
     if (profileForm.rut && !validateRut(profileForm.rut)) {
         alert("El RUT ingresado no es válido.");
         return;
@@ -161,18 +155,18 @@ const Dashboard: React.FC = () => {
 
     setProfileSaving(true);
     try {
-      await authService.updateProfile(user.id, {
+      // Usamos la respuesta directa del servidor para actualizar el estado global inmediatamente
+      const updatedProfile = await authService.updateProfile(user.id, {
         full_name: profileForm.full_name,
         rut: profileForm.rut,
         phone: profileForm.phone
       });
       
-      // Actualizamos el contexto local
-      await refreshProfile();
+      // Actualización inmediata del estado global (Evita race conditions de fetch)
+      setProfile(updatedProfile);
       
       setIsEditingProfile(false);
       setShowSuccessToast(true);
-      // Auto-ocultar después de 5 segundos
       setTimeout(() => setShowSuccessToast(false), 5000);
       
     } catch (e) {
@@ -275,10 +269,8 @@ const Dashboard: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
-        {/* TAB: MIS CAMPAÑAS (RESUMEN) */}
         {activeTab === 'resumen' && (
           <div className="space-y-10 animate-in fade-in duration-500">
-             {/* ... contenido existente ... */}
              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="md:col-span-2 bg-gradient-to-br from-violet-600 to-indigo-700 p-8 rounded-[40px] text-white shadow-xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
@@ -310,7 +302,6 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* LISTA DE CAMPAÑAS */}
             <div>
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-xl font-black text-slate-900 tracking-tight">Tus Historias</h2>
@@ -358,10 +349,8 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: MIS DONACIONES */}
         {activeTab === 'donaciones' && (
           <div className="animate-in slide-in-from-right-4 duration-500 space-y-6">
-             {/* ... contenido existente ... */}
              <div className="bg-sky-50 p-8 rounded-[40px] border border-sky-100 flex items-center justify-between">
                 <div>
                   <h2 className="text-2xl font-black text-sky-900 tracking-tight mb-2">Mi Impacto</h2>
@@ -376,7 +365,6 @@ const Dashboard: React.FC = () => {
              <div className="space-y-4">
                {donations.length > 0 ? donations.map(d => (
                  <div key={d.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-6 group hover:border-violet-100 transition-all">
-                    {/* Imagen Campaña */}
                     <div className="w-full md:w-20 h-20 rounded-2xl overflow-hidden shrink-0 bg-slate-100 relative">
                        {d.campaign?.imagenUrl ? (
                          <img src={d.campaign.imagenUrl} className="w-full h-full object-cover" alt="" />
@@ -385,7 +373,6 @@ const Dashboard: React.FC = () => {
                        )}
                     </div>
                     
-                    {/* Info Central */}
                     <div className="flex-grow w-full">
                        <div className="flex justify-between items-start mb-1">
                           <Link to={`/campana/${d.campaignId}`} className="font-black text-slate-900 text-lg hover:text-violet-600 transition-colors line-clamp-1">
@@ -414,7 +401,6 @@ const Dashboard: React.FC = () => {
                        </div>
                     </div>
 
-                    {/* Monto y Acciones */}
                     <div className="flex flex-row md:flex-col items-center md:items-end justify-between w-full md:w-auto gap-4 md:gap-2 border-t md:border-t-0 border-slate-50 pt-4 md:pt-0">
                        <p className={`text-xl font-black ${d.status === 'refunded' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                          ${d.monto.toLocaleString('es-CL')}
@@ -459,10 +445,8 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: FINANZAS */}
         {activeTab === 'finanzas' && (
           <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-8">
-             {/* ... contenido existente ... */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-emerald-50 p-10 rounded-[40px] border border-emerald-100 relative overflow-hidden group">
                    <div className="absolute top-0 right-0 p-6 text-emerald-200/50 group-hover:scale-110 transition-transform">
@@ -522,10 +506,8 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: SEGURIDAD */}
         {activeTab === 'seguridad' && (
           <div className="animate-in slide-in-from-right-4 duration-500 max-w-2xl">
-             {/* ... contenido existente ... */}
              <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm p-10">
               <div className="flex items-center gap-4 mb-10">
                 <div className="w-14 h-14 bg-sky-50 text-sky-600 rounded-2xl flex items-center justify-center">
@@ -566,10 +548,8 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: PERFIL (MODIFICADO) */}
         {activeTab === 'perfil' && (
           <div className="animate-in fade-in duration-500 max-w-xl">
-             {/* Alerta de Perfil Incompleto */}
              {isProfileIncomplete && !isEditingProfile && !showSuccessToast && (
                 <div className="mb-6 bg-amber-50 border border-amber-200 rounded-[32px] p-6 flex items-start gap-4">
                    <div className="bg-amber-100 p-2.5 rounded-xl text-amber-600 shrink-0">
@@ -590,7 +570,6 @@ const Dashboard: React.FC = () => {
                 </div>
              )}
 
-             {/* Mensaje de Éxito al Actualizar */}
              {showSuccessToast && (
                 <div className="mb-6 bg-emerald-50 border border-emerald-200 rounded-[32px] p-6 flex items-center gap-4 animate-in slide-in-from-top-2">
                     <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600 shrink-0">
@@ -607,7 +586,6 @@ const Dashboard: React.FC = () => {
              )}
 
             <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm relative overflow-hidden">
-               {/* Modo Visualización */}
                {!isEditingProfile ? (
                   <>
                      <div className="flex justify-between items-start mb-10">
@@ -661,7 +639,6 @@ const Dashboard: React.FC = () => {
                      </div>
                   </>
                ) : (
-                  // Modo Edición
                   <div className="animate-in fade-in zoom-in-95 duration-300">
                      <div className="flex justify-between items-center mb-8">
                         <h3 className="text-xl font-black text-slate-900 tracking-tight">Editando Información</h3>

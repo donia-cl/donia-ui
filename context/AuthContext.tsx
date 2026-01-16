@@ -8,6 +8,7 @@ import { Profile } from '../types';
 interface AuthContextType {
   user: any | null;
   profile: Profile | null;
+  setProfile: React.Dispatch<React.SetStateAction<Profile | null>>;
   loading: boolean;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -36,11 +37,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle();
         
       if (error) {
+        // Ignorar errores de cancelación (AbortError) para evitar ruido en consola
+        if (error.message?.includes('aborted') || error.code === 'ABORT') {
+          return null;
+        }
         console.error("Error fetching profile:", error);
         return null;
       }
       return data as Profile;
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError') return null;
       return null;
     }
   };
@@ -48,7 +54,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ensureProfileExists = async (currentUser: any) => {
     let userProfile = await fetchProfile(currentUser.id);
     
-    // Si no existe perfil (común en Google Login por primera vez), lo creamos
     if (!userProfile) {
       console.log("Detectado usuario sin perfil. Intentando crear perfil automáticamente...");
       try {
@@ -61,7 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   fullName: fullName
               })
           });
-          // Reintentamos buscar el perfil recién creado
           userProfile = await fetchProfile(currentUser.id);
       } catch (err) {
           console.error("Error en auto-creación de perfil:", err);
@@ -84,10 +88,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initApp = async () => {
       try {
-        // Optimización: Solo esperamos la autenticación crítica.
-        // CampaignService se inicializa en segundo plano (fire-and-forget)
         await authService.initialize();
-        campaignService.initialize().catch(console.warn);
+        campaignService.initialize().catch(() => {});
         
         const client = authService.getSupabase();
         const session = await authService.getSession();
@@ -95,10 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (mounted) {
           const currentUser = session?.user ?? null;
           setUser(currentUser);
-          
-          // OPTIMIZACIÓN DE RENDIMIENTO:
-          // No esperamos (await) a que el perfil cargue para quitar el loading screen.
-          // Permitimos que la app cargue y el perfil aparezca asíncronamente (Optimistic UI).
           setLoading(false);
 
           if (currentUser) {
@@ -116,7 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const currentUser = session?.user ?? null;
               setUser(currentUser);
               
-              // Si hay usuario, iniciamos la carga del perfil en background
               if (currentUser) {
                  ensureProfileExists(currentUser).then(p => {
                      if (mounted) setProfile(p);
@@ -126,14 +123,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
 
               if (event === 'SIGNED_IN') {
-                // En login explícito también quitamos loading rápido
                 setLoading(false);
-                
                 const savedRedirect = localStorage.getItem('donia_auth_redirect');
                 if (savedRedirect) {
                   localStorage.removeItem('donia_auth_redirect');
-                  const target = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
-                  window.location.hash = target;
+                  window.location.hash = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
                 } else if (window.location.hash.includes('access_token')) {
                   window.location.hash = '#/dashboard';
                 }
@@ -153,8 +147,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         }
       } catch (error) {
-        console.error("Error initializing auth:", error);
-        // En caso de error crítico, quitamos el loading para no dejar la app pegada
         if (mounted) setLoading(false);
       } finally {
         if (mounted) {
@@ -172,7 +164,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await authService.signOut();
     } catch (e) {
-      console.error("Error al cerrar sesión (se forzará cierre local):", e);
     } finally {
       setUser(null);
       setProfile(null);
@@ -192,7 +183,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, profile, setProfile, loading, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
