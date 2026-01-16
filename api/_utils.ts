@@ -90,6 +90,52 @@ export class Mailer {
       logger.error('MAILER_CRITICAL_ERROR', e);
     }
   }
+
+  static async sendProfileUpdateNotification(to: string, userName: string) {
+    if (!process.env.RESEND_API_KEY) return;
+
+    try {
+      await this.resend.emails.send({
+        from: 'Donia Seguridad <seguridad@donia.cl>',
+        to: [to],
+        subject: `Tu perfil en Donia ha sido actualizado 🛡️`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #f8fafc; border-radius: 32px;">
+            <div style="background-color: #ffffff; padding: 40px; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+              <div style="background-color: #0f172a; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+                <span style="color: white; font-size: 20px;">🛡️</span>
+              </div>
+              
+              <h1 style="color: #0f172a; font-size: 22px; font-weight: 900; margin-bottom: 16px;">Hola, ${userName}</h1>
+              
+              <p style="color: #475569; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
+                Te informamos que se han realizado cambios en la información de tu perfil (Nombre, RUT o Teléfono). 
+              </p>
+
+              <div style="background-color: #fff7ed; border: 1px solid #ffedd5; padding: 20px; border-radius: 16px; margin-bottom: 24px;">
+                <p style="color: #9a3412; font-size: 13px; font-weight: 700; margin: 0;">
+                  Si tú no realizaste estos cambios, por favor ponte en contacto con nuestro equipo de soporte inmediatamente escribiendo a soporte@donia.cl para proteger tu cuenta.
+                </p>
+              </div>
+
+              <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; text-align: center;">
+                Este es un mensaje automático de seguridad. No es necesario que respondas a este correo.
+              </p>
+
+              <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 32px 0;">
+
+              <p style="color: #64748b; font-size: 12px; text-align: center; font-weight: 700;">
+                © 2026 Donia SpA. Seguridad y Confianza.
+              </p>
+            </div>
+          </div>
+        `,
+      });
+      logger.info('PROFILE_UPDATE_EMAIL_SENT', { to });
+    } catch (e) {
+      logger.error('PROFILE_UPDATE_EMAIL_ERROR', e);
+    }
+  }
 }
 
 // 3. VALIDADOR DE INPUTS

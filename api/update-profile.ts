@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { logger, Mailer } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,19 +21,18 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // Validamos que el ID exista antes de actualizar
-    const { data: existing, error: findError } = await supabase.from('profiles').select('id').eq('id', id).single();
+    // 1. Validamos que el ID exista antes de actualizar
+    const { data: existing, error: findError } = await supabase.from('profiles').select('id, full_name').eq('id', id).single();
     
     if (findError || !existing) {
        return res.status(404).json({ error: 'Perfil no encontrado' });
     }
 
-    // Actualizamos los campos permitidos
+    // 2. Actualizamos los campos permitidos
     const { data, error } = await supabase.from('profiles').update({
         full_name: updates.full_name,
         rut: updates.rut,
         phone: updates.phone,
-        // is_verified no se actualiza aquí por seguridad, requiere proceso manual
     })
     .eq('id', id)
     .select()
@@ -40,9 +40,21 @@ export default async function handler(req: any, res: any) {
 
     if (error) throw error;
 
+    // 3. Obtener el email del usuario desde Auth para enviar la notificación
+    // Usamos el cliente admin para acceder a auth.users
+    const { data: { user }, error: authError } = await (supabase.auth as any).admin.getUserById(id);
+    
+    if (!authError && user && user.email) {
+      logger.info('TRIGGERING_PROFILE_UPDATE_EMAIL', { email: user.email });
+      // Enviamos el correo de notificación (Asíncrono, no bloqueamos la respuesta al cliente)
+      Mailer.sendProfileUpdateNotification(user.email, data.full_name || 'Usuario Donia').catch(e => {
+        logger.error('ASYNC_MAILER_PROFILE_ERROR', e);
+      });
+    }
+
     return res.status(200).json({ success: true, data });
   } catch (error: any) {
-    console.error("Update Profile Error:", error.message);
+    logger.error("Update Profile Error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 }
