@@ -56,20 +56,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
+    let oauthSafetyTimeout: any;
 
     const initApp = async () => {
       try {
-        // 1. Iniciar servicios
         await authService.initialize();
         campaignService.initialize().catch(() => {});
         
         const client = authService.getSupabase();
         
-        // 2. DETECCIÓN DE OAUTH: Si el hash tiene access_token, no quitamos el loader todavía
+        // DETECCIÓN DE OAUTH
         const hasAccessToken = window.location.hash.includes('access_token=');
         if (hasAccessToken) {
           console.log("[AuthContext] Detectado callback de OAuth, esperando procesamiento...");
-          // No seteamos loading(false) aún para que el router no nos mande a "/"
+          // Timer de seguridad: Si en 8 segundos no ha logueado, liberamos la pantalla
+          oauthSafetyTimeout = setTimeout(() => {
+            if (mounted && loading) {
+              console.warn("[AuthContext] OAuth safety timeout triggered. Releasing UI.");
+              setLoading(false);
+            }
+          }, 8000);
         }
 
         const session = await authService.getSession();
@@ -83,7 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (mounted) setProfile(p);
           }
 
-          // Si no hay token de acceso pendiente, podemos quitar el loader
           if (!hasAccessToken) {
             setLoading(false);
           }
@@ -97,36 +102,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(currentUser);
             
             if (currentUser) {
-               ensureProfileExists(currentUser).then(p => {
-                   if (mounted) setProfile(p);
-               });
+               const p = await ensureProfileExists(currentUser);
+               if (mounted) setProfile(p);
             } else {
                setProfile(null);
             }
 
             if (event === 'SIGNED_IN') {
+              if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
               setLoading(false);
+              
               const savedRedirect = localStorage.getItem('donia_auth_redirect');
               if (savedRedirect) {
                 localStorage.removeItem('donia_auth_redirect');
                 window.location.hash = savedRedirect.startsWith('#') ? savedRedirect : `#${savedRedirect}`;
               } else {
-                // Si venimos de Google, vamos al dashboard
                 if (window.location.hash.includes('access_token')) {
                   window.location.hash = '#/dashboard';
                 }
               }
             }
             
-            if (event === 'SIGNED_OUT') {
-              setUser(null);
-              setProfile(null);
-              setLoading(false);
-              window.location.hash = '#/';
+            if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+               // En INITIAL_SESSION si no hay token de acceso, ya podemos mostrar la app
+               if (!window.location.hash.includes('access_token')) {
+                 setLoading(false);
+               }
             }
           });
           
-          return () => { subscription.unsubscribe(); };
+          return () => { 
+            if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
+            subscription.unsubscribe(); 
+          };
         }
       } catch (error) {
         if (mounted) setLoading(false);
@@ -136,7 +144,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     initApp();
-    return () => { mounted = false; };
+    return () => { 
+      mounted = false; 
+      if (oauthSafetyTimeout) clearTimeout(oauthSafetyTimeout);
+    };
   }, []);
 
   const signOut = async () => {
@@ -152,7 +163,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  if (!isInitialized || (loading && window.location.hash.includes('access_token'))) {
+  // Solo bloqueamos con el loader si estamos inicializando O si estamos procesando un token de OAuth activamente
+  const isBlockedByOAuth = loading && window.location.hash.includes('access_token');
+
+  if (!isInitialized || isBlockedByOAuth) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <Loader2 className="w-10 h-10 text-violet-600 animate-spin" />

@@ -46,11 +46,11 @@ export class AuthService {
           } catch (e) { /* ignore */ }
         }
 
-        // Prioridad 3: Consultar endpoint de configuración si todo falla
+        // Prioridad 3: Consultar endpoint de configuración si todo falla (Aumentamos timeout a 5s)
         if (!url || !key) {
            try {
              const controller = new AbortController();
-             const timeoutId = setTimeout(() => controller.abort(new Error("AuthInitTimeout")), 1000);
+             const timeoutId = setTimeout(() => controller.abort(), 5000);
              const resp = await fetch('/api/config', { signal: controller.signal });
              clearTimeout(timeoutId);
              if (resp.ok) {
@@ -59,7 +59,7 @@ export class AuthService {
                key = config.supabaseKey || key;
              }
            } catch (e: any) {
-             console.warn("[AuthService] Config check skipped:", e.message);
+             console.warn("[AuthService] Config fetch skipped or timed out");
            }
         }
           
@@ -68,7 +68,7 @@ export class AuthService {
             auth: {
               persistSession: true,
               autoRefreshToken: true,
-              detectSessionInUrl: true, // Crítico para OAuth
+              detectSessionInUrl: true,
               storageKey: 'donia-auth-token-v1',
               flowType: 'implicit'
             }
@@ -135,7 +135,6 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Servicio de autenticación no disponible.");
     
-    // El origin debe coincidir exactamente con lo configurado en Supabase Dashboard
     const redirectTo = window.location.origin; 
     
     const { data, error } = await (this.client.auth as any).signInWithOAuth({
