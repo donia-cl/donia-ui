@@ -12,7 +12,8 @@ import {
   Receipt, 
   Mail, 
   Check, 
-  CreditCard 
+  CreditCard,
+  ShieldCheck
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
@@ -56,12 +57,18 @@ const DonatePage: React.FC = () => {
     return () => { isMountedRef.current = false; };
   }, []);
 
+  // Cálculos financieros
   const tipGrossAmount = tipPercentage === 'custom' 
     ? customTipAmount 
     : Math.round(donationAmount * (Number(tipPercentage) / 100));
+  
   const tipNetAmount = Math.round(tipGrossAmount / 1.19);
   const ivaAmount = tipGrossAmount - tipNetAmount;
-  const totalAmount = donationAmount + tipGrossAmount;
+  
+  // Comisión Mercado Pago: 3.8% sobre el monto de la donación
+  const commissionAmount = Math.round(donationAmount * 0.038);
+
+  const totalAmount = donationAmount + tipGrossAmount + commissionAmount;
 
   const handleManualTipChange = (strVal: string) => {
     const cleanVal = strVal.replace(/\./g, '').replace(/\D/g, '');
@@ -77,7 +84,6 @@ const DonatePage: React.FC = () => {
   };
 
   const handleBackToForm = () => {
-    // Limpieza agresiva antes de cambiar el estado visual
     if (brickControllerRef.current) {
         try {
             brickControllerRef.current.unmount();
@@ -89,7 +95,7 @@ const DonatePage: React.FC = () => {
     setBrickLoading(false);
     setError(null);
     setShowPaymentForm(false);
-    window.scrollTo(0, 0); // Scroll arriba al volver
+    window.scrollTo(0, 0);
   };
 
   useEffect(() => {
@@ -125,12 +131,9 @@ const DonatePage: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    // Bandera para cancelar la ejecución asíncrona si el usuario sale de esta vista
     let isCancelled = false;
 
-    if (!showPaymentForm) {
-        return;
-    }
+    if (!showPaymentForm) return;
 
     if (!mpPublicKey) {
         setError("Error de configuración: No se encontró la llave pública de Mercado Pago.");
@@ -141,7 +144,6 @@ const DonatePage: React.FC = () => {
       setBrickLoading(true);
       setError(null);
 
-      // Limpiar contenedor previo por seguridad
       if (paymentBrickContainerRef.current) {
           paymentBrickContainerRef.current.innerHTML = '';
       }
@@ -163,10 +165,13 @@ const DonatePage: React.FC = () => {
             },
             customization: {
               paymentMethods: {
-                wallet_purchase: 'all', // Opción Mercado Pago Wallet
+                wallet_purchase: 'all', // Habilita Wallet
                 creditCard: 'all',
                 debitCard: 'all',
-                maxInstallments: 1 // Una sola cuota
+                ticket: [], // Deshabilita ticket
+                bankTransfer: [], // Deshabilita transferencia
+                atm: [], // Deshabilita ATM
+                maxInstallments: 1
               },
               visual: {
                 style: {
@@ -198,6 +203,7 @@ const DonatePage: React.FC = () => {
                         comentario: donorComment,
                         tip: tipNetAmount,
                         iva: ivaAmount,
+                        commission: commissionAmount,
                         donorUserId: user?.id || null
                       }
                     })
@@ -527,6 +533,14 @@ const DonatePage: React.FC = () => {
                     </div>
                     <span className="font-black text-slate-900 text-lg">${tipGrossAmount.toLocaleString('es-CL')}</span>
                   </div>
+
+                  <div className="flex justify-between items-center group">
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Comisión Mercado Pago</span>
+                      <span className="text-slate-600 text-sm font-bold">Procesamiento seguro</span>
+                    </div>
+                    <span className="font-black text-slate-900 text-lg">${commissionAmount.toLocaleString('es-CL')}</span>
+                  </div>
                 </div>
                 
                 <div className="pt-8 border-t-2 border-dashed border-slate-100 mb-8">
@@ -536,7 +550,7 @@ const DonatePage: React.FC = () => {
                       <span className="text-4xl font-black text-slate-900 tracking-tighter">${totalAmount.toLocaleString('es-CL')}</span>
                     </div>
                     <div className="bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 flex items-center gap-2">
-                       <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                       <ShieldCheck size={14} className="text-emerald-600" />
                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seguro</span>
                     </div>
                   </div>
