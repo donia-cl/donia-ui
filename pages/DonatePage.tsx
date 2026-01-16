@@ -13,7 +13,9 @@ import {
   Mail, 
   Check, 
   ShieldCheck,
-  ExternalLink
+  XCircle,
+  Clock,
+  ArrowLeft
 } from 'lucide-react';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
@@ -38,23 +40,17 @@ const DonatePage: React.FC = () => {
   const [donorComment, setDonorComment] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   
-  // Detectar éxito desde la URL (Retorno de Mercado Pago)
+  // Detectar estado desde la URL (Retorno de Mercado Pago)
   const queryParams = new URLSearchParams(location.search);
-  const paymentStatus = queryParams.get('status'); // 'approved', 'failure', 'pending'
+  const paymentStatus = queryParams.get('status'); 
+  const collectionStatus = queryParams.get('collection_status');
+  const finalStatus = paymentStatus || collectionStatus;
 
   const service = CampaignService.getInstance();
 
-  // Resetear estado de redirección al montar o volver atrás
   useEffect(() => {
-    // 1. Reset inmediato al montar
     setRedirecting(false);
-
-    // 2. Manejar el evento pageshow (específico para el botón atrás del navegador)
-    const handlePageShow = (event: PageTransitionEvent) => {
-      // persisted es true si la página se cargó desde el cache (back button)
-      setRedirecting(false);
-    };
-
+    const handlePageShow = () => setRedirecting(false);
     window.addEventListener('pageshow', handlePageShow);
     return () => window.removeEventListener('pageshow', handlePageShow);
   }, [location.pathname]);
@@ -75,7 +71,6 @@ const DonatePage: React.FC = () => {
     fetchData();
   }, [id]);
 
-  // Autocompletar datos del usuario logueado
   useEffect(() => {
     if (user || profile) {
       if (profile?.full_name) setDonorName(profile.full_name);
@@ -83,13 +78,10 @@ const DonatePage: React.FC = () => {
     }
   }, [user, profile]);
 
-  // --- CÁLCULOS FINANCIEROS ---
   const tipGrossAmount = tipPercentage === 'custom' 
     ? customTipAmount 
     : Math.round(donationAmount * (Number(tipPercentage) / 100));
   
-  const tipNetAmount = Math.round(tipGrossAmount / 1.19);
-  const ivaAmount = tipGrossAmount - tipNetAmount;
   const commissionAmount = Math.round((donationAmount + tipGrossAmount) * 0.038);
   const totalAmount = donationAmount + tipGrossAmount + commissionAmount;
 
@@ -137,13 +129,11 @@ const DonatePage: React.FC = () => {
         const data = await resp.json();
         
         if (data.success && data.init_point) {
-            // REDIRECCIÓN A MERCADO PAGO
             window.location.href = data.init_point;
         } else {
             throw new Error(data.error || "No se pudo preparar la pasarela de pago.");
         }
     } catch (err: any) {
-        console.error("Error creando preference:", err);
         setError(`Error al conectar con Mercado Pago: ${err.message}`);
         setRedirecting(false);
     }
@@ -158,25 +148,89 @@ const DonatePage: React.FC = () => {
 
   if (!campaign) return <div className="p-20 text-center text-slate-500 font-bold">Causa no encontrada</div>;
 
-  // Pantalla de Éxito al volver de Mercado Pago
-  if (paymentStatus === 'approved') {
+  // --- PANTALLA DE ÉXITO ---
+  if (finalStatus === 'approved' || finalStatus === 'success') {
     return (
-      <div className="max-w-md mx-auto px-6 py-20 text-center animate-in zoom-in duration-300">
-        <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-sm">
-          <Check size={40} />
+      <div className="max-w-xl mx-auto px-6 py-20 text-center animate-in zoom-in duration-300">
+        <div className="relative mb-8">
+           <div className="absolute inset-0 bg-emerald-100 rounded-full blur-2xl opacity-40 scale-150 animate-pulse"></div>
+           <div className="relative w-24 h-24 bg-emerald-500 text-white rounded-[32px] flex items-center justify-center mx-auto shadow-xl shadow-emerald-200">
+             <Check size={48} strokeWidth={3} />
+           </div>
         </div>
-        <h1 className="text-3xl font-black text-slate-900 mb-3">¡Donación exitosa!</h1>
-        <p className="text-slate-500 mb-6 font-medium leading-relaxed">
-          Tu aporte para <span className="text-violet-600 font-bold">{campaign.titulo}</span> ha sido recibido correctamente.
+        
+        <h1 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">¡Muchas gracias! 💜</h1>
+        <p className="text-slate-500 mb-8 font-medium leading-relaxed text-lg">
+          Tu donación para <br/><span className="text-violet-600 font-black text-xl">"{campaign.titulo}"</span><br/> se ha procesado con éxito.
         </p>
-        <div className="bg-slate-50 p-4 rounded-xl mb-10 text-sm text-slate-600 border border-slate-100">
-           Gracias por usar <strong>Donia</strong> para apoyar causas locales.
+        
+        <div className="bg-white p-8 rounded-[32px] mb-10 border border-slate-100 shadow-xl shadow-slate-200/50">
+           <div className="flex justify-between items-center pb-4 border-b border-slate-50 mb-4">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comprobante enviado a</span>
+              <span className="text-sm font-bold text-slate-700">{donorEmail || 'Tu correo'}</span>
+           </div>
+           <div className="flex justify-between items-center">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Monto total</span>
+              <span className="text-2xl font-black text-slate-900">${totalAmount.toLocaleString('es-CL')}</span>
+           </div>
         </div>
+
         <button 
           onClick={() => navigate(`/campana/${campaign.id}`)} 
-          className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black hover:bg-slate-800 transition-colors"
+          className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95"
         >
           Volver a la campaña
+        </button>
+      </div>
+    );
+  }
+
+  // --- PANTALLA DE ERROR / FALLO ---
+  if (finalStatus === 'failure' || finalStatus === 'rejected') {
+    return (
+      <div className="max-w-xl mx-auto px-6 py-20 text-center animate-in zoom-in duration-300">
+        <div className="w-24 h-24 bg-rose-100 text-rose-500 rounded-[32px] flex items-center justify-center mx-auto mb-8 shadow-sm">
+          <XCircle size={48} />
+        </div>
+        <h1 className="text-3xl font-black text-slate-900 mb-4">Donación no realizada</h1>
+        <p className="text-slate-500 mb-10 font-medium leading-relaxed">
+          Mercado Pago no pudo procesar tu transacción. Esto puede deberse a fondos insuficientes o rechazo de tu banco.
+        </p>
+        
+        <div className="space-y-4">
+          <button 
+            onClick={() => navigate(`/campana/${campaign.id}/donar`)} 
+            className="w-full bg-violet-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-violet-700 transition-all shadow-xl shadow-violet-100"
+          >
+            Intentar nuevamente
+          </button>
+          <button 
+            onClick={() => navigate(`/campana/${campaign.id}`)} 
+            className="w-full bg-white text-slate-500 py-4 rounded-2xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+          >
+            <ArrowLeft size={18} /> Cancelar y volver
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PANTALLA DE PENDIENTE ---
+  if (finalStatus === 'pending' || finalStatus === 'in_process') {
+    return (
+      <div className="max-w-xl mx-auto px-6 py-20 text-center animate-in zoom-in duration-300">
+        <div className="w-24 h-24 bg-amber-100 text-amber-500 rounded-[32px] flex items-center justify-center mx-auto mb-8 animate-pulse">
+          <Clock size={48} />
+        </div>
+        <h1 className="text-3xl font-black text-slate-900 mb-4">Pago pendiente</h1>
+        <p className="text-slate-500 mb-10 font-medium leading-relaxed">
+          Tu donación está siendo procesada por el medio de pago. Te enviaremos un correo electrónico apenas se confirme el éxito de la operación.
+        </p>
+        <button 
+          onClick={() => navigate(`/campana/${campaign.id}`)} 
+          className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-xl"
+        >
+          Entendido
         </button>
       </div>
     );
@@ -185,7 +239,7 @@ const DonatePage: React.FC = () => {
   return (
     <div className="bg-slate-50 min-h-screen pb-20">
       <div className="max-w-5xl mx-auto px-4 pt-10">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-slate-400 hover:text-violet-600 font-bold mb-8 transition-colors group text-sm">
+        <button onClick={() => navigate(`/campana/${id}`)} className="flex items-center gap-1.5 text-slate-400 hover:text-violet-600 font-bold mb-8 transition-colors group text-sm">
           <ChevronLeft size={18} className="group-hover:-translate-x-0.5 transition-transform" /> Volver a la campaña
         </button>
 
@@ -203,7 +257,6 @@ const DonatePage: React.FC = () => {
               </div>
 
               <div className="space-y-8">
-                {/* Monto de Donación */}
                 <div>
                   <label className="block text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Monto base</label>
                   <div className="relative mb-4">
@@ -229,7 +282,6 @@ const DonatePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Aporte Donia */}
                 <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
                     <Zap size={80} className="text-violet-600" />
@@ -269,7 +321,6 @@ const DonatePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Datos del Donante */}
                 <div className="space-y-4">
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
@@ -310,7 +361,7 @@ const DonatePage: React.FC = () => {
                 <button 
                   onClick={handlePaymentRedirect}
                   disabled={redirecting}
-                  className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-violet-100 disabled:opacity-70 disabled:cursor-wait"
+                  className="w-full py-5 rounded-2xl font-black text-lg bg-violet-600 text-white hover:bg-violet-700 transition-all flex items-center justify-center gap-3 shadow-xl shadow-violet-100 disabled:opacity-70 disabled:cursor-wait active:scale-95"
                 >
                   {redirecting ? (
                     <>
@@ -323,23 +374,12 @@ const DonatePage: React.FC = () => {
                     </>
                   )}
                 </button>
-                
-                <div className="flex flex-col items-center justify-center gap-2 pt-4 opacity-50">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                      <Lock size={12} /> Zona de pago segura
-                    </p>
-                    <img 
-                      src="https://http2.mlstatic.com/frontend-assets/mp-web-navigation/ui-navigation/5.104.0/mercadopago/logo__large.png" 
-                      alt="Mercado Pago" 
-                      className="h-6 grayscale object-contain"
-                    />
-                </div>
               </div>
             </div>
           </div>
 
           <div className="lg:col-span-5 h-fit sticky top-24">
-            <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-violet-100 relative">
+            <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-xl shadow-slate-200/40 border border-violet-100">
               <h2 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
                 <Receipt className="text-violet-600" size={24} />
                 Resumen del aporte
@@ -382,13 +422,6 @@ const DonatePage: React.FC = () => {
                      <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Protegido</span>
                   </div>
                 </div>
-              </div>
-
-              <div className="p-4 bg-slate-50 rounded-2xl flex items-start gap-3">
-                 <AlertCircle size={16} className="text-slate-400 shrink-0 mt-0.5" />
-                 <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                   Al hacer clic en pagar, serás redirigido al servidor de Mercado Pago para procesar tu transacción de forma segura. Al finalizar, volverás automáticamente a Donia.
-                 </p>
               </div>
             </div>
           </div>

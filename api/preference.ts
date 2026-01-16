@@ -74,8 +74,9 @@ export default async function handler(req: any, res: any) {
   if (action === 'preference') {
     const { campaignId, monto, nombre, comentario, campaignTitle, email, donorUserId } = req.body; 
     
-    // URL de retorno basada en el referer o absoluta si es necesario
-    const returnUrl = req.headers.referer || `${req.headers.origin}/#/campana/${campaignId}/donar`;
+    // URL de retorno forzada para evitar redirecciones al home
+    const baseUrl = req.headers.origin || 'https://donia.cl';
+    const returnUrl = `${baseUrl}/#/campana/${campaignId}/donar`;
 
     const preference = { 
       items: [{ 
