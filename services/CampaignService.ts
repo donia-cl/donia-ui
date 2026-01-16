@@ -33,7 +33,7 @@ export class CampaignService {
 
     // CRITICO: No bloqueamos la inicialización esperando la configuración del servidor.
     // Lanzamos la petición en segundo plano. Si falla o demora, la app ya cargó.
-    this.fetchServerConfig();
+    this.fetchServerConfig().catch(() => { /* Silent catch for abort/timeout */ });
 
     this.initPromise = Promise.resolve();
     return this.initPromise;

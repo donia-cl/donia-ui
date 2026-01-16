@@ -47,9 +47,9 @@ export class AuthService {
         if (!url || !key) {
            try {
              // Usamos AbortController para evitar que este fetch se quede colgado.
-             // REDUCIDO: 1500ms para mejorar la experiencia de usuario en carga inicial.
+             // OPTIMIZACIÓN: Reducido a 800ms para evitar esperas largas en carga inicial si la API está fría.
              const controller = new AbortController();
-             const timeoutId = setTimeout(() => controller.abort(new Error("AuthInitTimeout")), 1500);
+             const timeoutId = setTimeout(() => controller.abort(new Error("AuthInitTimeout")), 800);
              
              const resp = await fetch('/api/config', { signal: controller.signal });
              clearTimeout(timeoutId);

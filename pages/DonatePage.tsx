@@ -184,12 +184,13 @@ const DonatePage: React.FC = () => {
             },
             customization: {
               paymentMethods: {
-                mercadoPago: 'all', // Habilita Wallet (Login con Mercado Pago)
-                creditCard: 'all',      // Habilita Crédito
-                debitCard: 'all',       // Habilita Débito
-                ticket: [],             // Deshabilita Efectivo/Ticket
-                bankTransfer: [],       // Deshabilita Transferencia
-                atm: [],                // Deshabilita Cajero
+                // NOTA: Deshabilitamos 'mercadoPago' (Wallet) porque requiere 'preferenceId' en initialization.
+                // Al usar 'amount' directo, solo soportamos tarjetas por ahora.
+                creditCard: 'all',      
+                debitCard: 'all',       
+                ticket: [],             
+                bankTransfer: [],       
+                atm: [],                
                 maxInstallments: 1
               },
               visual: {
