@@ -1,4 +1,3 @@
-
 export type CampaignStatus = 'borrador' | 'activa' | 'finalizada' | 'en_revision' | 'pausada';
 
 export interface Profile {
@@ -7,7 +6,8 @@ export interface Profile {
   rut?: string;
   phone?: string;
   role: 'user' | 'admin' | 'reviewer';
-  is_verified: boolean;
+  is_verified: boolean; // Verificación de identidad (KYC)
+  email_verified: boolean; // Verificación de cuenta/email
 }
 
 export interface CampaignData {
@@ -19,8 +19,8 @@ export interface CampaignData {
   categoria: string;
   ubicacion: string;
   fechaCreacion: string;
-  fechaTermino?: string; // Nuevo campo
-  duracionDias?: number; // Nuevo campo
+  fechaTermino?: string;
+  duracionDias?: number;
   imagenUrl: string;
   estado: CampaignStatus;
   donantesCount: number;
@@ -39,9 +39,9 @@ export interface Donation {
   emailDonante: string;
   comentario?: string;
   donorUserId?: string;
-  status?: 'completed' | 'refunded' | 'pending'; // Nuevo campo para control de devoluciones
+  status?: 'completed' | 'refunded' | 'pending';
   paymentId?: string;
-  campaign?: { // Datos expandidos para el dashboard del donante
+  campaign?: {
     titulo: string;
     imagenUrl: string;
   };

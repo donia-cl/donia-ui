@@ -22,7 +22,8 @@ import {
   User,
   ArrowRight,
   Wallet,
-  Edit3
+  Edit3,
+  Send
 } from 'lucide-react';
 import { useCampaign } from '../../context/CampaignContext';
 import { useAuth } from '../../context/AuthContext';
@@ -69,7 +70,6 @@ const VistoBuenoCheckbox = ({ checked, onChange, label }: { checked: boolean, on
   </label>
 );
 
-// --- AUTH MODAL COMPONENT (UPDATED) ---
 const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () => void }) => {
   const [isLogin, setIsLogin] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -100,9 +100,7 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
   };
 
   const handleGoogle = async () => {
-    // Guardamos la ubicación actual limpia (sin hash #) para volver tras la autenticación de Google
     localStorage.setItem('donia_auth_redirect', location.pathname + location.search);
-    
     setGoogleLoading(true);
     try {
       await authService.signInWithGoogle();
@@ -223,12 +221,13 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
 const CreateReview: React.FC = () => {
   const navigate = useNavigate();
   const { campaign, resetCampaign } = useCampaign();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resendingEmail, setResendingEmail] = useState(false);
   
   const [declarations, setDeclarations] = useState({
     veraz: false,
@@ -237,6 +236,22 @@ const CreateReview: React.FC = () => {
   });
 
   const service = CampaignService.getInstance();
+  const authService = AuthService.getInstance();
+
+  const isEmailUnverified = user && profile && !profile.email_verified;
+
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    setResendingEmail(true);
+    try {
+      await authService.resendVerificationEmail(user.email);
+      alert("¡Correo enviado! Por favor revisa tu bandeja de entrada.");
+    } catch (e: any) {
+      alert("Error al reenviar el correo.");
+    } finally {
+      setResendingEmail(false);
+    }
+  };
 
   const handlePublishClick = () => {
     if (!declarations.veraz || !declarations.verificacion || !declarations.pausar) {
@@ -246,6 +261,8 @@ const CreateReview: React.FC = () => {
 
     if (!user) {
       setShowAuthModal(true);
+    } else if (isEmailUnverified) {
+       setError("Debes verificar tu email antes de publicar. Revisa tu correo.");
     } else {
       handleSubmit();
     }
@@ -254,7 +271,6 @@ const CreateReview: React.FC = () => {
   const handleSubmit = async () => {
     if (isSubmitting) return;
     
-    // Obtener sesión fresca para evitar estados "stale"
     const session = await AuthService.getInstance().getSession();
     const currentUser = session?.user;
 
@@ -326,7 +342,6 @@ const CreateReview: React.FC = () => {
           onClose={() => setShowAuthModal(false)} 
           onSuccess={() => {
             setShowAuthModal(false);
-            // Pequeña espera para que el contexto de Auth se actualice internamente
             setTimeout(() => handleSubmit(), 500); 
           }} 
         />
@@ -343,6 +358,29 @@ const CreateReview: React.FC = () => {
           <h1 className="text-2xl font-black text-slate-900 mb-2 tracking-tight">Revisa tu campaña</h1>
           <p className="text-slate-500 font-medium text-sm">Confirma que todo esté correcto antes de lanzar tu historia.</p>
         </div>
+
+        {/* AVISO DE CORREO NO VERIFICADO (BLOQUEANTE) */}
+        {isEmailUnverified && (
+          <div className="mb-10 p-8 bg-amber-50 border-2 border-amber-200 rounded-[32px] flex flex-col md:flex-row items-center gap-6 shadow-sm animate-in slide-in-from-top-4 duration-500">
+             <div className="w-16 h-16 bg-amber-500 text-white rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-amber-200">
+                <Mail size={32} />
+             </div>
+             <div className="flex-grow text-center md:text-left">
+                <h3 className="text-xl font-black text-amber-900 mb-1">¡Casi listo! Solo falta verificar tu email</h3>
+                <p className="text-amber-800/80 text-sm font-medium leading-relaxed">
+                  Para poder publicar tu campaña en Donia, necesitamos confirmar que eres el dueño del correo <strong>{user?.email}</strong>.
+                </p>
+             </div>
+             <button 
+               onClick={handleResendVerification}
+               disabled={resendingEmail}
+               className="bg-amber-500 text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg hover:bg-amber-600 transition-all flex items-center gap-2 whitespace-nowrap"
+             >
+               {resendingEmail ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+               Reenviar activación
+             </button>
+          </div>
+        )}
 
         <div className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -462,21 +500,23 @@ const CreateReview: React.FC = () => {
                 <p className="font-black text-[9px] uppercase tracking-widest mb-0.5">{isSchemaError ? 'Error de Sistema' : 'Error de validación'}</p>
                 <p className="text-[11px] font-bold opacity-80">{error}</p>
               </div>
-              <button 
-                onClick={handleSubmit}
-                className={`flex items-center gap-2 ${isSchemaError ? 'bg-amber-500' : 'bg-rose-500'} text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-md`}
-              >
-                <RefreshCcw size={12} /> Reintentar
-              </button>
+              {!isEmailUnverified && (
+                <button 
+                  onClick={handleSubmit}
+                  className={`flex items-center gap-2 ${isSchemaError ? 'bg-amber-500' : 'bg-rose-500'} text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:opacity-90 transition-all shadow-md`}
+                >
+                  <RefreshCcw size={12} /> Reintentar
+                </button>
+              )}
             </div>
           )}
 
           {!isSuccess && (
             <button 
               onClick={handlePublishClick}
-              disabled={isSubmitting || !allChecked}
+              disabled={isSubmitting || !allChecked || isEmailUnverified}
               className={`w-full py-6 rounded-[24px] font-black text-xl transition-all flex items-center justify-center gap-3 shadow-2xl relative overflow-hidden group ${
-                isSubmitting || !allChecked
+                isSubmitting || !allChecked || isEmailUnverified
                 ? 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none' 
                 : 'bg-violet-600 text-white hover:bg-violet-700 shadow-violet-100 active:scale-95'
               }`}
@@ -489,8 +529,8 @@ const CreateReview: React.FC = () => {
               ) : (
                 <>
                   <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
-                  <Lock size={18} className={allChecked ? 'text-violet-200' : 'text-slate-300'} />
-                  <span>{user ? 'Lanzar mi campaña' : 'Ingresar y Publicar'}</span>
+                  <Lock size={18} className={allChecked && !isEmailUnverified ? 'text-violet-200' : 'text-slate-300'} />
+                  <span>{isEmailUnverified ? 'Pendiente de Verificación' : (user ? 'Lanzar mi campaña' : 'Ingresar y Publicar')}</span>
                 </>
               )}
             </button>

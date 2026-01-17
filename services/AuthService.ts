@@ -15,10 +15,6 @@ export class AuthService {
     return AuthService.instance;
   }
 
-  /**
-   * Inicializa el cliente una sola vez.
-   * Si las credenciales no están en el entorno, las busca en el endpoint de config.
-   */
   public async initialize(): Promise<void> {
     if (this.client) return;
     if (this.initPromise) return this.initPromise;
@@ -28,7 +24,6 @@ export class AuthService {
         let url = '';
         let key = '';
 
-        // 1. Intentar variables de entorno (Vite/CRA)
         try {
           // @ts-ignore
           const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : process.env;
@@ -36,7 +31,6 @@ export class AuthService {
           key = env.VITE_SUPABASE_KEY || env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
         } catch (e) { /* ignore */ }
 
-        // 2. Fallback a configuración de servidor
         if (!url || !key) {
            try {
              const resp = await fetch('/api/config');
@@ -55,12 +49,11 @@ export class AuthService {
             auth: {
               persistSession: true,
               autoRefreshToken: true,
-              detectSessionInUrl: true, // Crucial para PKCE automático
+              detectSessionInUrl: true,
               flowType: 'pkce',
-              storageKey: 'donia-auth-token-v2' // v2 invalida sesiones corruptas v1
+              storageKey: 'donia-auth-token-v2'
             }
           });
-          console.log("[AuthService] Supabase Client Initialized (Singleton)");
         }
       } catch (e) {
         console.error("[AuthService] Fallo fatal en inicialización:", e);
@@ -94,7 +87,7 @@ export class AuthService {
       password: pass,
       options: { 
         data: { full_name: fullName },
-        emailRedirectTo: window.location.origin
+        emailRedirectTo: window.location.origin + '/dashboard?verified=true'
       }
     });
     if (error) throw error;
@@ -107,6 +100,20 @@ export class AuthService {
     const { data, error } = await this.client.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     return data;
+  }
+
+  async resendVerificationEmail(email: string) {
+    await this.initialize();
+    if (!this.client) throw new Error("Servicio no disponible");
+    const { error } = await this.client.auth.resend({
+      type: 'signup',
+      email: email,
+      options: {
+        emailRedirectTo: window.location.origin + '/dashboard?verified=true'
+      }
+    });
+    if (error) throw error;
+    return true;
   }
 
   async signInWithGoogle() {

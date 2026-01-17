@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { 
   Heart, 
   Trash2, 
@@ -36,8 +36,8 @@ import {
   ShieldAlert,
   KeyRound,
   Fingerprint,
-  // Fix: Added missing Calendar icon import
-  Calendar
+  Calendar,
+  Send
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthService } from '../services/AuthService';
@@ -48,8 +48,9 @@ import { formatRut, validateRut, formatPhone, validateChileanPhone } from '../ut
 type TabType = 'resumen' | 'donaciones' | 'finanzas' | 'seguridad' | 'perfil';
 
 const Dashboard: React.FC = () => {
-  const { user, profile, setProfile, loading: authLoading, signOut } = useAuth();
+  const { user, profile, setProfile, loading: authLoading, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabType>('resumen');
   
   const [campaigns, setCampaigns] = useState<CampaignData[]>([]);
@@ -71,6 +72,8 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [withdrawalActionLoading, setWithdrawalActionLoading] = useState<string | null>(null);
   const [resetPassLoading, setResetPassLoading] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [emailSentSuccess, setEmailSentSuccess] = useState(false);
   
   const service = CampaignService.getInstance();
   const authService = AuthService.getInstance();
@@ -82,6 +85,10 @@ const Dashboard: React.FC = () => {
     }
     if (user) {
       loadAllData();
+      // Si venimos de un redirect de verificación exitosa
+      if (new URLSearchParams(location.search).get('verified') === 'true') {
+        refreshProfile();
+      }
     }
   }, [user, authLoading]);
 
@@ -115,7 +122,25 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    setResendingEmail(true);
+    try {
+      await authService.resendVerificationEmail(user.email);
+      setEmailSentSuccess(true);
+      setTimeout(() => setEmailSentSuccess(false), 5000);
+    } catch (e: any) {
+      alert(e.message || "Error al reenviar el correo.");
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
   const handleWithdrawalRequest = async (campaign: CampaignData) => {
+    if (!profile?.email_verified) {
+      alert("Debes verificar tu email antes de realizar retiros.");
+      return;
+    }
     if (!profile?.rut || !profile?.phone) {
       alert("Debes completar tu RUT y Teléfono en la pestaña 'Perfil' antes de cobrar.");
       setActiveTab('perfil');
@@ -141,7 +166,6 @@ const Dashboard: React.FC = () => {
     if (!user?.email) return;
     setResetPassLoading(true);
     try {
-      // Usamos el cliente de supabase expuesto para enviar el reset
       const client = authService.getSupabase();
       if (client) {
         await client.auth.resetPasswordForEmail(user.email, {
@@ -209,6 +233,7 @@ const Dashboard: React.FC = () => {
   };
 
   const isProfileIncomplete = !profile?.rut || !profile?.phone;
+  const isEmailUnverified = !profile?.email_verified;
   const dashboardName = profile?.full_name || user?.user_metadata?.full_name || 'Usuario';
   const dashboardInitial = dashboardName.charAt(0).toUpperCase();
 
@@ -232,6 +257,27 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="bg-slate-50/50 min-h-screen pb-20">
+      
+      {/* BANNER DE VERIFICACIÓN (OPCIÓN B) */}
+      {isEmailUnverified && (
+        <div className="bg-amber-500 text-white py-3 px-4 shadow-lg animate-in slide-in-from-top duration-500">
+           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                 <div className="bg-white/20 p-2 rounded-lg"><Mail size={18} /></div>
+                 <p className="text-sm font-black">Tu cuenta no está verificada. Revisa tu email ({user?.email}) para activar todas las funciones.</p>
+              </div>
+              <button 
+                onClick={handleResendVerification}
+                disabled={resendingEmail || emailSentSuccess}
+                className={`bg-white text-amber-600 px-6 py-2 rounded-xl font-black text-xs uppercase tracking-widest shadow-sm hover:bg-amber-50 transition-all flex items-center gap-2 whitespace-nowrap ${emailSentSuccess ? 'cursor-default opacity-80' : ''}`}
+              >
+                {resendingEmail ? <Loader2 size={14} className="animate-spin" /> : (emailSentSuccess ? <Check size={14} /> : <Send size={14} />)}
+                {emailSentSuccess ? 'Correo enviado' : 'Reenviar activación'}
+              </button>
+           </div>
+        </div>
+      )}
+
       <div className="bg-white border-b border-slate-100 pt-16 pb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -241,7 +287,15 @@ const Dashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mi Panel de Control</p>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Hola, {dashboardName.split(' ')[0]}</h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-3xl font-black text-slate-900 tracking-tight">Hola, {dashboardName.split(' ')[0]}</h1>
+                  {/* FIX: Type '{ size: number; className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'. Wrapped in span with title to preserve tooltip. */}
+                  {!isEmailUnverified && (
+                    <span title="Cuenta Verificada">
+                      <ShieldCheck size={20} className="text-emerald-500" />
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <Link to="/crear" className="bg-violet-600 text-white px-6 py-4 rounded-2xl font-black hover:bg-violet-700 transition-all flex items-center gap-2 shadow-xl shadow-violet-100">
@@ -266,6 +320,7 @@ const Dashboard: React.FC = () => {
               >
                 <tab.icon size={14} /> {tab.label}
                 {tab.id === 'perfil' && isProfileIncomplete && <span className="absolute -top-1 -right-2 w-2 h-2 bg-amber-500 rounded-full"></span>}
+                {tab.id === 'seguridad' && isEmailUnverified && <span className="absolute -top-1 -right-2 w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>}
               </button>
             ))}
           </nav>
@@ -486,8 +541,24 @@ const Dashboard: React.FC = () => {
                                <p className="font-bold text-slate-900">{user?.email}</p>
                             </div>
                          </div>
-                         <div className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Verificado</div>
+                         <div className={`${isEmailUnverified ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'} px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest`}>
+                            {isEmailUnverified ? 'Pendiente' : 'Verificado'}
+                         </div>
                       </div>
+
+                      {isEmailUnverified && (
+                        <div className="p-6 bg-amber-50 rounded-3xl border border-amber-100 flex flex-col gap-4">
+                           <p className="text-xs font-bold text-amber-800 leading-relaxed">Aún no has confirmado tu email. Necesitas hacerlo para publicar campañas y retirar fondos.</p>
+                           <button 
+                             onClick={handleResendVerification}
+                             disabled={resendingEmail}
+                             className="w-full bg-amber-500 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-md flex items-center justify-center gap-2"
+                           >
+                             {resendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                             Reenviar correo de activación
+                           </button>
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100">
                          <div className="flex items-center gap-4">
