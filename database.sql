@@ -1,26 +1,29 @@
--- 1. Función optimizada
+-- 1. Tabla de tokens de verificación propios
+CREATE TABLE IF NOT EXISTS public.email_verifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  token UUID NOT NULL DEFAULT gen_random_uuid(),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  expires_at TIMESTAMPTZ DEFAULT (now() + interval '24 hours'),
+  consumed_at TIMESTAMPTZ
+);
+
+-- 2. Simplificar el manejo de perfiles (Supabase solo crea el registro, Donia lo verifica)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, email_verified)
+  INSERT INTO public.profiles (id, full_name, email_verified, role)
   VALUES (
     NEW.id, 
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
-    -- email_verified será FALSE inicialmente si "Confirm Email" está ON
-    (NEW.email_confirmed_at IS NOT NULL)
+    FALSE, -- Siempre empieza falso
+    'user'
   )
-  ON CONFLICT (id) DO UPDATE SET
-    full_name = EXCLUDED.full_name,
-    email_verified = (NEW.email_confirmed_at IS NOT NULL);
-  RETURN NEW;
-EXCEPTION WHEN OTHERS THEN
+  ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. Script de reparación (Ejecutar esto una vez para corregir registros previos)
-UPDATE public.profiles p
-SET email_verified = FALSE
-FROM auth.users u
-WHERE p.id = u.id 
-AND u.email_confirmed_at IS NULL;
+-- 3. Índices para velocidad de verificación
+CREATE INDEX IF NOT EXISTS idx_email_verifications_token ON public.email_verifications(token);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_user ON public.email_verifications(user_id);

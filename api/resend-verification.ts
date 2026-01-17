@@ -15,63 +15,50 @@ export default async function handler(req: any, res: any) {
 
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = createClient(supabaseUrl!, serviceRoleKey!);
 
-    if (!supabaseUrl || !serviceRoleKey) throw new Error('Configuración de servidor incompleta (Supabase).');
+    // 1. Buscar al usuario por email
+    // Usamos admin para saltar RLS
+    // Fix: Avoid unsafe destructuring that causes 'never' type inference on users
+    const { data, error: userError } = await supabase.auth.admin.listUsers();
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-
-    // Intentamos generar enlace de tipo 'signup'
-    const redirectTo = `${req.headers.origin || 'https://donia.cl'}/dashboard?verified=true`;
-    
-    let { data, error } = await supabase.auth.admin.generateLink({
-      type: 'signup',
-      email: email,
-      options: { redirectTo }
-    } as any);
-
-    // Si falla porque ya está registrado o verificado, probamos con 'magiclink'
-    if (error && (error.message.includes('already been registered') || error.status === 422)) {
-      console.log(`[Auth] Usuario ${email} ya existe. Generando Magic Link para verificación.`);
-      
-      const magicRes = await supabase.auth.admin.generateLink({
-        type: 'magiclink',
-        email: email,
-        options: { redirectTo }
-      } as any);
-      
-      if (magicRes.error) throw magicRes.error;
-      data = magicRes.data;
-    } else if (error) {
-      throw error;
+    if (userError || !data?.users) {
+      throw new Error("Usuario no encontrado.");
     }
 
-    if (!data || !data.user) {
-      throw new Error("No se pudo generar el enlace de verificación en Supabase.");
+    // Explicitly find the user from the fetched list
+    const user = data.users.find(u => u.email === email);
+
+    if (!user) {
+      throw new Error("Usuario no encontrado.");
     }
 
-    // Obtener nombre para el correo
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', data.user.id).maybeSingle();
-    const userName = profile?.full_name || data.user.user_metadata?.full_name || 'Usuario de Donia';
+    // 2. Generar token propio en nuestra tabla
+    const { data: verification, error: vError } = await supabase
+      .from('email_verifications')
+      .insert([{ user_id: user.id }])
+      .select()
+      .single();
 
-    // ENVIAR VÍA RESEND (Ahora esperamos el resultado real)
-    try {
-      await Mailer.sendAccountVerification(email, userName, data.properties.action_link);
-      logger.info('MANUAL_VERIFICATION_SENT_SUCCESS', { email });
-    } catch (mailError: any) {
-      console.error("[Mailer Error Detail]:", mailError);
-      throw new Error(`El servicio de correos falló: ${mailError.message}`);
-    }
+    if (vError) throw vError;
 
-    return res.status(200).json({ 
-      success: true, 
-      message: "Correo de activación enviado exitosamente." 
-    });
+    // 3. Construir link de verificación propio
+    const baseUrl = req.headers.origin || 'https://donia.cl';
+    const verifyLink = `${baseUrl}/api/verify-token?token=${verification.token}`;
+
+    // 4. Obtener nombre para el correo
+    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+    const name = profile?.full_name || 'Usuario';
+
+    // 5. Enviar via Resend
+    await Mailer.sendAccountVerification(email, name, verifyLink);
+
+    console.log(`[Verification] Token generado para ${email}: ${verification.token}`);
+
+    return res.status(200).json({ success: true });
 
   } catch (error: any) {
-    logger.error('RESEND_VERIFICATION_FATAL_ERROR', error);
-    return res.status(500).json({ 
-      success: false, 
-      error: error.message || "Error interno al procesar el reenvío." 
-    });
+    logger.error('RESEND_VERIFICATION_HANDLER_FAIL', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 }
