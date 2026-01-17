@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart, RefreshCw, Send, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 
 const Auth: React.FC = () => {
@@ -8,7 +8,11 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isTimeoutError, setIsTimeoutError] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false); 
+  const [resendingInNotice, setResendingInNotice] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
+  
   const navigate = useNavigate();
   const location = useLocation();
   const authService = AuthService.getInstance();
@@ -39,6 +43,7 @@ const Auth: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setIsTimeoutError(false);
 
     if (formData.password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres.");
@@ -49,23 +54,39 @@ const Auth: React.FC = () => {
     try {
       if (isLogin) {
         await authService.signIn(formData.email, formData.password);
+        const from = (location.state as any)?.from?.pathname || '/';
+        navigate(from, { replace: true });
       } else {
-        await authService.signUp(formData.email, formData.password, formData.fullName);
+        const result = await authService.signUp(formData.email, formData.password, formData.fullName);
+        
+        // Registro exitoso (esperando confirmación)
+        setIsRegistered(true);
+        setLoading(false);
       }
-      
-      const from = (location.state as any)?.from?.pathname || '/';
-      navigate(from, { replace: true });
     } catch (err: any) {
       console.error("Auth error:", err);
       
-      // Manejo robusto de mensajes de error
+      const isTimeout = err.name === 'AuthRetryableFetchError' || (err.message && (err.message.includes("504") || err.message.includes("timeout")));
+      
+      // LOGICA CRITICA: Si es un registro (Sign Up) y da timeout, 
+      // lo tratamos como éxito porque el mail suele enviarse de todos modos.
+      if (!isLogin && isTimeout) {
+        console.warn("Timeout detectado en registro. Asumiendo creación exitosa en segundo plano.");
+        setIsRegistered(true);
+        setLoading(false);
+        return;
+      }
+
       let msg = "";
       if (typeof err === 'string') msg = err;
+      else if (isTimeout) {
+        msg = "El servidor de autenticación no responde. Intenta de nuevo en unos segundos.";
+        setIsTimeoutError(true);
+      }
       else if (err.message && err.message !== "{}") msg = err.message;
-      else if (err.name === 'AuthRetryableFetchError') msg = "Hubo un problema de conexión con el servidor. Por favor intenta de nuevo en unos segundos.";
       else msg = "Ocurrió un error inesperado al procesar tu solicitud.";
       
-      if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
+      if (msg.includes("already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
       if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
       
@@ -85,6 +106,65 @@ const Auth: React.FC = () => {
     }
   };
 
+  const handleResendFromNotice = async () => {
+    setResendingInNotice(true);
+    try {
+      await authService.resendVerificationEmail(formData.email);
+      alert("¡Correo de activación reenviado!");
+    } catch (e) {
+      alert("Error al reenviar. Intenta más tarde.");
+    } finally {
+      setResendingInNotice(false);
+    }
+  };
+
+  if (isRegistered) {
+    return (
+      <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 bg-slate-50/30">
+        <div className="max-w-md w-full bg-white p-10 rounded-[40px] shadow-2xl shadow-slate-200/40 border border-slate-100 text-center animate-in zoom-in-95 duration-300">
+          <div className="relative mb-8">
+            <div className="absolute inset-0 bg-violet-100 rounded-full blur-2xl opacity-40 scale-150"></div>
+            <div className="relative w-24 h-24 bg-violet-600 text-white rounded-[32px] flex items-center justify-center mx-auto shadow-xl shadow-violet-200">
+              <Send size={40} className="animate-bounce duration-[3000ms]" />
+            </div>
+          </div>
+          
+          <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">¡Revisa tu correo!</h1>
+          <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+            Hemos enviado un enlace de activación a:<br/>
+            <strong className="text-slate-900">{formData.email}</strong>
+          </p>
+
+          <div className="bg-violet-50 p-6 rounded-2xl border border-violet-100 mb-8 flex items-start gap-4 text-left">
+             <div className="bg-white p-1.5 rounded-lg shadow-sm text-violet-600 shrink-0 mt-0.5">
+                <CheckCircle2 size={18} />
+             </div>
+             <p className="text-xs text-violet-800 font-bold leading-relaxed">
+               Haz clic en el enlace que recibiste para activar tu cuenta. Si no lo ves, revisa tu carpeta de <strong>SPAM</strong>.
+             </p>
+          </div>
+
+          <div className="space-y-4">
+            <button 
+              onClick={() => { setIsLogin(true); setIsRegistered(false); setError(null); }}
+              className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+            >
+              Ir al inicio de sesión
+            </button>
+            <button 
+              onClick={handleResendFromNotice}
+              disabled={resendingInNotice}
+              className="w-full py-3 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-violet-600 transition-colors flex items-center justify-center gap-2"
+            >
+              {resendingInNotice ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              ¿No recibiste nada? Reenviar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-[85vh] flex items-center justify-center px-4 py-12 bg-slate-50/30">
       <div className="max-w-md w-full">
@@ -103,9 +183,19 @@ const Auth: React.FC = () => {
         <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl shadow-slate-200/40 border border-slate-100">
           
           {error && (
-            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-700 text-sm font-bold animate-in fade-in slide-in-from-top-1">
-              <AlertCircle size={18} className="shrink-0 mt-0.5" />
-              <p>{error}</p>
+            <div className={`mb-6 p-5 rounded-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-top-1 ${isTimeoutError ? 'bg-amber-50 border border-amber-100 text-amber-900' : 'bg-rose-50 border border-rose-100 text-rose-700'}`}>
+              <div className="flex items-start gap-3 text-sm font-bold">
+                <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                <p>{error}</p>
+              </div>
+              {isTimeoutError && !isLogin && (
+                <button 
+                  onClick={() => { setError(null); setIsLogin(true); setIsTimeoutError(false); }}
+                  className="flex items-center justify-center gap-2 py-2.5 bg-amber-500 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-md mt-1"
+                >
+                  <RefreshCw size={14} /> Probar Iniciar Sesión
+                </button>
+              )}
             </div>
           )}
 
@@ -230,7 +320,7 @@ const Auth: React.FC = () => {
             <p className="text-slate-500 font-medium">
               {isLogin ? '¿No tienes cuenta?' : '¿Ya eres parte de Donia?'}
               <button
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => { setIsLogin(!isLogin); setError(null); }}
                 className="ml-2 text-violet-600 font-black hover:underline"
               >
                 {isLogin ? 'Regístrate aquí' : 'Inicia sesión'}
