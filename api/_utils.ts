@@ -76,34 +76,22 @@ const renderBaseTemplate = (config: EmailTemplateConfig) => {
       <title>${config.title}</title>
     </head>
     <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 40px 20px;">
+      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 60px 20px;">
         <tr>
           <td align="center">
-            <!-- Logo Header -->
-            <table border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 32px;">
-              <tr>
-                <td align="center">
-                  <div style="background-color: #7c3aed; width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center;">
-                    <span style="font-size: 24px;">💜</span>
-                  </div>
-                  <div style="margin-top: 8px; color: #0f172a; font-weight: 900; font-size: 20px; letter-spacing: -0.05em;">Donia</div>
-                </td>
-              </tr>
-            </table>
-
             <!-- Main Card -->
-            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 500px; background-color: #ffffff; border-radius: 32px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 500px; background-color: #ffffff; border-radius: 40px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
               <tr>
-                <td style="padding: 40px;">
-                  <!-- Icon Badge -->
+                <td style="padding: 48px 40px;">
+                  <!-- Icon Badge inside card top -->
                   <div style="text-align: center; margin-bottom: 24px;">
-                    <div style="display: inline-block; width: 64px; height: 64px; line-height: 64px; background-color: ${bg}; border-radius: 20px; font-size: 32px; text-align: center;">
+                    <div style="display: inline-block; width: 72px; height: 72px; line-height: 72px; background-color: ${bg}; border-radius: 24px; font-size: 32px; text-align: center;">
                       ${emoji}
                     </div>
                   </div>
 
                   <!-- Title -->
-                  <h1 style="margin: 0 0 16px 0; color: #0f172a; font-size: 24px; font-weight: 800; text-align: center; letter-spacing: -0.02em; line-height: 1.2;">
+                  <h1 style="margin: 0 0 16px 0; color: #0f172a; font-size: 26px; font-weight: 800; text-align: center; letter-spacing: -0.02em; line-height: 1.2;">
                     ${config.title}
                   </h1>
 
@@ -114,16 +102,17 @@ const renderBaseTemplate = (config: EmailTemplateConfig) => {
 
                   <!-- CTA Button -->
                   <div style="text-align: center;">
-                    <a href="${config.buttonUrl}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; padding: 16px 32px; border-radius: 16px; text-decoration: none; font-weight: 800; font-size: 16px; box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.2);">
+                    <a href="${config.buttonUrl}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; padding: 18px 36px; border-radius: 18px; text-decoration: none; font-weight: 800; font-size: 16px; box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.2);">
                       ${config.buttonText}
                     </a>
                   </div>
                 </td>
               </tr>
               
-              <!-- Simple Footer inside card -->
+              <!-- Footer integrated inside card -->
               <tr>
-                <td style="padding: 24px; background-color: #f1f5f9; text-align: center;">
+                <td style="padding: 32px; background-color: #f8fafc; text-align: center; border-top: 1px solid #f1f5f9;">
+                  <div style="color: #7c3aed; font-weight: 900; font-size: 14px; letter-spacing: -0.02em; margin-bottom: 8px;">Donia Chile 💜</div>
                   <p style="margin: 0; color: #94a3b8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">
                     © 2026 Donia SpA • Santiago, Chile
                   </p>
@@ -131,12 +120,11 @@ const renderBaseTemplate = (config: EmailTemplateConfig) => {
               </tr>
             </table>
 
-            <!-- Anti-Phishing & Support Footer -->
+            <!-- Support Footer -->
             <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 400px; margin-top: 32px;">
               <tr>
                 <td align="center" style="color: #94a3b8; font-size: 12px; line-height: 1.5; font-weight: 500;">
-                  Has recibido este correo porque estás registrado en Donia.cl. 
-                  Si tienes dudas, contáctanos en 
+                  Si tienes dudas o no reconoces esta actividad, contáctanos en 
                   <a href="mailto:soporte@donia.cl" style="color: #7c3aed; text-decoration: none; font-weight: 700;">soporte@donia.cl</a>
                 </td>
               </tr>
@@ -179,7 +167,7 @@ export class Mailer {
     return this.send({
       from: 'Donia <seguridad@notifications.donia.cl>',
       to: [to],
-      subject: 'Activa tu cuenta en Donia 💜',
+      subject: 'Activa tu cuenta - Donia Chile',
       html: renderBaseTemplate({
         title,
         previewText: 'Confirma tu registro en Donia',
@@ -198,7 +186,7 @@ export class Mailer {
     return this.send({
       from: 'Donia <pagos@notifications.donia.cl>',
       to: [to],
-      subject: '¡Gracias por tu donación! 💜',
+      subject: '¡Gracias por tu donación! - Donia Chile',
       html: renderBaseTemplate({
         title,
         previewText: 'Recibo de donación procesado',
@@ -217,7 +205,7 @@ export class Mailer {
     return this.send({
       from: 'Donia <notificaciones@notifications.donia.cl>',
       to: [to],
-      subject: '¡Nueva donación recibida! 🚀',
+      subject: '¡Nueva donación recibida! - Donia Chile',
       html: renderBaseTemplate({
         title,
         previewText: `Has recibido $${amount.toLocaleString('es-CL')}`,
@@ -236,7 +224,7 @@ export class Mailer {
     return this.send({
       from: 'Donia <notificaciones@notifications.donia.cl>',
       to: [to],
-      subject: '¡Meta alcanzada! 🥳',
+      subject: '¡Meta alcanzada! - Donia Chile',
       html: renderBaseTemplate({
         title,
         previewText: 'Tu campaña alcanzó su meta',
@@ -255,7 +243,7 @@ export class Mailer {
     return this.send({
       from: 'Donia <seguridad@notifications.donia.cl>',
       to: [to],
-      subject: 'Aviso de seguridad 🛡️',
+      subject: 'Aviso de seguridad - Donia Chile',
       html: renderBaseTemplate({
         title,
         previewText: 'Se modificó información en tu cuenta',
@@ -274,7 +262,7 @@ export class Mailer {
     return this.send({
       from: 'Donia <notificaciones@notifications.donia.cl>',
       to: [to],
-      subject: 'Perfil actualizado ✅',
+      subject: 'Perfil actualizado - Donia Chile',
       html: renderBaseTemplate({
         title,
         previewText: 'Tus datos han sido guardados',
@@ -293,7 +281,7 @@ export class Mailer {
     return this.send({
       from: 'Donia <pagos@notifications.donia.cl>',
       to: [to],
-      subject: 'Solicitud de retiro en proceso 💸',
+      subject: 'Solicitud de retiro en proceso - Donia Chile',
       html: renderBaseTemplate({
         title,
         previewText: 'Hemos recibido tu solicitud de retiro',
