@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { logger } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,20 +29,22 @@ export default async function handler(req: any, res: any) {
 
     if (error) throw error;
 
-    // 2. Sincronización de seguridad: 
-    // Si el perfil existe pero dice que no está verificado, checkeamos Auth
-    if (profile && !profile.email_verified) {
-      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
-      if (authUser?.user?.email_confirmed_at) {
-        // El usuario ya confirmó pero el trigger falló o no se ejecutó, reparamos ahora
-        const { data: updated } = await supabase
-          .from('profiles')
-          .update({ email_verified: true })
-          .eq('id', userId)
-          .select()
-          .single();
-        if (updated) profile = updated;
-      }
+    // 2. Sincronización de seguridad (Auto-reparación)
+    // Si el perfil no existe o dice que no está verificado, validamos contra Auth directamente
+    const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+    const isActuallyConfirmed = !!authUser?.user?.email_confirmed_at;
+
+    if (isActuallyConfirmed && (!profile || !profile.email_verified)) {
+      logger.info('AUTO_REPAIR_PROFILE_VERIFICATION', { userId });
+      
+      const { data: updated, error: uError } = await supabase
+        .from('profiles')
+        .update({ email_verified: true })
+        .eq('id', userId)
+        .select()
+        .single();
+        
+      if (!uError && updated) profile = updated;
     }
 
     if (!profile) {
@@ -50,6 +53,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ success: true, data: profile });
   } catch (error: any) {
+    logger.error('GET_PROFILE_ERROR', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }

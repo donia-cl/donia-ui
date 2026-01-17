@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Validator, logger } from './_utils.js';
 
@@ -27,7 +26,6 @@ export default async function handler(req: any, res: any) {
         const { data: campaign, error: cError } = await supabase.from('campaigns').select('*').eq('id', id).single();
         if (cError) throw cError;
         
-        // CORREGIDO: Ordenar por 'fecha' en lugar de 'created_at' para coincidir con el esquema de la DB
         const { data: donations } = await supabase.from('donations').select('*').eq('campaign_id', id).order('fecha', { ascending: false }).limit(50);
         
         return res.status(200).json({ success: true, data: { ...campaign, donations: donations || [] } });
@@ -47,20 +45,25 @@ export default async function handler(req: any, res: any) {
       Validator.string(historia, 20, 'historia');
       Validator.number(monto, 1000, 'monto');
       
-      // Auto-reparación de perfil
+      // Auto-reparación de perfil y verificación de email al publicar
       if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        const { data: profile } = await supabase.from('profiles').select('id').eq('id', finalUserId).single();
+        const { data: authUser } = await (supabase.auth as any).admin.getUserById(finalUserId);
+        const isConfirmed = !!authUser?.user?.email_confirmed_at;
+        
+        const { data: profile } = await supabase.from('profiles').select('id, email_verified').eq('id', finalUserId).maybeSingle();
+        
         if (!profile) {
-            const { data: { user } } = await (supabase.auth as any).admin.getUserById(finalUserId);
-            if (user) {
-                const fullName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario';
-                await supabase.from('profiles').insert([{
-                    id: finalUserId,
-                    full_name: fullName,
-                    role: 'user',
-                    is_verified: false
-                }]);
-            }
+            const fullName = authUser?.user?.user_metadata?.full_name || authUser?.user?.email?.split('@')[0] || 'Usuario';
+            await supabase.from('profiles').insert([{
+                id: finalUserId,
+                full_name: fullName,
+                role: 'user',
+                is_verified: false,
+                email_verified: isConfirmed
+            }]);
+        } else if (isConfirmed && !profile.email_verified) {
+            // Reparar si el perfil existe pero no estaba marcado como verificado
+            await supabase.from('profiles').update({ email_verified: true }).eq('id', finalUserId);
         }
       }
 
