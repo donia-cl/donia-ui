@@ -45,6 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     mountedRef.current = true;
+    let subscription: any = null;
     
     const initializeAuth = async () => {
       try {
@@ -56,10 +57,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        // 1. FUENTE ÚNICA DE VERDAD: onAuthStateChange
-        // Este listener maneja el inicio (INITIAL_SESSION), el login (SIGNED_IN),
-        // los refrescos de token y el logout.
-        const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
+        // FUENTE ÚNICA DE VERDAD: onAuthStateChange
+        const { data } = client.auth.onAuthStateChange(async (event, session) => {
           if (!mountedRef.current) return;
           
           console.log(`[AUTH] Evento detectado: ${event}`);
@@ -72,7 +71,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const p = await loadUserProfile(currentUser);
               if (mountedRef.current) setProfile(p);
               
-              // Limpieza de URL: Solo después de que Supabase confirma el SIGNED_IN
+              // Limpieza de URL segura: Solo después de que el motor confirma la sesión
               if (window.location.search.includes('code=')) {
                 const url = new URL(window.location.href);
                 url.searchParams.delete('code');
@@ -82,7 +81,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
             }
             
-            // Finalizamos la carga inicial
             if (mountedRef.current) setLoading(false);
           }
           
@@ -93,10 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
-        return () => {
-          mountedRef.current = false;
-          subscription.unsubscribe();
-        };
+        subscription = data.subscription;
+
       } catch (error) {
         console.error("[AUTH] Error crítico en inicialización:", error);
         if (mountedRef.current) setLoading(false);
@@ -105,8 +101,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     initializeAuth();
 
+    // Bloque de Cleanup real procesado por React
     return () => {
       mountedRef.current = false;
+      if (subscription) {
+        console.log("[AUTH] Limpiando suscripción de auth...");
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
@@ -126,7 +127,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // UI de carga optimizada
   if (loading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-white gap-6">
