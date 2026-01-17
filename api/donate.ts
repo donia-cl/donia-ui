@@ -16,78 +16,68 @@ export default async function handler(req: any, res: any) {
 
     if (adminKey !== expectedKey) {
       logger.error('UNAUTHORIZED_SIMULATED_DONATION_ATTEMPT', { ip: req.headers['x-forwarded-for'] });
-      return res.status(401).json({ 
-        success: false, 
-        error: "No tienes permisos para realizar donaciones simuladas." 
-      });
+      return res.status(401).json({ success: false, error: "No autorizado." });
     }
-
-    Validator.uuid(campaignId, 'campaignId');
-    Validator.number(monto, 500, 'monto');
-    Validator.email(email);
 
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = createClient(supabaseUrl!, supabaseKey!);
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Configuración de base de datos incompleta.');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const { data: campaign, error: cFetchError } = await supabase
+    // 1. Obtener campaña y DUEÑO
+    const { data: campaign, error: cError } = await supabase
       .from('campaigns')
-      .select('id, titulo, recaudado, donantes_count')
+      .select('id, titulo, recaudado, donantes_count, owner_id')
       .eq('id', campaignId)
       .single();
 
-    if (cFetchError || !campaign) {
-      return res.status(404).json({ success: false, error: "Campaña no encontrada." });
-    }
+    if (cError || !campaign) throw new Error("Campaña no encontrada.");
 
-    const donationData: any = { 
+    // 2. Insertar donación
+    const { data: donation, error: dError } = await supabase.from('donations').insert([{ 
       campaign_id: campaignId, 
       monto: Number(monto), 
       nombre_donante: nombre || 'Anónimo',
       donor_email: email, 
       donor_user_id: donorUserId || null,
       comentario: comentario || null,
-      payment_provider: 'simulated',
       status: 'completed'
-    };
-
-    const { data: donation, error: dError } = await supabase
-      .from('donations')
-      .insert([donationData])
-      .select()
-      .single();
+    }]).select().single();
 
     if (dError) throw dError;
 
+    // 3. Actualizar campaña
     await supabase.from('campaigns').update({
       recaudado: (Number(campaign.recaudado) || 0) + Number(monto),
       donantes_count: (Number(campaign.donantes_count) || 0) + 1
     }).eq('id', campaignId);
 
+    // 4. NOTIFICACIONES (Email)
+    // Al Donante
     if (email) {
-      await Mailer.sendDonationReceipt(
-        email,
-        nombre || 'Amigo de Donia',
-        Number(monto),
-        campaign.titulo || 'Campaña Donia',
-        campaignId
-      );
+      await Mailer.sendDonationReceipt(email, nombre || 'Amigo de Donia', Number(monto), campaign.titulo, campaignId);
     }
 
-    logger.audit(donorUserId || 'anonymous', 'DONATION_CREATED_SIMULATED', donation.id, { 
-      campaignId, 
-      amount: monto 
-    });
+    // Al Dueño
+    if (campaign.owner_id) {
+      const { data: ownerAuth } = await (supabase.auth as any).admin.getUserById(campaign.owner_id);
+      const { data: ownerProfile } = await supabase.from('profiles').select('full_name').eq('id', campaign.owner_id).single();
+      
+      if (ownerAuth?.user?.email) {
+        await Mailer.sendOwnerDonationNotification(
+          ownerAuth.user.email,
+          ownerProfile?.full_name || 'Creador de Campaña',
+          nombre || 'Un donante anónimo',
+          Number(monto),
+          campaign.titulo,
+          comentario
+        );
+      }
+    }
 
     return res.status(200).json({ success: true, data: donation });
 
   } catch (error: any) {
-    logger.error('DONATE_ENDPOINT_ERROR', error);
+    logger.error('DONATE_SIMULATED_ERROR', error);
     return res.status(500).json({ success: false, error: error.message });
   }
 }

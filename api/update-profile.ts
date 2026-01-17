@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { logger, Mailer } from './_utils.js';
 
@@ -8,55 +7,38 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { id, updates } = req.body;
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return res.status(500).json({ error: 'Server configuration missing' });
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl!, serviceRoleKey!);
 
   try {
-    // 1. Validamos que el ID exista antes de actualizar
-    const { data: existing, error: findError } = await supabase.from('profiles').select('id, full_name').eq('id', id).single();
-    
-    if (findError || !existing) {
-       return res.status(404).json({ error: 'Perfil no encontrado' });
-    }
+    const { data: existing, error: findError } = await supabase.from('profiles').select('*').eq('id', id).single();
+    if (findError || !existing) return res.status(404).json({ error: 'Perfil no encontrado' });
 
-    // 2. Actualizamos los campos permitidos
+    // Detectar si cambian datos sensibles
+    const isSensitiveChange = (updates.rut && updates.rut !== existing.rut) || (updates.phone && updates.phone !== existing.phone);
+
     const { data, error } = await supabase.from('profiles').update({
         full_name: updates.full_name,
         rut: updates.rut,
         phone: updates.phone,
-    })
-    .eq('id', id)
-    .select()
-    .single();
+    }).eq('id', id).select().single();
 
     if (error) throw error;
 
-    // 3. Obtener el email del usuario desde Auth para enviar la notificación
-    // Usamos el cliente admin para acceder a auth.users (corregido el acceso seguro a data)
-    const { data: authData, error: authError } = await (supabase.auth as any).admin.getUserById(id);
-    const user = authData?.user;
-    
-    if (authError) {
-      logger.error('AUTH_GET_USER_ERROR', authError, { userId: id });
-    }
+    const { data: authData } = await (supabase.auth as any).admin.getUserById(id);
+    const email = authData?.user?.email;
 
-    if (user && user.email) {
-      logger.info('TRIGGERING_PROFILE_UPDATE_EMAIL', { email: user.email });
-      // Enviamos el correo de notificación (Asíncrono)
-      Mailer.sendProfileUpdateNotification(user.email, data.full_name || 'Usuario Donia').catch(e => {
-        logger.error('ASYNC_MAILER_PROFILE_ERROR', e);
-      });
-    } else {
-      logger.info('SKIP_PROFILE_UPDATE_EMAIL', { reason: 'No user or email found', userId: id });
+    if (email) {
+      if (isSensitiveChange) {
+        // Alerta de seguridad crítica
+        await Mailer.sendSecurityUpdateNotification(email, data.full_name, 'RUT o Teléfono de contacto');
+      } else {
+        // Notificación estándar
+        await Mailer.sendProfileUpdateNotification(email, data.full_name);
+      }
     }
 
     return res.status(200).json({ success: true, data });
