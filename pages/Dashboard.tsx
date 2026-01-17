@@ -32,7 +32,12 @@ import {
   Save,
   X,
   Timer,
-  ExternalLink
+  ExternalLink,
+  ShieldAlert,
+  KeyRound,
+  Fingerprint,
+  // Fix: Added missing Calendar icon import
+  Calendar
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AuthService } from '../services/AuthService';
@@ -65,6 +70,7 @@ const Dashboard: React.FC = () => {
   const [profileSaving, setProfileSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [withdrawalActionLoading, setWithdrawalActionLoading] = useState<string | null>(null);
+  const [resetPassLoading, setResetPassLoading] = useState(false);
   
   const service = CampaignService.getInstance();
   const authService = AuthService.getInstance();
@@ -123,11 +129,30 @@ const Dashboard: React.FC = () => {
     try {
       await service.requestWithdrawal(user!.id, campaign.id, campaign.recaudado);
       alert("¡Solicitud enviada! Te hemos enviado un correo con los detalles.");
-      await loadAllData(); // Recargar saldos
+      await loadAllData(); 
     } catch (e: any) {
       alert(e.message);
     } finally {
       setWithdrawalActionLoading(null);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!user?.email) return;
+    setResetPassLoading(true);
+    try {
+      // Usamos el cliente de supabase expuesto para enviar el reset
+      const client = authService.getSupabase();
+      if (client) {
+        await client.auth.resetPasswordForEmail(user.email, {
+          redirectTo: `${window.location.origin}/dashboard?tab=seguridad`,
+        });
+        alert("Te hemos enviado un correo para restablecer tu contraseña.");
+      }
+    } catch (e) {
+      alert("Hubo un error al procesar la solicitud.");
+    } finally {
+      setResetPassLoading(false);
     }
   };
 
@@ -176,15 +201,6 @@ const Dashboard: React.FC = () => {
     } finally {
       setProfileSaving(false);
     }
-  };
-
-  const handleDelete = async (campaign: CampaignData) => {
-    if (campaign.recaudado > 0) return alert("No se puede eliminar una campaña con donaciones.");
-    if (!window.confirm('¿Eliminar esta campaña?')) return;
-    try {
-      const success = await service.deleteCampaign(campaign.id, user!.id);
-      if (success) setCampaigns(prev => prev.filter(c => c.id !== campaign.id));
-    } catch (e) { console.error(e); }
   };
 
   const copyLink = (id: string) => {
@@ -312,6 +328,50 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'donaciones' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <HeartHandshake className="text-violet-600" /> Mi historial de aportes
+            </h2>
+            
+            {donations.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4">
+                {donations.map((d) => (
+                  <div key={d.id} className="bg-white p-6 rounded-3xl border border-slate-100 flex flex-col md:flex-row items-center gap-6 hover:border-violet-100 transition-all group">
+                    <div className="w-full md:w-24 h-24 rounded-2xl overflow-hidden shrink-0 bg-slate-100">
+                       <img src={d.campaign?.imagenUrl || 'https://picsum.photos/200/200'} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                    </div>
+                    <div className="flex-grow w-full">
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Donaste a</p>
+                       <h3 className="text-lg font-black text-slate-900 leading-tight mb-2">{d.campaign?.titulo}</h3>
+                       <div className="flex items-center gap-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <span className="flex items-center gap-1.5"><Calendar size={12} /> {new Date(d.fecha).toLocaleDateString('es-CL')}</span>
+                          <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-full">Exitoso</span>
+                       </div>
+                    </div>
+                    <div className="text-right w-full md:w-auto">
+                       <p className="text-2xl font-black text-slate-900">${d.monto.toLocaleString('es-CL')}</p>
+                       <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Aporte solidario</p>
+                    </div>
+                    <Link to={`/campana/${d.campaignId}`} className="p-3 bg-slate-50 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-xl transition-all">
+                      <Eye size={20} />
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-24 bg-white rounded-[40px] border-2 border-dashed border-slate-100 text-center px-10">
+                 <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Heart size={40} className="text-slate-200" />
+                 </div>
+                 <h3 className="text-xl font-black text-slate-900 mb-2">Aún no has realizado donaciones</h3>
+                 <p className="text-slate-400 font-medium text-sm mb-8">Tus aportes solidarios aparecerán aquí para que lleves un registro de tu ayuda.</p>
+                 <Link to="/explorar" className="inline-flex items-center gap-2 bg-violet-600 text-white px-8 py-4 rounded-2xl font-black hover:bg-violet-700 transition-all shadow-lg">Explorar causas <ArrowRight size={20} /></Link>
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'finanzas' && (
           <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-8">
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -407,6 +467,74 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
+        {activeTab === 'seguridad' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8 max-w-2xl">
+             <div className="bg-white p-10 rounded-[40px] border border-slate-100 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 text-slate-50"><ShieldCheck size={120} /></div>
+                <div className="relative z-10">
+                   <h3 className="text-2xl font-black text-slate-900 tracking-tight mb-2">Protección de Cuenta</h3>
+                   <p className="text-slate-500 font-medium mb-10">Gestiona la seguridad de tu acceso y las sesiones activas.</p>
+                   
+                   <div className="space-y-6">
+                      <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                         <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-violet-600 shadow-sm">
+                               <Mail size={24} />
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Principal</p>
+                               <p className="font-bold text-slate-900">{user?.email}</p>
+                            </div>
+                         </div>
+                         <div className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Verificado</div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                         <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-violet-600 shadow-sm">
+                               <KeyRound size={24} />
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contraseña</p>
+                               <p className="font-bold text-slate-900">••••••••••••••</p>
+                            </div>
+                         </div>
+                         <button 
+                           onClick={handlePasswordReset}
+                           disabled={resetPassLoading}
+                           className="text-violet-600 font-black text-xs uppercase tracking-widest hover:underline disabled:opacity-50"
+                         >
+                           {resetPassLoading ? 'Enviando...' : 'Cambiar'}
+                         </button>
+                      </div>
+
+                      <div className="flex items-center justify-between p-6 bg-slate-50 rounded-3xl border border-slate-100 opacity-60">
+                         <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 shadow-sm">
+                               <Fingerprint size={24} />
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Doble Factor (2FA)</p>
+                               <p className="font-bold text-slate-900">Desactivado</p>
+                            </div>
+                         </div>
+                         <span className="text-[10px] font-black uppercase text-slate-400">Próximamente</span>
+                      </div>
+                   </div>
+                </div>
+             </div>
+
+             <div className="bg-rose-50 border border-rose-100 p-8 rounded-[40px] flex items-start gap-5">
+                <div className="bg-rose-100 p-3 rounded-2xl text-rose-600"><ShieldAlert size={28} /></div>
+                <div>
+                   <h4 className="text-rose-900 font-black text-base mb-1">Zona Crítica</h4>
+                   <p className="text-rose-800/70 text-xs font-medium leading-relaxed mb-4">Si sospechas que alguien ha accedido a tu cuenta sin permiso, te recomendamos cerrar todas las sesiones activas y cambiar tu contraseña inmediatamente.</p>
+                   <button onClick={() => alert("Función disponible pronto en el panel de soporte.")} className="text-rose-600 font-black text-[10px] uppercase tracking-widest hover:underline">Solicitar cierre de sesiones globales</button>
+                </div>
+             </div>
+          </div>
+        )}
+
         {activeTab === 'perfil' && (
           <div className="animate-in fade-in duration-500 max-w-xl">
              {isProfileIncomplete && !isEditingProfile && !showSuccessToast && (
@@ -421,7 +549,7 @@ const Dashboard: React.FC = () => {
                    </div>
                 </div>
              )}
-             {/* ... resto del perfil (nombre, rut, phone, etc) se mantiene igual ... */}
+             
              <div className="bg-white rounded-[40px] border border-slate-100 p-10 shadow-sm relative overflow-hidden">
                {!isEditingProfile ? (
                   <>
