@@ -56,27 +56,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        // 1. Escuchamos cambios de estado (El motor principal de PKCE)
+        // 1. FUENTE ÚNICA DE VERDAD: onAuthStateChange
+        // Este listener maneja el inicio (INITIAL_SESSION), el login (SIGNED_IN),
+        // los refrescos de token y el logout.
         const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
           if (!mountedRef.current) return;
           
-          console.log(`[AUTH] Evento: ${event}`);
+          console.log(`[AUTH] Evento detectado: ${event}`);
           const currentUser = session?.user ?? null;
           
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+          if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             setUser(currentUser);
+            
             if (currentUser) {
               const p = await loadUserProfile(currentUser);
               if (mountedRef.current) setProfile(p);
               
-              // Si hay código en URL, limpiamos silenciosamente
+              // Limpieza de URL: Solo después de que Supabase confirma el SIGNED_IN
               if (window.location.search.includes('code=')) {
                 const url = new URL(window.location.href);
                 url.searchParams.delete('code');
                 url.searchParams.delete('state');
                 window.history.replaceState({}, document.title, url.pathname);
+                console.log("[AUTH] URL limpia tras intercambio PKCE exitoso.");
               }
             }
+            
+            // Finalizamos la carga inicial
             if (mountedRef.current) setLoading(false);
           }
           
@@ -87,36 +93,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
-        // 2. RECUPERACIÓN DE SESIÓN (SOLO SI NO HAY CÓDIGO)
-        // Regla de Oro: No llamar a getSession() si estamos en medio de un intercambio de código PKCE
-        // porque detectSessionInUrl: true ya lo está manejando internamente.
-        const hasCode = window.location.search.includes('code=');
-        if (!hasCode) {
-          try {
-            const { data: { session } } = await client.auth.getSession();
-            if (session?.user && mountedRef.current) {
-              setUser(session.user);
-              const p = await loadUserProfile(session.user);
-              if (mountedRef.current) setProfile(p);
-            }
-          } catch (err: any) {
-            // Ignoramos AbortErrors ya que son comunes en re-renders de React StrictMode
-            if (err.name !== 'AbortError') console.error("getSession error:", err);
-          } finally {
-            if (mountedRef.current) setLoading(false);
-          }
-        } else {
-          // Si tiene código, NO quitamos el loader aquí. 
-          // Esperamos a que onAuthStateChange detecte SIGNED_IN y lo haga.
-          console.log("[AUTH] Detectado flujo PKCE activo. Esperando suscriptor...");
-        }
-
         return () => {
           mountedRef.current = false;
           subscription.unsubscribe();
         };
       } catch (error) {
-        console.error("[AUTH] Error crítico inicialización:", error);
+        console.error("[AUTH] Error crítico en inicialización:", error);
         if (mountedRef.current) setLoading(false);
       }
     };
@@ -144,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // UI de carga optimizada para esperas de autenticación
+  // UI de carga optimizada
   if (loading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-white gap-6">
@@ -156,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         </div>
         <div className="text-center">
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-2">Seguridad Donia</p>
-          <p className="text-slate-900 font-black text-lg">Validando acceso...</p>
+          <p className="text-slate-900 font-black text-lg">Verificando sesión...</p>
         </div>
       </div>
     );
