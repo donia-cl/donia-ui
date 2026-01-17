@@ -82,6 +82,8 @@ export class AuthService {
     await this.initialize();
     if (!this.client) throw new Error("Servicio no disponible");
     
+    // Al registrarse, Supabase intenta enviar correo automáticamente.
+    // Pero inmediatamente después lanzamos nuestro reenvío manual por Resend para asegurar el éxito.
     const { data, error } = await this.client.auth.signUp({
       email,
       password: pass,
@@ -90,7 +92,12 @@ export class AuthService {
         emailRedirectTo: window.location.origin + '/dashboard?verified=true'
       }
     });
+    
     if (error) throw error;
+
+    // Disparamos el envío manual por Resend sin esperar (Background fire and forget)
+    this.resendVerificationEmail(email).catch(console.error);
+
     return data;
   }
 
@@ -103,16 +110,17 @@ export class AuthService {
   }
 
   async resendVerificationEmail(email: string) {
-    await this.initialize();
-    if (!this.client) throw new Error("Servicio no disponible");
-    const { error } = await this.client.auth.resend({
-      type: 'signup',
-      email: email,
-      options: {
-        emailRedirectTo: window.location.origin + '/dashboard?verified=true'
-      }
+    // CAMBIO CRÍTICO: En lugar de usar client.auth.resend (que usa el SMTP de Supabase limitado),
+    // llamamos a nuestra API que usa nuestra API KEY de Resend.
+    const response = await fetch('/api/resend-verification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
     });
-    if (error) throw error;
+    
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error || "Error al enviar correo vía Resend");
+    
     return true;
   }
 

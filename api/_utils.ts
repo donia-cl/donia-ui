@@ -31,6 +31,35 @@ export class Mailer {
     return new Resend(apiKey);
   }
 
+  // 0. Correo de Activación de Cuenta (NUEVO)
+  static async sendAccountVerification(to: string, userName: string, link: string) {
+    try {
+      const resend = this.getResend();
+      if (!resend) return;
+
+      await resend.emails.send({
+        from: 'Donia <seguridad@notifications.donia.cl>',
+        to: [to],
+        subject: 'Activa tu cuenta en Donia 💜',
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #334155;">
+            <div style="border: 1px solid #e2e8f0; border-radius: 32px; padding: 48px; background: white; text-align: center;">
+              <h1 style="color: #1e293b; font-size: 28px; margin-bottom: 16px;">¡Hola, ${userName}!</h1>
+              <p style="font-size: 16px; color: #64748b; line-height: 1.6;">Gracias por unirte a Donia. Para poder publicar tu campaña y retirar fondos, necesitamos confirmar tu correo electrónico.</p>
+              
+              <a href="${link}" style="${buttonStyle}">Confirmar mi cuenta</a>
+
+              <p style="margin-top: 32px; font-size: 13px; color: #94a3b8;">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+              <p style="font-size: 11px; color: #cbd5e1; word-break: break-all;">${link}</p>
+              
+              <p style="margin-top: 40px; font-size: 12px; color: #cbd5e1; border-top: 1px solid #f1f5f9; pt-20">Este enlace expirará en 24 horas.</p>
+            </div>
+          </div>
+        `
+      });
+    } catch (e: any) { console.error('Mailer Verification Error:', e.message); }
+  }
+
   // 1. Comprobante para el Donante
   static async sendDonationReceipt(to: string, donorName: string, amount: number, campaignTitle: string, campaignId: string) {
     try {
