@@ -16,7 +16,7 @@ export default async function handler(req: any, res: any) {
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !serviceRoleKey) throw new Error('Configuración de servidor incompleta.');
+    if (!supabaseUrl || !serviceRoleKey) throw new Error('Configuración de servidor incompleta (Supabase).');
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -29,10 +29,9 @@ export default async function handler(req: any, res: any) {
       options: { redirectTo }
     } as any);
 
-    // Si falla porque ya está registrado, probamos con 'magiclink'
-    // El magiclink en Supabase también confirma el email si no lo estaba.
+    // Si falla porque ya está registrado o verificado, probamos con 'magiclink'
     if (error && (error.message.includes('already been registered') || error.status === 422)) {
-      logger.info('USER_ALREADY_EXISTS_USING_MAGICLINK', { email });
+      console.log(`[Auth] Usuario ${email} ya existe. Generando Magic Link para verificación.`);
       
       const magicRes = await supabase.auth.admin.generateLink({
         type: 'magiclink',
@@ -47,17 +46,21 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!data || !data.user) {
-      throw new Error("No se pudo generar el enlace de verificación.");
+      throw new Error("No se pudo generar el enlace de verificación en Supabase.");
     }
 
     // Obtener nombre para el correo
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', data.user.id).maybeSingle();
     const userName = profile?.full_name || data.user.user_metadata?.full_name || 'Usuario de Donia';
 
-    // Enviar vía Resend
-    await Mailer.sendAccountVerification(email, userName, data.properties.action_link);
-
-    logger.info('MANUAL_VERIFICATION_SENT_SUCCESS', { email, type: data.properties.action_link.includes('type=signup') ? 'signup' : 'magiclink' });
+    // ENVIAR VÍA RESEND (Ahora esperamos el resultado real)
+    try {
+      await Mailer.sendAccountVerification(email, userName, data.properties.action_link);
+      logger.info('MANUAL_VERIFICATION_SENT_SUCCESS', { email });
+    } catch (mailError: any) {
+      console.error("[Mailer Error Detail]:", mailError);
+      throw new Error(`El servicio de correos falló: ${mailError.message}`);
+    }
 
     return res.status(200).json({ 
       success: true, 
