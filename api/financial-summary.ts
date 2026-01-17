@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
@@ -18,55 +17,68 @@ export default async function handler(req: any, res: any) {
 
   try {
     if (type === 'summary') {
-      // 1. Obtener Campañas (Crítico para Total Recaudado)
+      const now = new Date().toISOString();
+      
+      // Obtener todas las campañas del usuario
       const { data: campaigns, error: cError } = await supabase
         .from('campaigns')
-        .select('recaudado')
+        .select('id, titulo, recaudado, estado, fecha_termino')
         .eq('owner_id', userId); 
 
-      if (cError) {
-        console.error("Error fetching campaigns for summary:", cError);
-        // Si fallan las campañas, no podemos calcular ingresos.
-        return res.status(200).json({ success: true, data: { totalRecaudado: 0, disponibleRetiro: 0, enProceso: 0, totalRetirado: 0 } });
-      }
+      if (cError) throw cError;
 
-      // 2. Obtener Retiros (Resiliente: si falla, asumimos 0)
-      let withdrawals: any[] = [];
-      const { data: wData, error: wError } = await supabase
+      // Obtener retiros realizados o pendientes
+      const { data: withdrawals } = await supabase
         .from('withdrawals')
-        .select('monto, estado')
+        .select('monto, estado, campaign_id')
         .eq('user_id', userId);
-      
-      if (wError) {
-        // Solo advertimos, no bloqueamos el flujo principal
-        console.warn("Warning: No se pudieron leer retiros (tabla inexistente o error):", wError.message);
-      } else if (wData) {
-        withdrawals = wData;
-      }
 
-      // 3. Cálculos
-      const totalRecaudado = (campaigns || []).reduce((acc, c) => acc + (Number(c.recaudado) || 0), 0);
-      
-      const totalRetirado = withdrawals
-        .filter((w: any) => w.estado === 'completado')
-        .reduce((acc, w: any) => acc + (Number(w.monto) || 0), 0);
+      const withdrawalData = withdrawals || [];
+
+      // Lógica de Disponibilidad: Solo campañas finalizadas o con fecha vencida
+      let totalRecaudado = 0;
+      let disponibleRetiro = 0;
+      let enCursoNoDisponible = 0;
+
+      campaigns?.forEach(c => {
+        const montoRecaudado = Number(c.recaudado) || 0;
+        totalRecaudado += montoRecaudado;
+
+        const isFinished = c.estado === 'finalizada' || (c.fecha_termino && c.fecha_termino < now);
         
-      const enProceso = withdrawals
-        .filter((w: any) => w.estado === 'pendiente')
-        .reduce((acc, w: any) => acc + (Number(w.monto) || 0), 0);
-      
-      const disponibleRetiro = Math.max(0, totalRecaudado - totalRetirado - enProceso);
+        if (isFinished) {
+          // Calcular cuánto de esta campaña ya se retiró o está en proceso
+          const descontado = withdrawalData
+            .filter(w => w.campaign_id === c.id && (w.estado === 'completado' || w.estado === 'pendiente'))
+            .reduce((acc, w) => acc + (Number(w.monto) || 0), 0);
+          
+          disponibleRetiro += Math.max(0, montoRecaudado - descontado);
+        } else {
+          enCursoNoDisponible += montoRecaudado;
+        }
+      });
+
+      const totalRetirado = withdrawalData
+        .filter(w => w.estado === 'completado')
+        .reduce((acc, w) => acc + (Number(w.monto) || 0), 0);
+        
+      const enProceso = withdrawalData
+        .filter(w => w.estado === 'pendiente')
+        .reduce((acc, w) => acc + (Number(w.monto) || 0), 0);
 
       return res.status(200).json({ 
         success: true, 
-        data: { totalRecaudado, disponibleRetiro, enProceso, totalRetirado } 
+        data: { 
+          totalRecaudado, 
+          disponibleRetiro, 
+          enProceso, 
+          totalRetirado,
+          enCursoNoDisponible // Informamos lo que está "atrapado" en campañas activas
+        } 
       });
-    } else if (type === 'withdrawals') {
-      return res.status(200).json({ success: true, data: [] });
     }
     return res.status(400).json({ error: 'Tipo de consulta no válido' });
   } catch (error: any) {
-    console.error("Financial Summary Error:", error);
     return res.status(500).json({ error: error.message });
   }
 }

@@ -22,16 +22,10 @@ export class CampaignService {
 
   public async initialize(): Promise<void> {
     if (this.initPromise) return this.initPromise;
-
-    console.log("[CampaignService] Inicializando...");
-
-    // Inicializar Auth primero si es necesario
     try {
        await AuthService.getInstance().initialize();
     } catch (e) { /* ignore */ }
-
     this.fetchServerConfig().catch(() => { /* Silent fail */ });
-
     this.initPromise = Promise.resolve();
     return this.initPromise;
   }
@@ -42,11 +36,9 @@ export class CampaignService {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
-        
         if (resp.ok) {
           const config = await resp.json();
           this.aiEnabled = !!config.aiEnabled;
-          console.log("[CampaignService] Configuración del servidor cargada. AI:", this.aiEnabled);
         }
       } catch (netError: any) {
         this.aiEnabled = false; 
@@ -125,9 +117,7 @@ export class CampaignService {
       const json = await resp.json();
       if (!json.success || !json.data) return null;
       return this.mapCampaign(json.data);
-    } catch (e) { 
-      return null; 
-    }
+    } catch (e) { return null; }
   }
 
   async createCampaign(campaign: Partial<CampaignData>): Promise<CampaignData> {
@@ -168,27 +158,14 @@ export class CampaignService {
 
   async uploadImage(base64: string, name: string): Promise<string> {
       await this.initialize();
-      try {
-        const response = await fetch('/api/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64, name })
-        });
-        
-        const text = await response.text();
-        let json;
-        try {
-            json = JSON.parse(text);
-        } catch (e) {
-            throw new Error(`Error del servidor (${response.status})`);
-        }
-
-        if (!json.success) throw new Error(json.error || 'Error uploading image');
-        return json.url;
-      } catch (err: any) {
-        console.error("Upload failed:", err);
-        throw err;
-      }
+      const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, name })
+      });
+      const json = await response.json();
+      if (!json.success) throw new Error(json.error || 'Error uploading image');
+      return json.url;
   }
 
   async polishStory(story: string): Promise<string> {
@@ -202,35 +179,22 @@ export class CampaignService {
           });
           const json = await response.json();
           return json.text || story;
-      } catch (e) {
-          return story;
-      }
+      } catch (e) { return story; }
   }
 
-  async processPayment(paymentData: any, campaignId: string, metadata: any): Promise<any> {
-      await this.initialize();
-      const response = await fetch('/api/process-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentData, campaignId, metadata })
-      });
-      const json = await response.json();
-      if (!json.success) throw new Error(json.error || 'Payment failed');
-      return json;
+  async requestWithdrawal(userId: string, campaignId: string, monto: number): Promise<any> {
+    await this.initialize();
+    const response = await fetch('/api/request-withdrawal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, campaignId, monto })
+    });
+    const json = await response.json();
+    if (!json.success) throw new Error(json.error || 'Error solicitando retiro');
+    return json;
   }
 
-  async simulateDonation(data: any): Promise<void> {
-      await this.initialize();
-      const response = await fetch('/api/donate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-      });
-      const json = await response.json();
-      if (!json.success) throw new Error(json.error || 'Simulated donation failed');
-  }
-
-  async getFinancialSummary(userId: string): Promise<FinancialSummary> {
+  async getFinancialSummary(userId: string): Promise<FinancialSummary & { enCursoNoDisponible: number }> {
       await this.initialize();
       const response = await fetch(`/api/financial-summary?userId=${userId}&type=summary`);
       if (!response.ok) throw new Error('Failed to fetch financial summary');
