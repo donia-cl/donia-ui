@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
-  // Configuración CORS consistente con el resto de las APIs
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -17,34 +16,40 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ success: false, error: 'User ID is required' });
   }
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    return res.status(500).json({ success: false, error: 'Server configuration missing' });
-  }
-
-  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const supabase = createClient(supabaseUrl!, serviceRoleKey!);
 
   try {
-    const { data, error } = await supabase
+    // 1. Obtener perfil actual
+    let { data: profile, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .maybeSingle(); // Usamos maybeSingle para que no lance error si no existe
+      .maybeSingle();
 
     if (error) throw error;
 
-    if (!data) {
-      // Devolvemos 200 con success false para que el front sepa que debe crearlo
-      // pero sin disparar una alerta roja de 404 en la consola del navegador.
-      return res.status(200).json({ 
-        success: false, 
-        error: 'Profile not found', 
-        data: null 
-      });
+    // 2. Sincronización de seguridad: 
+    // Si el perfil existe pero dice que no está verificado, checkeamos Auth
+    if (profile && !profile.email_verified) {
+      const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+      if (authUser?.user?.email_confirmed_at) {
+        // El usuario ya confirmó pero el trigger falló o no se ejecutó, reparamos ahora
+        const { data: updated } = await supabase
+          .from('profiles')
+          .update({ email_verified: true })
+          .eq('id', userId)
+          .select()
+          .single();
+        if (updated) profile = updated;
+      }
     }
 
-    return res.status(200).json({ success: true, data });
+    if (!profile) {
+      return res.status(200).json({ success: false, error: 'Profile not found' });
+    }
+
+    return res.status(200).json({ success: true, data: profile });
   } catch (error: any) {
-    console.error("[API/get-profile] Error:", error.message);
-    return res.status(500).json({ success: false, error: 'Internal server error' });
+    return res.status(500).json({ success: false, error: error.message });
   }
 }

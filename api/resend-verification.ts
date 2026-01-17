@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Mailer, Validator, logger } from './_utils.js';
 
@@ -21,34 +20,55 @@ export default async function handler(req: any, res: any) {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // 1. Generar enlace de verificación (Signup) mediante el Admin API de Supabase
-    // Este enlace es el que Supabase procesa para marcar el email como verificado
+    // Intentamos generar enlace de tipo 'signup'
     const redirectTo = `${req.headers.origin || 'https://donia.cl'}/dashboard?verified=true`;
     
-    // Fixed: Cast the configuration object to any to bypass the TypeScript error.
-    // In this 'resend' flow for an existing user, the password is not required by 
-    // the backend API, even though it's marked as required in the GenerateSignupLinkParams type.
-    const { data, error } = await supabase.auth.admin.generateLink({
+    let { data, error } = await supabase.auth.admin.generateLink({
       type: 'signup',
       email: email,
       options: { redirectTo }
     } as any);
 
-    if (error) throw error;
+    // Si falla porque ya está registrado, probamos con 'magiclink'
+    // El magiclink en Supabase también confirma el email si no lo estaba.
+    if (error && (error.message.includes('already been registered') || error.status === 422)) {
+      logger.info('USER_ALREADY_EXISTS_USING_MAGICLINK', { email });
+      
+      const magicRes = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: { redirectTo }
+      } as any);
+      
+      if (magicRes.error) throw magicRes.error;
+      data = magicRes.data;
+    } else if (error) {
+      throw error;
+    }
 
-    // 2. Obtener nombre del usuario si existe en perfiles
+    if (!data || !data.user) {
+      throw new Error("No se pudo generar el enlace de verificación.");
+    }
+
+    // Obtener nombre para el correo
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', data.user.id).maybeSingle();
     const userName = profile?.full_name || data.user.user_metadata?.full_name || 'Usuario de Donia';
 
-    // 3. Enviar el correo usando nuestra integración PROPIA de Resend
+    // Enviar vía Resend
     await Mailer.sendAccountVerification(email, userName, data.properties.action_link);
 
-    logger.info('MANUAL_VERIFICATION_SENT', { email });
+    logger.info('MANUAL_VERIFICATION_SENT_SUCCESS', { email, type: data.properties.action_link.includes('type=signup') ? 'signup' : 'magiclink' });
 
-    return res.status(200).json({ success: true, message: "Correo de activación enviado exitosamente vía Resend." });
+    return res.status(200).json({ 
+      success: true, 
+      message: "Correo de activación enviado exitosamente." 
+    });
 
   } catch (error: any) {
-    logger.error('RESEND_VERIFICATION_ERROR', error);
-    return res.status(500).json({ success: false, error: error.message });
+    logger.error('RESEND_VERIFICATION_FATAL_ERROR', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: error.message || "Error interno al procesar el reenvío." 
+    });
   }
 }
