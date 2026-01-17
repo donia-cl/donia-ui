@@ -104,7 +104,79 @@ export class Mailer {
     } catch (e: any) { console.error('Mailer Owner Notify Error:', e.message); }
   }
 
-  // 3. Notificación de Cambio de Datos Críticos (Seguridad)
+  // 3. ¡Meta Alcanzada! (NUEVO)
+  static async sendGoalReachedNotification(to: string, ownerName: string, campaignTitle: string, totalAmount: number) {
+    try {
+      const resend = this.getResend();
+      if (!resend) return;
+
+      await resend.emails.send({
+        from: 'Donia <celebraciones@notifications.donia.cl>',
+        to: [to],
+        subject: `¡FELICIDADES! 🎉 Meta alcanzada para "${campaignTitle}"`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #334155;">
+            <div style="border: 2px solid #7c3aed; border-radius: 32px; padding: 48px; background: white; text-align: center;">
+              <span style="font-size: 64px;">🥳</span>
+              <h1 style="color: #1e293b; font-size: 32px; font-weight: 900; margin: 24px 0 12px 0;">¡Lo lograste, ${ownerName}!</h1>
+              <p style="font-size: 18px; color: #64748b; margin-bottom: 32px;">Tu campaña <strong>"${campaignTitle}"</strong> ha alcanzado su meta de recaudación.</p>
+              
+              <div style="background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%); padding: 32px; border-radius: 24px; margin-bottom: 32px;">
+                <p style="margin: 0; font-size: 12px; color: rgba(255,255,255,0.8); text-transform: uppercase; font-weight: 700;">Total Recaudado</p>
+                <p style="margin: 8px 0 0 0; font-size: 42px; font-weight: 900; color: white;">$${totalAmount.toLocaleString('es-CL')}</p>
+              </div>
+
+              <p style="font-size: 15px; color: #64748b; margin-bottom: 24px; line-height: 1.6;">
+                Una vez que la campaña finalice oficialmente según su fecha de término, podrás solicitar el retiro de los fondos desde tu panel.
+              </p>
+              
+              <a href="https://donia.cl/dashboard" style="${buttonStyle}">Ir a ver mis donantes</a>
+            </div>
+          </div>
+        `
+      });
+    } catch (e: any) { console.error('Mailer Goal Reached Error:', e.message); }
+  }
+
+  // 4. Retiro Procesado / Pagado (NUEVO)
+  static async sendWithdrawalCompletedNotification(to: string, userName: string, amount: number, campaignTitle: string) {
+    try {
+      const resend = this.getResend();
+      if (!resend) return;
+
+      await resend.emails.send({
+        from: 'Donia Finanzas <pagos@notifications.donia.cl>',
+        to: [to],
+        subject: `¡Pago realizado! Fondos enviados por "${campaignTitle}" 💸`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="border: 1px solid #e2e8f0; border-radius: 32px; padding: 48px; background: white; text-align: center;">
+              <div style="background: #ecfdf5; width: 64px; height: 64px; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px auto;">
+                <span style="font-size: 32px;">✅</span>
+              </div>
+              <h2 style="color: #065f46; margin: 0 0 16px 0; font-size: 24px; font-weight: 900;">¡Transferencia Exitosa!</h2>
+              <p style="text-align: left; font-size: 16px; color: #475569; line-height: 1.6;">Hola ${userName}, te informamos que hemos realizado la transferencia de <strong>$${amount.toLocaleString('es-CL')}</strong> correspondiente a tu campaña.</p>
+              
+              <div style="background: #f8fafc; padding: 24px; border-radius: 20px; margin: 24px 0; text-align: left;">
+                <p style="margin: 0 0 8px 0; font-size: 12px; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Detalles del depósito</p>
+                <p style="margin: 0; font-size: 15px; color: #1e293b;"><strong>Campaña:</strong> ${campaignTitle}</p>
+                <p style="margin: 4px 0 0 0; font-size: 15px; color: #1e293b;"><strong>Monto:</strong> $${amount.toLocaleString('es-CL')}</p>
+                <p style="margin: 4px 0 0 0; font-size: 15px; color: #1e293b;"><strong>Fecha:</strong> ${new Date().toLocaleDateString('es-CL')}</p>
+              </div>
+              
+              <p style="font-size: 14px; color: #64748b; line-height: 1.6; text-align: left; margin-bottom: 32px;">
+                Dependiendo de tu banco, los fondos podrían tardar hasta 24 horas en verse reflejados en tu cartola.
+              </p>
+
+              <a href="https://donia.cl/dashboard" style="${buttonStyle} background-color: #059669;">Ver historial en Donia</a>
+            </div>
+          </div>
+        `
+      });
+    } catch (e: any) { console.error('Mailer Withdrawal Processed Error:', e.message); }
+  }
+
+  // 5. Alerta de Seguridad
   static async sendSecurityUpdateNotification(to: string, userName: string, detail: string) {
     try {
       const resend = this.getResend();
@@ -138,7 +210,7 @@ export class Mailer {
     } catch (e: any) { console.error('Mailer Security Notify Error:', e.message); }
   }
 
-  // 4. Confirmación de Solicitud de Retiro
+  // 6. Confirmación de Solicitud de Retiro (Cuando el usuario aprieta el botón)
   static async sendWithdrawalConfirmation(to: string, userName: string, amount: number, campaignTitle: string) {
     try {
       const resend = this.getResend();

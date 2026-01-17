@@ -26,16 +26,20 @@ export default async function handler(req: any, res: any) {
     // 1. Obtener campaña y DUEÑO
     const { data: campaign, error: cError } = await supabase
       .from('campaigns')
-      .select('id, titulo, recaudado, donantes_count, owner_id')
+      .select('id, titulo, monto, recaudado, donantes_count, owner_id')
       .eq('id', campaignId)
       .single();
 
     if (cError || !campaign) throw new Error("Campaña no encontrada.");
 
+    const montoDonacion = Number(monto);
+    const nuevoRecaudado = (Number(campaign.recaudado) || 0) + montoDonacion;
+    const metaAlcanzadaJustoAhora = nuevoRecaudado >= Number(campaign.monto) && (Number(campaign.recaudado) < Number(campaign.monto));
+
     // 2. Insertar donación
     const { data: donation, error: dError } = await supabase.from('donations').insert([{ 
       campaign_id: campaignId, 
-      monto: Number(monto), 
+      monto: montoDonacion, 
       nombre_donante: nombre || 'Anónimo',
       donor_email: email, 
       donor_user_id: donorUserId || null,
@@ -47,14 +51,14 @@ export default async function handler(req: any, res: any) {
 
     // 3. Actualizar campaña
     await supabase.from('campaigns').update({
-      recaudado: (Number(campaign.recaudado) || 0) + Number(monto),
+      recaudado: nuevoRecaudado,
       donantes_count: (Number(campaign.donantes_count) || 0) + 1
     }).eq('id', campaignId);
 
-    // 4. NOTIFICACIONES (Email)
+    // 4. NOTIFICACIONES
     // Al Donante
     if (email) {
-      await Mailer.sendDonationReceipt(email, nombre || 'Amigo de Donia', Number(monto), campaign.titulo, campaignId);
+      await Mailer.sendDonationReceipt(email, nombre || 'Amigo de Donia', montoDonacion, campaign.titulo, campaignId);
     }
 
     // Al Dueño
@@ -63,14 +67,25 @@ export default async function handler(req: any, res: any) {
       const { data: ownerProfile } = await supabase.from('profiles').select('full_name').eq('id', campaign.owner_id).single();
       
       if (ownerAuth?.user?.email) {
+        // Enviar aviso de nueva donación normal
         await Mailer.sendOwnerDonationNotification(
           ownerAuth.user.email,
           ownerProfile?.full_name || 'Creador de Campaña',
           nombre || 'Un donante anónimo',
-          Number(monto),
+          montoDonacion,
           campaign.titulo,
           comentario
         );
+
+        // Si justo con este pago se llegó a la meta, enviar el correo especial de celebración
+        if (metaAlcanzadaJustoAhora) {
+          await Mailer.sendGoalReachedNotification(
+            ownerAuth.user.email,
+            ownerProfile?.full_name || 'Creador de Campaña',
+            campaign.titulo,
+            nuevoRecaudado
+          );
+        }
       }
     }
 
