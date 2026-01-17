@@ -61,27 +61,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data } = client.auth.onAuthStateChange(async (event, session) => {
           if (!mountedRef.current) return;
           
-          console.log(`[AUTH] Evento detectado: ${event}`);
           const currentUser = session?.user ?? null;
           
-          if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Optimización: Solo cargamos el perfil en login inicial o cambio de sesión real
+          if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
             setUser(currentUser);
             
             if (currentUser) {
               const p = await loadUserProfile(currentUser);
               if (mountedRef.current) setProfile(p);
               
-              // Limpieza de URL segura: Solo después de que el motor confirma la sesión
+              // Limpieza de URL segura: Solo tras confirmar la sesión
               if (window.location.search.includes('code=')) {
                 const url = new URL(window.location.href);
                 url.searchParams.delete('code');
                 url.searchParams.delete('state');
                 window.history.replaceState({}, document.title, url.pathname);
-                console.log("[AUTH] URL limpia tras intercambio PKCE exitoso.");
               }
             }
             
             if (mountedRef.current) setLoading(false);
+          }
+          
+          // En caso de refresco silencioso, actualizamos solo el objeto user de auth
+          if (event === 'TOKEN_REFRESHED') {
+            setUser(currentUser);
           }
           
           if (event === 'SIGNED_OUT') {
@@ -94,18 +98,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscription = data.subscription;
 
       } catch (error) {
-        console.error("[AUTH] Error crítico en inicialización:", error);
+        console.error("[AUTH] Error crítico inicialización:", error);
         if (mountedRef.current) setLoading(false);
       }
     };
 
     initializeAuth();
 
-    // Bloque de Cleanup real procesado por React
     return () => {
       mountedRef.current = false;
       if (subscription) {
-        console.log("[AUTH] Limpiando suscripción de auth...");
         subscription.unsubscribe();
       }
     };
@@ -138,7 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         </div>
         <div className="text-center">
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-2">Seguridad Donia</p>
-          <p className="text-slate-900 font-black text-lg">Verificando sesión...</p>
+          <p className="text-slate-900 font-black text-lg">Validando acceso...</p>
         </div>
       </div>
     );

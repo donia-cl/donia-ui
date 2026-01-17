@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart, Terminal, Settings } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, Loader2, AlertCircle, Heart } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
 
 const Auth: React.FC = () => {
@@ -9,7 +8,6 @@ const Auth: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showTimeoutFix, setShowTimeoutFix] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,17 +19,14 @@ const Auth: React.FC = () => {
     fullName: ''
   });
 
-  // Resetear estados de carga al entrar o volver a la página
   useEffect(() => {
-    const resetLoading = (event?: PageTransitionEvent) => {
+    const resetLoading = () => {
       setLoading(false);
       setGoogleLoading(false);
     };
     resetLoading();
     window.addEventListener('pageshow', resetLoading);
-    return () => {
-      window.removeEventListener('pageshow', resetLoading);
-    };
+    return () => window.removeEventListener('pageshow', resetLoading);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,7 +39,6 @@ const Auth: React.FC = () => {
 
     setLoading(true);
     setError(null);
-    setShowTimeoutFix(false);
 
     if (formData.password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres.");
@@ -62,21 +56,12 @@ const Auth: React.FC = () => {
       const from = (location.state as any)?.from?.pathname || '/';
       navigate(from, { replace: true });
     } catch (err: any) {
-      console.error("Auth error catch:", err);
+      console.error("Auth error:", err);
       let msg = err.message || "Ocurrió un error inesperado.";
-      const errorCode = err.status || 0;
       
-      // Traducción de errores comunes de Supabase
       if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
       if (msg.includes("Email not confirmed")) msg = "Debes confirmar tu correo electrónico antes de ingresar.";
-      if (msg.includes("Servicio de autenticación no disponible")) msg = "Error de configuración: Faltan credenciales de Supabase.";
-      
-      // MANEJO ESPECÍFICO DE ERROR 504 (TIMEOUT)
-      if (errorCode === 504 || msg.includes("Timeout") || msg.includes("AuthRetryableFetchError")) {
-        msg = "El servidor tardó demasiado en responder (Timeout).";
-        setShowTimeoutFix(true);
-      }
       
       setError(msg);
       setLoading(false);
@@ -86,12 +71,10 @@ const Auth: React.FC = () => {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     setError(null);
-    setShowTimeoutFix(false);
     try {
       await authService.signInWithGoogle();
     } catch (err: any) {
-      console.error("Google Auth error:", err);
-      setError(err.message || "No pudimos conectar con Google. Verifica la configuración en Supabase.");
+      setError(err.message || "No pudimos conectar con Google.");
       setGoogleLoading(false);
     }
   };
@@ -113,29 +96,7 @@ const Auth: React.FC = () => {
 
         <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl shadow-slate-200/40 border border-slate-100">
           
-          {/* Mensaje de Diagnóstico 504 Actualizado */}
-          {showTimeoutFix ? (
-             <div className="mb-8 p-5 bg-amber-50 border border-amber-200 rounded-3xl text-sm text-slate-700 animate-in fade-in zoom-in-95">
-                <div className="flex items-center gap-2 text-amber-700 font-black mb-3">
-                    <Settings size={18} />
-                    <p>TIMEOUT DETECTADO (504)</p>
-                </div>
-                <p className="mb-3 text-xs font-medium leading-relaxed">
-                   Si ya eliminaste los triggers SQL y el error persiste, el problema es el <strong>envío de correos</strong>. Supabase intenta enviar el email de confirmación y la conexión se cae.
-                </p>
-                <div className="bg-white p-3 rounded-xl border border-amber-100 mb-3">
-                   <p className="text-[10px] font-black uppercase text-amber-600 mb-1">Solución recomendada:</p>
-                   <ol className="list-decimal pl-4 text-[11px] text-slate-600 space-y-1">
-                      <li>Ve a Supabase Dashboard {'>'} Authentication {'>'} Providers {'>'} Email.</li>
-                      <li>Desactiva la opción <strong>"Confirm email"</strong> (Confirmar email).</li>
-                      <li>Guarda los cambios e intenta registrarte de nuevo.</li>
-                   </ol>
-                </div>
-                <p className="text-[10px] text-slate-400 italic text-center">
-                    (Esto evitará que el servidor espere al servicio de correo)
-                </p>
-             </div>
-          ) : error && (
+          {error && (
             <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-700 text-sm font-bold animate-in fade-in slide-in-from-top-1">
               <AlertCircle size={18} />
               <p>{error}</p>
