@@ -13,7 +13,6 @@ export default async function handler(req: any, res: any) {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-  // WEBHOOK: Mercado Pago envía notificaciones aquí cuando se confirma un pago
   if (req.method === 'POST' && req.body.type === 'payment' && !action) {
     const { data } = req.body;
     try {
@@ -27,7 +26,6 @@ export default async function handler(req: any, res: any) {
         const amount = payment.transaction_amount;
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         
-        // Evitar registros duplicados mediante idempotencia con payment_id
         const { data: existing } = await supabase.from('donations').select('id').eq('payment_id', String(payment.id)).maybeSingle();
         
         if (!existing) {
@@ -51,13 +49,13 @@ export default async function handler(req: any, res: any) {
             }).eq('id', campaign_id);
           }
 
-          // Notificación por correo electrónico
           if (donor_email) {
             await Mailer.sendDonationReceipt(
               donor_email, 
               donor_name || 'Amigo de Donia', 
               amount, 
-              campaign_title || 'una causa'
+              campaign_title || 'una causa',
+              campaign_id
             );
           }
         }
@@ -69,45 +67,16 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  // CREAR PREFERENCIA (Checkout Pro)
   if (action === 'preference') {
     const { campaignId, monto, nombre, comentario, campaignTitle, email, donorUserId } = req.body; 
-    
-    // URL de retorno compatible con el sistema de rutas BrowserRouter (sin hash #)
     const baseUrl = req.headers.origin || 'https://donia.cl';
     const returnUrl = `${baseUrl}/campana/${campaignId}/donar`;
 
     const preference = { 
-      items: [{ 
-        id: campaignId, 
-        title: `Donación Donia: ${campaignTitle}`, 
-        quantity: 1, 
-        unit_price: Number(monto), 
-        currency_id: 'CLP' 
-      }], 
-      payer: {
-        email: email || 'donor@donia.cl',
-        name: nombre || 'Donante'
-      },
-      payment_methods: {
-        excluded_payment_types: [
-            { id: "ticket" } 
-        ],
-        installments: 1 
-      },
-      metadata: { 
-        campaign_id: campaignId, 
-        campaign_title: campaignTitle,
-        donor_name: nombre, 
-        donor_comment: comentario,
-        donor_email: email,
-        donor_user_id: donorUserId
-      }, 
-      back_urls: { 
-        success: returnUrl,
-        failure: returnUrl,
-        pending: returnUrl
-      }, 
+      items: [{ id: campaignId, title: `Donación Donia: ${campaignTitle}`, quantity: 1, unit_price: Number(monto), currency_id: 'CLP' }], 
+      payer: { email: email || 'donor@donia.cl', name: nombre || 'Donante' },
+      metadata: { campaign_id: campaignId, campaign_title: campaignTitle, donor_name: nombre, donor_comment: comentario, donor_email: email, donor_user_id: donorUserId }, 
+      back_urls: { success: returnUrl, failure: returnUrl, pending: returnUrl }, 
       auto_return: 'approved',
       binary_mode: true 
     };
@@ -115,24 +84,11 @@ export default async function handler(req: any, res: any) {
     try {
       const resp = await fetch('https://api.mercadopago.com/checkout/preferences', { 
         method: 'POST', 
-        headers: { 
-          'Authorization': `Bearer ${accessToken}`, 
-          'Content-Type': 'application/json' 
-        }, 
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, 
         body: JSON.stringify(preference) 
       });
-      
       const data = await resp.json();
-      
-      if (!resp.ok) {
-          return res.status(500).json({ success: false, error: data.message });
-      }
-
-      return res.status(200).json({ 
-        success: true, 
-        preference_id: data.id,
-        init_point: data.init_point 
-      });
+      return res.status(200).json({ success: true, preference_id: data.id, init_point: data.init_point });
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err.message });
     }

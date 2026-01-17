@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Mailer, logger } from './_utils.js';
 
@@ -22,86 +21,56 @@ export default async function handler(req: any, res: any) {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
     
-    if (!mpResponse.ok) {
-      throw new Error(`Mercado Pago API error: ${mpResponse.status}`);
-    }
+    if (!mpResponse.ok) throw new Error(`Mercado Pago API error: ${mpResponse.status}`);
 
     const payment = await mpResponse.json();
 
     if (payment.status === 'approved') {
-      const { 
-        campaign_id, 
-        donor_name, 
-        donor_comment, 
-        donor_email, 
-        donor_user_id,
-        campaign_title 
-      } = payment.metadata;
-      
+      const { campaign_id, donor_name, donor_comment, donor_email, donor_user_id, campaign_title } = payment.metadata;
       const amount = payment.transaction_amount;
 
       if (!supabaseUrl || !serviceRoleKey) throw new Error("Configuración DB ausente");
       const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-      // Verificamos si la donación ya fue registrada (Idempotencia)
-      const { data: existing } = await supabase
-        .from('donations')
-        .select('id')
-        .eq('payment_id', String(payment.id))
-        .maybeSingle();
+      const { data: existing } = await supabase.from('donations').select('id').eq('payment_id', String(payment.id)).maybeSingle();
 
       if (!existing) {
-        // 1. Registrar la donación
-        await supabase
-          .from('donations')
-          .insert([{
-            campaign_id: campaign_id,
-            monto: amount,
-            nombre_donante: donor_name || 'Anónimo',
-            donor_email: donor_email,
-            donor_user_id: donor_user_id || null,
-            comentario: donor_comment,
-            payment_provider: 'mercado_pago',
-            payment_id: String(payment.id),
-            status: 'completed'
-          }]);
+        await supabase.from('donations').insert([{
+          campaign_id: campaign_id,
+          monto: amount,
+          nombre_donante: donor_name || 'Anónimo',
+          donor_email: donor_email,
+          donor_user_id: donor_user_id || null,
+          comentario: donor_comment,
+          payment_provider: 'mercado_pago',
+          payment_id: String(payment.id),
+          status: 'completed'
+        }]);
 
-        // 2. Actualizar métricas de la campaña
-        const { data: campaign } = await supabase
-          .from('campaigns')
-          .select('recaudado, donantes_count')
-          .eq('id', campaign_id)
-          .single();
+        const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaign_id).single();
 
         if (campaign) {
-          await supabase
-            .from('campaigns')
-            .update({
-              recaudado: (Number(campaign.recaudado) || 0) + amount,
-              donantes_count: (Number(campaign.donantes_count) || 0) + 1
-            })
-            .eq('id', campaign_id);
+          await supabase.from('campaigns').update({
+            recaudado: (Number(campaign.recaudado) || 0) + amount,
+            donantes_count: (Number(campaign.donantes_count) || 0) + 1
+          }).eq('id', campaign_id);
         }
 
-        // 3. ENVIAR EMAIL DE AGRADECIMIENTO (DESACOPLADO)
         if (donor_email) {
-          logger.info('TRIGGERING_EMAIL_FROM_WEBHOOK', { email: donor_email, campaign: campaign_title });
           await Mailer.sendDonationReceipt(
             donor_email, 
             donor_name || 'Amigo de Donia', 
             amount, 
-            campaign_title || 'una causa'
+            campaign_title || 'una causa',
+            campaign_id
           );
         }
-        
-        logger.audit(donor_user_id || 'anonymous', 'WEBHOOK_PAYMENT_PROCESSED', payment.id, { amount });
       }
     }
 
     return res.status(200).send('OK');
   } catch (error: any) {
     logger.error("WEBHOOK_ERROR", error);
-    // Respondemos 500 para que Mercado Pago reintente si hubo un error real de servidor
     return res.status(500).json({ error: error.message });
   }
 }

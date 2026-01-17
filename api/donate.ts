@@ -69,15 +69,13 @@ export default async function handler(req: any, res: any) {
       donantes_count: (Number(campaign.donantes_count) || 0) + 1
     }).eq('id', campaignId);
 
-    // LOG DE INICIO DE ENVÍO
-    logger.info('DONATION_SUCCESS_TRIGGERING_MAIL', { donationId: donation.id, email });
-
     if (email) {
       await Mailer.sendDonationReceipt(
         email,
         nombre || 'Amigo de Donia',
         Number(monto),
-        campaign.titulo || 'Campaña Donia'
+        campaign.titulo || 'Campaña Donia',
+        campaignId
       );
     }
 

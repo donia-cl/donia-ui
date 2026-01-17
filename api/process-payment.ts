@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { Validator, logger, Mailer } from './_utils.js';
 
@@ -13,12 +12,6 @@ export default async function handler(req: any, res: any) {
   try {
     const { paymentData, campaignId, metadata } = req.body;
     
-    logger.info('PROCESS_PAYMENT_INIT', { 
-        campaignId, 
-        email: metadata.email, 
-        receivedAmount: paymentData.transaction_amount
-    });
-    
     Validator.required(paymentData, 'paymentData');
     Validator.uuid(campaignId, 'campaignId');
     Validator.email(metadata.email);
@@ -27,18 +20,12 @@ export default async function handler(req: any, res: any) {
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!accessToken || !supabaseUrl || !serviceRoleKey) {
-        throw new Error('Error de configuración del servidor (Credenciales faltantes).');
-    }
+    if (!accessToken || !supabaseUrl || !serviceRoleKey) throw new Error('Credenciales faltantes.');
 
     const paymentPayload = {
       ...paymentData,
       description: `Donación Donia - Campaña ${campaignId}`,
-      payer: {
-        ...(paymentData.payer || {}),
-        email: metadata.email,
-        first_name: metadata.nombre || 'Anónimo'
-      },
+      payer: { ...(paymentData.payer || {}), email: metadata.email, first_name: metadata.nombre || 'Anónimo' },
       metadata: {
         campaign_id: campaignId,
         campaign_title: metadata.campaignTitle || 'Campaña Donia',
@@ -52,30 +39,19 @@ export default async function handler(req: any, res: any) {
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': `pay-${Date.now()}-${Math.random()}`
-      },
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(paymentPayload),
     });
 
     const paymentResult = await mpResponse.json();
-
-    if (!mpResponse.ok) {
-      logger.error('MP_API_ERROR', paymentResult);
-      throw new Error(paymentResult.message || 'Error procesando el pago en la pasarela.');
-    }
+    if (!mpResponse.ok) throw new Error(paymentResult.message || 'Error Mercado Pago');
 
     const isSuccess = paymentResult.status === 'approved';
-    const isPending = paymentResult.status === 'in_process' || paymentResult.status === 'pending';
 
-    if (isSuccess || isPending) {
+    if (isSuccess || paymentResult.status === 'pending') {
         const supabase = createClient(supabaseUrl, serviceRoleKey);
         const amount = paymentResult.transaction_amount;
-        const dbStatus = isSuccess ? 'completed' : 'pending';
 
-        // Registrar en DB
         await supabase.from('donations').insert([{
           campaign_id: campaignId,
           monto: amount,
@@ -85,37 +61,31 @@ export default async function handler(req: any, res: any) {
           comentario: metadata.comentario || '',
           payment_provider: 'mercado_pago',
           payment_id: String(paymentResult.id),
-          status: dbStatus
+          status: isSuccess ? 'completed' : 'pending'
         }]);
 
         if (isSuccess) {
             const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count, titulo').eq('id', campaignId).single();
-            
             if (campaign) {
               await supabase.from('campaigns').update({
                 recaudado: (Number(campaign.recaudado) || 0) + amount,
                 donantes_count: (Number(campaign.donantes_count) || 0) + 1
               }).eq('id', campaignId);
 
-              // ENVIAR EMAIL DESDE EL PROCESO MANUAL TAMBIÉN
               if (metadata.email) {
                 await Mailer.sendDonationReceipt(
                   metadata.email,
                   metadata.nombre || 'Amigo de Donia',
                   amount,
-                  campaign.titulo || 'una causa'
+                  campaign.titulo || 'una causa',
+                  campaignId
                 );
               }
             }
         }
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      status: paymentResult.status,
-      id: paymentResult.id 
-    });
-
+    return res.status(200).json({ success: true, status: paymentResult.status, id: paymentResult.id });
   } catch (error: any) {
     logger.error('PROCESS_PAYMENT_ERROR', error);
     return res.status(500).json({ success: false, error: error.message });
