@@ -221,13 +221,14 @@ const AuthModal = ({ onClose, onSuccess }: { onClose: () => void, onSuccess: () 
 const CreateReview: React.FC = () => {
   const navigate = useNavigate();
   const { campaign, resetCampaign } = useCampaign();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   
   const [declarations, setDeclarations] = useState({
     veraz: false,
@@ -250,6 +251,15 @@ const CreateReview: React.FC = () => {
       alert("Error al reenviar el correo.");
     } finally {
       setResendingEmail(false);
+    }
+  };
+
+  const handleRefreshStatus = async () => {
+    setRefreshing(true);
+    try {
+      await refreshProfile();
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -305,6 +315,7 @@ const CreateReview: React.FC = () => {
       console.error("Error al publicar:", err);
       setError(err.message || "Error al conectar con el servidor.");
     } finally {
+      // Fix: Used setIsSubmitting instead of non-existent setSubmitting
       setIsSubmitting(false);
     }
   };
@@ -370,6 +381,16 @@ const CreateReview: React.FC = () => {
                 <p className="text-amber-800/80 text-sm font-medium leading-relaxed">
                   Para poder publicar tu campaña en Donia, necesitamos confirmar que eres el dueño del correo <strong>{user?.email}</strong>.
                 </p>
+                <div className="flex gap-4 mt-3">
+                   <button 
+                     onClick={handleRefreshStatus}
+                     disabled={refreshing}
+                     className="text-amber-700 font-black text-[10px] uppercase tracking-widest flex items-center gap-1.5 hover:underline"
+                   >
+                     {refreshing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCcw size={12} />}
+                     Ya lo verifiqué
+                   </button>
+                </div>
              </div>
              <button 
                onClick={handleResendVerification}
