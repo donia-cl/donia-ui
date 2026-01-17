@@ -1,4 +1,3 @@
-
 import { Resend } from 'resend';
 
 // 1. LOGGER ESTRUCTURADO PARA AUDITORÍA
@@ -16,7 +15,8 @@ export const logger = {
       level: 'ERROR',
       timestamp: new Date().toISOString(),
       action,
-      error: error?.message || error,
+      message: error?.message || error,
+      details: error?.response?.data || error?.data || error,
       stack: error?.stack,
       ...meta
     }));
@@ -36,56 +36,63 @@ export const logger = {
 // 2. SERVICIO DE CORREO (RESEND)
 export class Mailer {
   private static getResend() {
-    if (!process.env.RESEND_API_KEY) {
-      throw new Error('RESEND_API_KEY no configurada en el servidor');
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      logger.error('MAILER_CONFIG_MISSING', 'La variable RESEND_API_KEY no está definida en el entorno.');
+      return null;
     }
-    return new Resend(process.env.RESEND_API_KEY);
+    return new Resend(apiKey);
   }
 
+  /**
+   * Envía comprobante de donación
+   * Nota: El dominio 'notifications.donia.cl' DEBE estar verificado en Resend.
+   */
   static async sendDonationReceipt(to: string, donorName: string, amount: number, campaignTitle: string) {
     try {
       const resend = this.getResend();
-      // IMPORTANTE: El dominio verificado es notifications.donia.cl
+      if (!resend) return;
+
       const { data, error } = await resend.emails.send({
         from: 'Donia <comprobantes@notifications.donia.cl>',
         to: [to],
         replyTo: 'soporte@donia.cl',
         subject: `¡Gracias por tu apoyo a ${campaignTitle}! 💜`,
         html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #f8fafc; border-radius: 32px;">
-            <div style="background-color: #ffffff; padding: 40px; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-              <div style="background-color: #7c3aed; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
-                <span style="color: white; font-size: 24px;">♥</span>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #ffffff; border: 1px solid #f1f5f9; border-radius: 32px; padding: 40px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);">
+              <div style="background-color: #7c3aed; width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 32px;">
+                <span style="color: white; font-size: 28px; line-height: 56px; display: block; text-align: center; width: 100%;">♥</span>
               </div>
               
-              <h1 style="color: #0f172a; font-size: 24px; font-weight: 900; margin-bottom: 16px; letter-spacing: -0.025em;">¡Gracias por tu generosidad, ${donorName}!</h1>
+              <h1 style="color: #0f172a; font-size: 26px; font-weight: 900; margin-bottom: 16px; letter-spacing: -0.04em;">¡Gracias por tu generosidad, ${donorName}!</h1>
               
-              <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 24px;">
-                Tu aporte para la campaña <strong>"${campaignTitle}"</strong> ha sido procesado con éxito. Gracias a personas como tú, estamos construyendo una comunidad más solidaria en Chile.
+              <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 32px;">
+                Tu aporte para la campaña <strong>"${campaignTitle}"</strong> ha sido recibido. Tu ayuda es fundamental para que esta historia tenga un final feliz.
               </p>
 
-              <div style="background-color: #f1f5f9; padding: 24px; border-radius: 16px; margin-bottom: 24px;">
-                <p style="color: #64748b; font-size: 12px; font-weight: 800; text-transform: uppercase; margin: 0 0 8px 0; letter-spacing: 0.1em;">Resumen de donación</p>
-                <p style="color: #0f172a; font-size: 32px; font-weight: 900; margin: 0;">$${amount.toLocaleString('es-CL')}</p>
-                <p style="color: #64748b; font-size: 14px; margin: 8px 0 0 0;">Medio de pago: Mercado Pago</p>
+              <div style="background-color: #f8fafc; padding: 32px; border-radius: 24px; margin-bottom: 32px; border: 1px solid #f1f5f9;">
+                <p style="color: #64748b; font-size: 11px; font-weight: 800; text-transform: uppercase; margin: 0 0 8px 0; letter-spacing: 0.15em;">Detalle de tu donación</p>
+                <p style="color: #0f172a; font-size: 36px; font-weight: 900; margin: 0; letter-spacing: -0.02em;">$${amount.toLocaleString('es-CL')}</p>
+                <p style="color: #94a3b8; font-size: 13px; margin: 12px 0 0 0; font-weight: 600;">Procesado vía Mercado Pago</p>
               </div>
 
-              <p style="color: #94a3b8; font-size: 13px; line-height: 1.5;">
-                Este correo sirve como comprobante de tu donación voluntaria. Si tienes alguna duda sobre este cargo, puedes contactarnos en soporte@donia.cl.
+              <p style="color: #94a3b8; font-size: 12px; line-height: 1.6; font-weight: 500;">
+                Este correo es un comprobante oficial de tu donación. Si tienes dudas, escríbenos a soporte@donia.cl mencionando el correo asociado a tu aporte.
               </p>
 
-              <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 32px 0;">
-
-              <p style="color: #64748b; font-size: 12px; text-align: center; font-weight: 700;">
-                © 2026 Donia SpA. Santiago, Chile.
-              </p>
+              <div style="margin-top: 40px; padding-top: 32px; border-top: 1px solid #f1f5f9; text-align: center;">
+                <p style="color: #64748b; font-size: 12px; font-weight: 700;">
+                  © 2026 Donia SpA. Santiago, Chile.
+                </p>
+              </div>
             </div>
           </div>
         `,
       });
 
       if (error) {
-        logger.error('MAILER_SEND_FAILED', error);
+        logger.error('RESEND_API_ERROR_RECEIPT', error, { to, campaignTitle });
       } else {
         logger.info('MAILER_SENT_SUCCESS', { to, campaignTitle, emailId: data?.id });
       }
@@ -94,50 +101,54 @@ export class Mailer {
     }
   }
 
+  /**
+   * Envía alerta de seguridad por cambio de perfil
+   */
   static async sendProfileUpdateNotification(to: string, userName: string) {
     try {
       const resend = this.getResend();
-      // IMPORTANTE: El dominio verificado es notifications.donia.cl
+      if (!resend) return;
+
       const { data, error } = await resend.emails.send({
         from: 'Donia Seguridad <seguridad@notifications.donia.cl>',
         to: [to],
         replyTo: 'soporte@donia.cl',
-        subject: `Tu perfil en Donia ha sido actualizado 🛡️`,
+        subject: `Actualización de seguridad en tu cuenta 🛡️`,
         html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background-color: #f8fafc; border-radius: 32px;">
-            <div style="background-color: #ffffff; padding: 40px; border-radius: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-              <div style="background-color: #0f172a; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
-                <span style="color: white; font-size: 20px;">🛡️</span>
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: #ffffff; border: 1px solid #f1f5f9; border-radius: 32px; padding: 40px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);">
+              <div style="background-color: #0f172a; width: 56px; height: 56px; border-radius: 18px; display: flex; align-items: center; justify-content: center; margin-bottom: 32px;">
+                <span style="color: white; font-size: 24px; line-height: 56px; display: block; text-align: center; width: 100%;">🛡️</span>
               </div>
               
-              <h1 style="color: #0f172a; font-size: 22px; font-weight: 900; margin-bottom: 16px;">Hola, ${userName}</h1>
+              <h1 style="color: #0f172a; font-size: 24px; font-weight: 900; margin-bottom: 16px; letter-spacing: -0.04em;">Hola, ${userName}</h1>
               
-              <p style="color: #475569; font-size: 15px; line-height: 1.6; margin-bottom: 24px;">
-                Te informamos que se han realizado cambios en la información de tu perfil (Nombre, RUT o Teléfono). 
+              <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-bottom: 32px;">
+                Te notificamos que la información de tu cuenta (Nombre, RUT o Teléfono) ha sido modificada recientemente.
               </p>
 
-              <div style="background-color: #fff7ed; border: 1px solid #ffedd5; padding: 20px; border-radius: 16px; margin-bottom: 24px;">
-                <p style="color: #9a3412; font-size: 13px; font-weight: 700; margin: 0;">
-                  Si tú no realizaste estos cambios, por favor ponte en contacto con nuestro equipo de soporte inmediatamente escribiendo a soporte@donia.cl para proteger tu cuenta.
+              <div style="background-color: #fff7ed; border: 1px solid #ffedd5; padding: 24px; border-radius: 20px; margin-bottom: 32px;">
+                <p style="color: #9a3412; font-size: 14px; font-weight: 700; margin: 0; line-height: 1.5;">
+                  Si NO realizaste estos cambios, contacta a nuestro equipo de soporte de inmediato escribiendo a soporte@donia.cl para bloquear cualquier acceso no autorizado.
                 </p>
               </div>
 
-              <p style="color: #94a3b8; font-size: 12px; line-height: 1.5; text-align: center;">
-                Este es un mensaje automático de seguridad. No es necesario que respondas a este correo.
+              <p style="color: #94a3b8; font-size: 11px; line-height: 1.5; text-align: center; font-weight: 500;">
+                Este es un aviso automático de seguridad. Donia nunca te pedirá claves o códigos por este medio.
               </p>
 
-              <hr style="border: 0; border-top: 1px solid #f1f5f9; margin: 32px 0;">
-
-              <p style="color: #64748b; font-size: 12px; text-align: center; font-weight: 700;">
-                © 2026 Donia SpA. Seguridad y Confianza.
-              </p>
+              <div style="margin-top: 40px; padding-top: 32px; border-top: 1px solid #f1f5f9; text-align: center;">
+                <p style="color: #64748b; font-size: 11px; font-weight: 700;">
+                  © 2026 Donia SpA. Centro de Seguridad.
+                </p>
+              </div>
             </div>
           </div>
         `,
       });
 
       if (error) {
-        logger.error('PROFILE_UPDATE_EMAIL_FAILED', error);
+        logger.error('RESEND_API_ERROR_PROFILE', error, { to });
       } else {
         logger.info('PROFILE_UPDATE_EMAIL_SENT', { to, emailId: data?.id });
       }
