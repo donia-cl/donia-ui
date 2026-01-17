@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { Mailer, Validator, logger } from './_utils.js';
 
@@ -27,7 +28,8 @@ export default async function handler(req: any, res: any) {
     }
 
     // Explicitly find the user from the fetched list
-    const user = data.users.find(u => u.email === email);
+    // Cast data.users to any[] to avoid 'never' type inference issue in some environments
+    const user = (data.users as any[]).find(u => u.email === email);
 
     if (!user) {
       throw new Error("Usuario no encontrado.");
