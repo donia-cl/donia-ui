@@ -1,8 +1,6 @@
-
 import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req: any, res: any) {
-  // Configuración CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -21,27 +19,23 @@ export default async function handler(req: any, res: any) {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    // 1. Verificar si ya existe para no duplicar
-    const { data: existing } = await supabase.from('profiles').select('id').eq('id', id).maybeSingle();
-    
-    if (!existing) {
-        // 2. Insertar perfil con privilegios de admin (Service Role)
-        const { error } = await supabase.from('profiles').insert([{
-            id,
-            full_name: fullName || 'Usuario Nuevo',
-            role: 'user',
-            is_verified: false
-        }]);
+    // Usamos upsert con 'onConflict' para que si el trigger de DB ya lo creó, no falle.
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({
+        id,
+        full_name: fullName || 'Usuario Nuevo',
+        role: 'user'
+      }, { onConflict: 'id' });
 
-        if (error) {
-            console.error("Error creating profile row:", error);
-            throw error;
-        }
+    if (error) {
+        // Si sigue fallando por FK, es que auth.users realmente no tiene el ID aún (race condition extrema)
+        console.error(`[Profile API] Falló creación para ${id}:`, error.message);
+        return res.status(400).json({ success: false, error: error.message });
     }
 
     return res.status(200).json({ success: true });
   } catch (error: any) {
-    console.error("Profile API Error:", error.message);
     return res.status(500).json({ error: error.message });
   }
 }

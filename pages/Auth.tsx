@@ -57,7 +57,13 @@ const Auth: React.FC = () => {
       navigate(from, { replace: true });
     } catch (err: any) {
       console.error("Auth error:", err);
-      let msg = err.message || "Ocurrió un error inesperado.";
+      
+      // Manejo robusto de mensajes de error
+      let msg = "";
+      if (typeof err === 'string') msg = err;
+      else if (err.message && err.message !== "{}") msg = err.message;
+      else if (err.name === 'AuthRetryableFetchError') msg = "Hubo un problema de conexión con el servidor. Por favor intenta de nuevo en unos segundos.";
+      else msg = "Ocurrió un error inesperado al procesar tu solicitud.";
       
       if (msg.includes("User already registered")) msg = "Este correo ya está registrado. Intenta iniciar sesión.";
       if (msg.includes("Invalid login credentials")) msg = "Email o contraseña incorrectos.";
@@ -97,8 +103,8 @@ const Auth: React.FC = () => {
         <div className="bg-white p-8 md:p-10 rounded-[40px] shadow-2xl shadow-slate-200/40 border border-slate-100">
           
           {error && (
-            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 text-rose-700 text-sm font-bold animate-in fade-in slide-in-from-top-1">
-              <AlertCircle size={18} />
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-700 text-sm font-bold animate-in fade-in slide-in-from-top-1">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <p>{error}</p>
             </div>
           )}

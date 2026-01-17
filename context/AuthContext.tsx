@@ -22,12 +22,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authService = AuthService.getInstance();
   const mountedRef = useRef(true);
 
-  // Carga el perfil desde el backend de Donia
-  const loadUserProfile = async (currentUser: any) => {
+  // Carga el perfil con lógica de reintento para evitar race conditions
+  const loadUserProfile = async (currentUser: any, retryCount = 0): Promise<Profile | null> => {
     if (!currentUser || !mountedRef.current) return null;
+    
     try {
       let userProfile = await authService.fetchProfile(currentUser.id);
-      // Auto-creación de perfil si no existe (Lazy repair)
+      
+      // Si no existe, esperamos un momento (el trigger de DB podría estar trabajando)
+      if (!userProfile && retryCount < 2) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return loadUserProfile(currentUser, retryCount + 1);
+      }
+
+      // Si después de los reintentos sigue sin existir, intentamos creación manual (fallback)
       if (!userProfile && mountedRef.current) {
         const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Usuario';
         await fetch('/api/create-profile', {
@@ -37,13 +45,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         userProfile = await authService.fetchProfile(currentUser.id);
       }
+      
       return userProfile;
     } catch (err) {
       return null;
     }
   };
 
-  // 1. Motor de Autenticación Principal
   useEffect(() => {
     mountedRef.current = true;
     let subscription: any = null;
@@ -58,13 +66,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        // FUENTE ÚNICA DE VERDAD: onAuthStateChange
         const { data } = client.auth.onAuthStateChange(async (event, session) => {
           if (!mountedRef.current) return;
           
           const currentUser = session?.user ?? null;
           
-          // Optimización: Solo cargamos el perfil en login inicial o cambio de sesión real
           if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
             setUser(currentUser);
             
@@ -72,7 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const p = await loadUserProfile(currentUser);
               if (mountedRef.current) setProfile(p);
               
-              // Limpieza de URL segura: Solo tras confirmar la sesión
               if (window.location.search.includes('code=')) {
                 const url = new URL(window.location.href);
                 url.searchParams.delete('code');
@@ -84,7 +89,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (mountedRef.current) setLoading(false);
           }
           
-          // En caso de refresco silencioso, actualizamos solo el objeto user de auth
           if (event === 'TOKEN_REFRESHED') {
             setUser(currentUser);
           }
@@ -114,19 +118,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // 2. Safety Timeout: Failsafe para evitar loader infinito por estado de storage corrupto
   useEffect(() => {
     if (!loading) return;
-
     const safetyTimeout = setTimeout(() => {
       if (mountedRef.current && loading) {
-        console.warn('[AUTH] Timeout de seguridad alcanzado (8s). Limpiando estado local para desbloquear UI.');
         authService.signOut().finally(() => {
           if (mountedRef.current) setLoading(false);
         });
       }
-    }, 8000);
-
+    }, 10000);
     return () => clearTimeout(safetyTimeout);
   }, [loading]);
 
