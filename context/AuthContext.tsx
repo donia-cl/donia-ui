@@ -43,6 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // 1. Motor de Autenticación Principal
   useEffect(() => {
     mountedRef.current = true;
     let subscription: any = null;
@@ -112,6 +113,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
   }, []);
+
+  // 2. Safety Timeout: Failsafe para evitar loader infinito por estado de storage corrupto
+  useEffect(() => {
+    if (!loading) return;
+
+    const safetyTimeout = setTimeout(() => {
+      if (mountedRef.current && loading) {
+        console.warn('[AUTH] Timeout de seguridad alcanzado (8s). Limpiando estado local para desbloquear UI.');
+        authService.signOut().finally(() => {
+          if (mountedRef.current) setLoading(false);
+        });
+      }
+    }, 8000);
+
+    return () => clearTimeout(safetyTimeout);
+  }, [loading]);
 
   const signOut = async () => {
     setLoading(true);

@@ -57,7 +57,7 @@ export class AuthService {
               autoRefreshToken: true,
               detectSessionInUrl: true, // Crucial para PKCE automático
               flowType: 'pkce',
-              storageKey: 'donia-auth-token-v1'
+              storageKey: 'donia-auth-token-v2' // v2 invalida sesiones corruptas v1
             }
           });
           console.log("[AuthService] Supabase Client Initialized (Singleton)");
