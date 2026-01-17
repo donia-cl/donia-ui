@@ -1,12 +1,9 @@
+
 import { Resend } from 'resend';
 
 // rateLimitMap for in-memory rate limiting
 const rateLimitMap = new Map<string, { count: number, lastReset: number }>();
 
-/**
- * Basic in-memory rate limiter for serverless functions (effective per-instance).
- * Fix for error in api/polish.ts: Module '"./_utils.js"' has no exported member 'checkRateLimit'.
- */
 export const checkRateLimit = (ip: string, limit: number = 10, windowMs: number = 60000) => {
   const now = Date.now();
   const record = rateLimitMap.get(ip) || { count: 0, lastReset: now };
@@ -36,9 +33,6 @@ export const logger = {
       ...meta
     });
   },
-  /**
-   * Fix for errors in api/campaigns.ts and api/request-withdrawal.ts regarding missing audit method.
-   */
   audit: (userId: string, action: string, resourceId: string, details: any = {}) => {
     console.log(JSON.stringify({
       level: 'AUDIT',
@@ -51,14 +45,114 @@ export const logger = {
   }
 };
 
-const buttonStyle = "display: inline-block; background-color: #7c3aed; color: white; padding: 16px 32px; border-radius: 16px; text-decoration: none; font-weight: 800; font-size: 16px; margin-top: 20px;";
+// --- EMAIL TEMPLATING SYSTEM ---
+
+interface EmailTemplateConfig {
+  title: string;
+  previewText: string;
+  icon: 'security' | 'success' | 'info' | 'heart' | 'money';
+  content: string;
+  buttonText: string;
+  buttonUrl: string;
+}
+
+const renderBaseTemplate = (config: EmailTemplateConfig) => {
+  const iconMap = {
+    security: { emoji: '🛡️', bg: '#fee2e2' }, // red-100
+    success: { emoji: '✅', bg: '#d1fae5' },  // emerald-100
+    info: { emoji: 'ℹ️', bg: '#e0f2fe' },    // sky-100
+    heart: { emoji: '💜', bg: '#f5f3ff' },   // violet-100
+    money: { emoji: '💸', bg: '#fef3c7' }    // amber-100
+  };
+
+  const { emoji, bg } = iconMap[config.icon];
+
+  return `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${config.title}</title>
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 40px 20px;">
+        <tr>
+          <td align="center">
+            <!-- Logo Header -->
+            <table border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 32px;">
+              <tr>
+                <td align="center">
+                  <div style="background-color: #7c3aed; width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 24px;">💜</span>
+                  </div>
+                  <div style="margin-top: 8px; color: #0f172a; font-weight: 900; font-size: 20px; letter-spacing: -0.05em;">Donia</div>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Main Card -->
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 500px; background-color: #ffffff; border-radius: 32px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+              <tr>
+                <td style="padding: 40px;">
+                  <!-- Icon Badge -->
+                  <div style="text-align: center; margin-bottom: 24px;">
+                    <div style="display: inline-block; width: 64px; height: 64px; line-height: 64px; background-color: ${bg}; border-radius: 20px; font-size: 32px; text-align: center;">
+                      ${emoji}
+                    </div>
+                  </div>
+
+                  <!-- Title -->
+                  <h1 style="margin: 0 0 16px 0; color: #0f172a; font-size: 24px; font-weight: 800; text-align: center; letter-spacing: -0.02em; line-height: 1.2;">
+                    ${config.title}
+                  </h1>
+
+                  <!-- Content Block -->
+                  <div style="color: #475569; font-size: 16px; line-height: 1.6; text-align: center; margin-bottom: 32px;">
+                    ${config.content}
+                  </div>
+
+                  <!-- CTA Button -->
+                  <div style="text-align: center;">
+                    <a href="${config.buttonUrl}" style="display: inline-block; background-color: #7c3aed; color: #ffffff; padding: 16px 32px; border-radius: 16px; text-decoration: none; font-weight: 800; font-size: 16px; box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.2);">
+                      ${config.buttonText}
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Simple Footer inside card -->
+              <tr>
+                <td style="padding: 24px; background-color: #f1f5f9; text-align: center;">
+                  <p style="margin: 0; color: #94a3b8; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em;">
+                    © 2026 Donia SpA • Santiago, Chile
+                  </p>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Anti-Phishing & Support Footer -->
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 400px; margin-top: 32px;">
+              <tr>
+                <td align="center" style="color: #94a3b8; font-size: 12px; line-height: 1.5; font-weight: 500;">
+                  Has recibido este correo porque estás registrado en Donia.cl. 
+                  Si tienes dudas, contáctanos en 
+                  <a href="mailto:soporte@donia.cl" style="color: #7c3aed; text-decoration: none; font-weight: 700;">soporte@donia.cl</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+};
 
 export class Mailer {
   private static getResend() {
     const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      throw new Error('RESEND_API_KEY no configurada en Vercel.');
-    }
+    if (!apiKey) throw new Error('RESEND_API_KEY no configurada.');
     return new Resend(apiKey);
   }
 
@@ -66,12 +160,10 @@ export class Mailer {
     try {
       const resend = this.getResend();
       const { data, error } = await resend.emails.send(payload);
-
       if (error) {
         logger.error('RESEND_REJECTED', error, { to: payload.to });
         throw new Error(`Resend rechazó el envío: ${error.message}`);
       }
-
       logger.info('MAIL_SENT_SUCCESS', { id: data?.id, to: payload.to });
       return data;
     } catch (e: any) {
@@ -81,131 +173,135 @@ export class Mailer {
   }
 
   static async sendAccountVerification(to: string, userName: string, link: string) {
+    const title = 'Activa tu cuenta';
+    const content = `Hola <strong>${userName}</strong>,<br><br>Bienvenido a la comunidad de Donia. Para comenzar a crear campañas y recibir apoyo, necesitamos que confirmes tu cuenta haciendo clic en el botón de abajo.`;
+    
     return this.send({
       from: 'Donia <seguridad@notifications.donia.cl>',
       to: [to],
       subject: 'Activa tu cuenta en Donia 💜',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="border: 1px solid #e2e8f0; border-radius: 32px; padding: 40px; text-align: center;">
-            <h1 style="color: #1e293b;">Hola ${userName},</h1>
-            <p>Haz clic abajo para activar tu cuenta y empezar a recaudar fondos:</p>
-            <a href="${link}" style="${buttonStyle}">Activar mi cuenta</a>
-            <p style="margin-top: 30px; font-size: 12px; color: #94a3b8;">Si no solicitaste esto, ignora este correo.</p>
-          </div>
-        </div>
-      `
+      html: renderBaseTemplate({
+        title,
+        previewText: 'Confirma tu registro en Donia',
+        icon: 'heart',
+        content,
+        buttonText: 'Verificar mi cuenta',
+        buttonUrl: link
+      })
     });
   }
 
-  /**
-   * Fix for errors in api/donate.ts, api/preference.ts, api/webhook.ts, api/process-payment.ts.
-   */
   static async sendDonationReceipt(to: string, userName: string, amount: number, campaignTitle: string, campaignId: string) {
+    const title = '¡Gracias por tu apoyo!';
+    const content = `Hola <strong>${userName}</strong>,<br><br>Tu donación de <strong>$${amount.toLocaleString('es-CL')}</strong> para la campaña <strong>"${campaignTitle}"</strong> ha sido procesada con éxito.<br><br>¡Tu aporte marca la diferencia!`;
+
     return this.send({
       from: 'Donia <pagos@notifications.donia.cl>',
       to: [to],
       subject: '¡Gracias por tu donación! 💜',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #7c3aed;">¡Gracias, ${userName}!</h1>
-          <p>Tu donación de <strong>$${amount.toLocaleString('es-CL')}</strong> para <strong>"${campaignTitle}"</strong> ha sido procesada con éxito.</p>
-          <p>Tu apoyo es fundamental para que esta historia siga adelante.</p>
-          <a href="https://donia.cl/campana/${campaignId}" style="${buttonStyle}">Ver campaña</a>
-        </div>
-      `
+      html: renderBaseTemplate({
+        title,
+        previewText: 'Recibo de donación procesado',
+        icon: 'success',
+        content,
+        buttonText: 'Ver campaña',
+        buttonUrl: `https://donia.cl/campana/${campaignId}`
+      })
     });
   }
 
-  /**
-   * Fix for error in api/donate.ts regarding missing sendOwnerDonationNotification method.
-   */
   static async sendOwnerDonationNotification(to: string, ownerName: string, donorName: string, amount: number, campaignTitle: string, comment?: string) {
+    const title = '¡Nueva donación recibida!';
+    const content = `Hola <strong>${ownerName}</strong>,<br><br><strong>${donorName}</strong> acaba de aportar <strong>$${amount.toLocaleString('es-CL')}</strong> a tu campaña <strong>"${campaignTitle}"</strong>.<br><br>${comment ? `<div style="font-style: italic; background-color: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 16px;">"${comment}"</div>` : ''}`;
+
     return this.send({
       from: 'Donia <notificaciones@notifications.donia.cl>',
       to: [to],
       subject: '¡Nueva donación recibida! 🚀',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #1e293b;">¡Buenas noticias, ${ownerName}!</h1>
-          <p>Has recibido una nueva donación de <strong>$${amount.toLocaleString('es-CL')}</strong> de parte de <strong>${donorName}</strong> para tu campaña <strong>"${campaignTitle}"</strong>.</p>
-          ${comment ? `<p style="font-style: italic; background: #f8fafc; padding: 15px; border-radius: 10px;">"${comment}"</p>` : ''}
-          <a href="https://donia.cl/dashboard" style="${buttonStyle}">Ir a mi panel</a>
-        </div>
-      `
+      html: renderBaseTemplate({
+        title,
+        previewText: `Has recibido $${amount.toLocaleString('es-CL')}`,
+        icon: 'success',
+        content,
+        buttonText: 'Revisar mi panel',
+        buttonUrl: 'https://donia.cl/dashboard'
+      })
     });
   }
 
-  /**
-   * Fix for error in api/donate.ts regarding missing sendGoalReachedNotification method.
-   */
   static async sendGoalReachedNotification(to: string, ownerName: string, campaignTitle: string, totalAmount: number) {
+    const title = '¡Felicidades, meta alcanzada!';
+    const content = `¡Lo lograste! Tu campaña <strong>"${campaignTitle}"</strong> ha alcanzado su objetivo de recaudación con un total de <strong>$${totalAmount.toLocaleString('es-CL')}</strong>.<br><br>Ya puedes solicitar el retiro de tus fondos desde tu panel.`;
+
     return this.send({
       from: 'Donia <notificaciones@notifications.donia.cl>',
       to: [to],
-      subject: '¡Meta alcanzada! 🥳🥳🥳',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #7c3aed;">¡Felicidades, ${ownerName}!</h1>
-          <p>Tu campaña <strong>"${campaignTitle}"</strong> ha alcanzado su meta de recaudación.</p>
-          <p>Has recaudado un total de <strong>$${totalAmount.toLocaleString('es-CL')}</strong>.</p>
-          <p>Ahora puedes solicitar el retiro de tus fondos desde tu panel.</p>
-          <a href="https://donia.cl/dashboard" style="${buttonStyle}">Ir a mi panel</a>
-        </div>
-      `
+      subject: '¡Meta alcanzada! 🥳',
+      html: renderBaseTemplate({
+        title,
+        previewText: 'Tu campaña alcanzó su meta',
+        icon: 'heart',
+        content,
+        buttonText: 'Gestionar retiro',
+        buttonUrl: 'https://donia.cl/dashboard'
+      })
     });
   }
 
-  /**
-   * Fix for error in api/update-profile.ts regarding missing sendSecurityUpdateNotification method.
-   */
   static async sendSecurityUpdateNotification(to: string, userName: string, field: string) {
+    const title = 'Alerta de Seguridad';
+    const content = `Hola <strong>${userName}</strong>,<br><br>Te informamos que se han modificado datos sensibles en tu perfil: <strong>${field}</strong>.<br><br>¿No fuiste tú? Por favor protege tu cuenta de inmediato.`;
+
     return this.send({
       from: 'Donia <seguridad@notifications.donia.cl>',
       to: [to],
-      subject: 'Actualización de seguridad en tu cuenta 🛡️',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #1e293b;">Aviso de seguridad</h1>
-          <p>Hola ${userName}, te informamos que se ha modificado información sensible en tu cuenta: <strong>${field}</strong>.</p>
-          <p>Si no realizaste este cambio, por favor contáctanos de inmediato.</p>
-        </div>
-      `
+      subject: 'Aviso de seguridad 🛡️',
+      html: renderBaseTemplate({
+        title,
+        previewText: 'Se modificó información en tu cuenta',
+        icon: 'security',
+        content,
+        buttonText: 'Revisar mi seguridad',
+        buttonUrl: 'https://donia.cl/dashboard'
+      })
     });
   }
 
-  /**
-   * Fix for error in api/update-profile.ts regarding missing sendProfileUpdateNotification method.
-   */
   static async sendProfileUpdateNotification(to: string, userName: string) {
+    const title = 'Perfil Actualizado';
+    const content = `Hola <strong>${userName}</strong>,<br><br>Tus datos de perfil han sido actualizados correctamente en nuestra plataforma.`;
+
     return this.send({
       from: 'Donia <notificaciones@notifications.donia.cl>',
       to: [to],
-      subject: 'Perfil actualizado con éxito ✅',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #1e293b;">Perfil actualizado</h1>
-          <p>Hola ${userName}, tus datos de perfil han sido actualizados correctamente.</p>
-        </div>
-      `
+      subject: 'Perfil actualizado ✅',
+      html: renderBaseTemplate({
+        title,
+        previewText: 'Tus datos han sido guardados',
+        icon: 'info',
+        content,
+        buttonText: 'Ir a mi perfil',
+        buttonUrl: 'https://donia.cl/dashboard'
+      })
     });
   }
 
-  /**
-   * Fix for error in api/request-withdrawal.ts regarding missing sendWithdrawalConfirmation method.
-   */
   static async sendWithdrawalConfirmation(to: string, userName: string, amount: number, campaignTitle: string) {
+    const title = 'Solicitud de Retiro Recibida';
+    const content = `Hola <strong>${userName}</strong>,<br><br>Hemos recibido tu solicitud para retirar <strong>$${amount.toLocaleString('es-CL')}</strong> de la campaña <strong>"${campaignTitle}"</strong>.<br><br>Nuestro equipo validará los antecedentes y procesará la transferencia en las próximas 48 horas hábiles.`;
+
     return this.send({
       from: 'Donia <pagos@notifications.donia.cl>',
       to: [to],
-      subject: 'Solicitud de retiro recibida 💸',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #1e293b;">Solicitud de retiro</h1>
-          <p>Hola ${userName}, hemos recibido tu solicitud para retirar <strong>$${amount.toLocaleString('es-CL')}</strong> de la campaña <strong>"${campaignTitle}"</strong>.</p>
-          <p>Nuestro equipo revisará los antecedentes y procesará la transferencia en un plazo de 24 a 48 horas hábiles.</p>
-        </div>
-      `
+      subject: 'Solicitud de retiro en proceso 💸',
+      html: renderBaseTemplate({
+        title,
+        previewText: 'Hemos recibido tu solicitud de retiro',
+        icon: 'money',
+        content,
+        buttonText: 'Ver mis finanzas',
+        buttonUrl: 'https://donia.cl/dashboard'
+      })
     });
   }
 }
@@ -218,24 +314,15 @@ export class Validator {
   static required(value: any, name: string) {
     if (value === undefined || value === null || value === '') throw new Error(`${name} es requerido.`);
   }
-  /**
-   * Fix for errors in api/polish.ts, api/campaigns.ts, and api/contact.ts.
-   */
   static string(value: any, minLength: number, fieldName: string) {
     if (typeof value !== 'string') throw new Error(`${fieldName} debe ser texto.`);
     if (value.length < minLength) throw new Error(`${fieldName} es muy corto (mínimo ${minLength} caracteres).`);
   }
-  /**
-   * Fix for errors in api/campaigns.ts and api/request-withdrawal.ts.
-   */
   static number(value: any, min: number, fieldName: string) {
     const num = Number(value);
     if (isNaN(num)) throw new Error(`${fieldName} debe ser un número.`);
     if (num < min) throw new Error(`${fieldName} debe ser mayor o igual a ${min}.`);
   }
-  /**
-   * Fix for errors in api/campaigns.ts, api/process-payment.ts, and api/request-withdrawal.ts.
-   */
   static uuid(value: any, fieldName: string) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!value || !uuidRegex.test(value)) throw new Error(`${fieldName} ID inválido.`);
