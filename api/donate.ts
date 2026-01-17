@@ -1,16 +1,26 @@
-
 import { createClient } from '@supabase/supabase-js';
-import { Validator, logger } from './_utils.js';
+import { Validator, logger, Mailer } from './_utils.js';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Donia-Admin-Key');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
     const { campaignId, monto, nombre, comentario, email, donorUserId } = req.body;
+    
+    const adminKey = req.headers['x-donia-admin-key'];
+    const expectedKey = process.env.ADMIN_SECRET_KEY || 'donia_dev_2026';
+
+    if (adminKey !== expectedKey) {
+      logger.error('UNAUTHORIZED_SIMULATED_DONATION_ATTEMPT', { ip: req.headers['x-forwarded-for'] });
+      return res.status(401).json({ 
+        success: false, 
+        error: "No tienes permisos para realizar donaciones simuladas." 
+      });
+    }
 
     Validator.uuid(campaignId, 'campaignId');
     Validator.number(monto, 500, 'monto');
@@ -20,11 +30,20 @@ export default async function handler(req: any, res: any) {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error("CRITICAL: SUPABASE_SERVICE_ROLE_KEY is missing for donation processing.");
       throw new Error('Configuración de base de datos incompleta.');
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data: campaign, error: cFetchError } = await supabase
+      .from('campaigns')
+      .select('id, titulo, recaudado, donantes_count')
+      .eq('id', campaignId)
+      .single();
+
+    if (cFetchError || !campaign) {
+      return res.status(404).json({ success: false, error: "Campaña no encontrada." });
+    }
 
     const donationData: any = { 
       campaign_id: campaignId, 
@@ -45,18 +64,27 @@ export default async function handler(req: any, res: any) {
 
     if (dError) throw dError;
 
-    logger.audit(donorUserId || 'anonymous', 'DONATION_CREATED', donation.id, { 
+    await supabase.from('campaigns').update({
+      recaudado: (Number(campaign.recaudado) || 0) + Number(monto),
+      donantes_count: (Number(campaign.donantes_count) || 0) + 1
+    }).eq('id', campaignId);
+
+    // LOG DE INICIO DE ENVÍO
+    logger.info('DONATION_SUCCESS_TRIGGERING_MAIL', { donationId: donation.id, email });
+
+    if (email) {
+      await Mailer.sendDonationReceipt(
+        email,
+        nombre || 'Amigo de Donia',
+        Number(monto),
+        campaign.titulo || 'Campaña Donia'
+      );
+    }
+
+    logger.audit(donorUserId || 'anonymous', 'DONATION_CREATED_SIMULATED', donation.id, { 
       campaignId, 
       amount: monto 
     });
-
-    const { data: campaign } = await supabase.from('campaigns').select('recaudado, donantes_count').eq('id', campaignId).single();
-    if (campaign) {
-      await supabase.from('campaigns').update({
-          recaudado: (Number(campaign.recaudado) || 0) + Number(monto),
-          donantes_count: (Number(campaign.donantes_count) || 0) + 1
-        }).eq('id', campaignId);
-    }
 
     return res.status(200).json({ success: true, data: donation });
 
