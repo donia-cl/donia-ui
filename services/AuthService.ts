@@ -15,6 +15,10 @@ export class AuthService {
     return AuthService.instance;
   }
 
+  /**
+   * Inicializa el cliente una sola vez.
+   * Si las credenciales no están en el entorno, las busca en el endpoint de config.
+   */
   public async initialize(): Promise<void> {
     if (this.client) return;
     if (this.initPromise) return this.initPromise;
@@ -24,16 +28,15 @@ export class AuthService {
         let url = '';
         let key = '';
 
+        // 1. Intentar variables de entorno (Vite/CRA)
         try {
           // @ts-ignore
-          if (typeof import.meta !== 'undefined' && import.meta.env) {
-            // @ts-ignore
-            url = import.meta.env.VITE_SUPABASE_URL || import.meta.env.REACT_APP_SUPABASE_URL || '';
-            // @ts-ignore
-            key = import.meta.env.VITE_SUPABASE_KEY || import.meta.env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
-          }
+          const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : process.env;
+          url = env.VITE_SUPABASE_URL || env.REACT_APP_SUPABASE_URL || '';
+          key = env.VITE_SUPABASE_KEY || env.REACT_APP_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
         } catch (e) { /* ignore */ }
 
+        // 2. Fallback a configuración de servidor
         if (!url || !key) {
            try {
              const resp = await fetch('/api/config');
@@ -43,25 +46,24 @@ export class AuthService {
                key = config.supabaseKey || key;
              }
            } catch (e: any) {
-             console.warn("[AuthService] Error consultando /api/config");
+             console.error("[AuthService] Error crítico cargando config de servidor");
            }
         }
           
-        if (url && key) {
-          // Fix: Removed the non-existent 'lockLimit' property from the auth configuration object
-          // and ensured it strictly adheres to the Supported Auth settings for Supabase client.
+        if (url && key && !this.client) {
           this.client = createClient(url, key, {
             auth: {
               persistSession: true,
               autoRefreshToken: true,
-              detectSessionInUrl: true, 
-              storageKey: 'donia-auth-token-v1',
-              flowType: 'pkce'
+              detectSessionInUrl: true, // Crucial para PKCE automático
+              flowType: 'pkce',
+              storageKey: 'donia-auth-token-v1'
             }
           });
+          console.log("[AuthService] Supabase Client Initialized (Singleton)");
         }
       } catch (e) {
-        console.error("[AuthService] Error fatal en initialize():", e);
+        console.error("[AuthService] Fallo fatal en inicialización:", e);
       }
     })();
 
@@ -85,9 +87,9 @@ export class AuthService {
 
   async signUp(email: string, pass: string, fullName: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
+    if (!this.client) throw new Error("Servicio no disponible");
     
-    const { data, error } = await (this.client.auth as any).signUp({
+    const { data, error } = await this.client.auth.signUp({
       email,
       password: pass,
       options: { 
@@ -95,65 +97,41 @@ export class AuthService {
         emailRedirectTo: window.location.origin
       }
     });
-
     if (error) throw error;
-    
-    if (data.user) {
-      this.createProfile(data.user.id, fullName).catch(() => {});
-    }
     return data;
-  }
-
-  private async createProfile(id: string, fullName: string) {
-      try {
-        await fetch('/api/create-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, fullName })
-        });
-      } catch (profileError) { /* ignore */ }
   }
 
   async signIn(email: string, pass: string) {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
-    const { data, error } = await (this.client.auth as any).signInWithPassword({ email, password: pass });
+    if (!this.client) throw new Error("Servicio no disponible");
+    const { data, error } = await this.client.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     return data;
   }
 
   async signInWithGoogle() {
     await this.initialize();
-    if (!this.client) throw new Error("Servicio de autenticación no disponible.");
+    if (!this.client) throw new Error("Servicio no disponible");
     
     const redirectTo = window.location.origin; 
-    console.log("[AuthService] Iniciando OAuth Google hacia:", redirectTo);
-    
-    const { data, error } = await (this.client.auth as any).signInWithOAuth({
+    const { data, error } = await this.client.auth.signInWithOAuth({
       provider: 'google',
-      options: { 
-        redirectTo,
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        }
-      }
+      options: { redirectTo }
     });
-    
     if (error) throw error;
     return data;
   }
 
   async signOut() {
     if (!this.client) return;
-    await (this.client.auth as any).signOut();
+    await this.client.auth.signOut();
   }
 
   async getSession(): Promise<any> {
     await this.initialize();
     if (!this.client) return null;
     try {
-      const { data: { session } } = await (this.client.auth as any).getSession();
+      const { data: { session } } = await this.client.auth.getSession();
       return session;
     } catch (e: any) {
       return null;

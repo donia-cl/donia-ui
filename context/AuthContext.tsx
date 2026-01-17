@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { AuthService } from '../services/AuthService';
-import { CampaignService } from '../services/CampaignService';
 import { Profile } from '../types';
 
 interface AuthContextType {
@@ -19,24 +18,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<any | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [debugError, setDebugError] = useState<string | null>(null);
-  
-  const initStarted = useRef(false);
-  const mountedRef = useRef(true);
-  const codeHandled = useRef(false);
   
   const authService = AuthService.getInstance();
-  const campaignService = CampaignService.getInstance();
+  const mountedRef = useRef(true);
 
-  const logStep = (step: string, data?: any) => {
-    const timestamp = new Date().toISOString().split('T')[1];
-    console.log(`%c[AUTH_STEP @ ${timestamp}] ${step}`, 'color: #7c3aed; font-weight: bold; background: #f5f3ff; padding: 2px 4px; border-radius: 4px;', data || '');
-  };
-
+  // Carga el perfil desde el backend de Donia
   const loadUserProfile = async (currentUser: any) => {
     if (!currentUser || !mountedRef.current) return null;
     try {
       let userProfile = await authService.fetchProfile(currentUser.id);
+      // Auto-creación de perfil si no existe (Lazy repair)
       if (!userProfile && mountedRef.current) {
         const fullName = currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Usuario';
         await fetch('/api/create-profile', {
@@ -48,77 +39,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return userProfile;
     } catch (err) {
-      console.error("[AUTH_ERROR] Error perfil:", err);
       return null;
     }
   };
 
-  const cleanUrlAndRedirect = () => {
-     const searchParams = new URLSearchParams(window.location.search);
-     const code = searchParams.get('code');
-     
-     if (code && !codeHandled.current) {
-        codeHandled.current = true;
-        logStep("Limpiando URL de retorno...");
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, newUrl);
-
-        const savedRedirect = localStorage.getItem('donia_auth_redirect');
-        if (savedRedirect) {
-            localStorage.removeItem('donia_auth_redirect');
-            window.location.assign(savedRedirect); 
-        } else if (window.location.pathname === '/' || window.location.pathname === '/login') {
-            window.location.assign('/dashboard');
-        }
-     }
-  };
-
   useEffect(() => {
     mountedRef.current = true;
-    if (initStarted.current) return;
-    initStarted.current = true;
-
-    const initApp = async () => {
-      logStep("Iniciando flujo resiliente...");
-      
-      // Failsafe global: Si en 7 segundos seguimos cargando, forzamos entrada como invitado
-      const failsafeTimer = setTimeout(() => {
-        if (mountedRef.current && loading) {
-          logStep("TIMEOUT CRÍTICO: Forzando desactivación de loader.");
-          setLoading(false);
-          setDebugError("La validación de sesión tardó demasiado. Entrando como invitado.");
-        }
-      }, 7000);
-
+    
+    const initializeAuth = async () => {
       try {
         await authService.initialize();
-        campaignService.initialize().catch(() => {});
-        
         const client = authService.getSupabase();
+        
         if (!client) {
-          clearTimeout(failsafeTimer);
           if (mountedRef.current) setLoading(false);
           return;
         }
 
-        // Suscripción temprana
-        const { data: { subscription } } = (client.auth as any).onAuthStateChange(async (event: any, session: any) => {
+        // 1. Escuchamos cambios de estado (El motor principal de PKCE)
+        const { data: { subscription } } = client.auth.onAuthStateChange(async (event, session) => {
           if (!mountedRef.current) return;
-          logStep(`Evento: ${event}`, session?.user?.email);
           
+          console.log(`[AUTH] Evento: ${event}`);
           const currentUser = session?.user ?? null;
-          setUser(currentUser);
           
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+            setUser(currentUser);
             if (currentUser) {
               const p = await loadUserProfile(currentUser);
               if (mountedRef.current) setProfile(p);
-              cleanUrlAndRedirect();
+              
+              // Si hay código en URL, limpiamos silenciosamente
+              if (window.location.search.includes('code=')) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('code');
+                url.searchParams.delete('state');
+                window.history.replaceState({}, document.title, url.pathname);
+              }
             }
-            if (mountedRef.current) {
-                clearTimeout(failsafeTimer);
-                setLoading(false);
-            }
+            if (mountedRef.current) setLoading(false);
           }
           
           if (event === 'SIGNED_OUT') {
@@ -128,51 +87,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
-        // REGLA ORO: Delay para evitar colisión de locks de navegador con el proceso interno de Supabase
-        await new Promise(r => setTimeout(r, 800));
-
-        logStep("Pidiendo sesión al servidor...");
-        const { data: { session }, error: sessionError } = await client.auth.getSession().catch(e => ({ data: { session: null }, error: e }));
-        
-        if (sessionError) {
-            logStep("Error capturado en getSession", sessionError.message);
-        }
-
-        if (mountedRef.current) {
-          if (session?.user) {
-            logStep("Sesión activa encontrada.");
-            setUser(session.user);
-            const p = await loadUserProfile(session.user);
-            if (mountedRef.current) setProfile(p);
-            cleanUrlAndRedirect();
-            clearTimeout(failsafeTimer);
-            setLoading(false);
-          } else {
-            const hasCode = new URLSearchParams(window.location.search).has('code');
-            if (!hasCode) {
-                logStep("Sin sesión ni código. Flujo regular.");
-                clearTimeout(failsafeTimer);
-                setLoading(false);
-            } else {
-                logStep("Código detectado. Esperando intercambio PKCE...");
-                // No quitamos el loading aquí, dejamos que onAuthStateChange SIGNED_IN lo haga
+        // 2. RECUPERACIÓN DE SESIÓN (SOLO SI NO HAY CÓDIGO)
+        // Regla de Oro: No llamar a getSession() si estamos en medio de un intercambio de código PKCE
+        // porque detectSessionInUrl: true ya lo está manejando internamente.
+        const hasCode = window.location.search.includes('code=');
+        if (!hasCode) {
+          try {
+            const { data: { session } } = await client.auth.getSession();
+            if (session?.user && mountedRef.current) {
+              setUser(session.user);
+              const p = await loadUserProfile(session.user);
+              if (mountedRef.current) setProfile(p);
             }
+          } catch (err: any) {
+            // Ignoramos AbortErrors ya que son comunes en re-renders de React StrictMode
+            if (err.name !== 'AbortError') console.error("getSession error:", err);
+          } finally {
+            if (mountedRef.current) setLoading(false);
           }
+        } else {
+          // Si tiene código, NO quitamos el loader aquí. 
+          // Esperamos a que onAuthStateChange detecte SIGNED_IN y lo haga.
+          console.log("[AUTH] Detectado flujo PKCE activo. Esperando suscriptor...");
         }
 
         return () => {
           mountedRef.current = false;
           subscription.unsubscribe();
-          clearTimeout(failsafeTimer);
         };
-      } catch (error: any) {
-        logStep("Error fatal en initApp", error.message);
-        clearTimeout(failsafeTimer);
+      } catch (error) {
+        console.error("[AUTH] Error crítico inicialización:", error);
         if (mountedRef.current) setLoading(false);
       }
     };
 
-    initApp();
+    initializeAuth();
+
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const signOut = async () => {
@@ -191,9 +144,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const isProcessingAuth = loading && new URLSearchParams(window.location.search).has('code');
-
-  if (isProcessingAuth) {
+  // UI de carga optimizada para esperas de autenticación
+  if (loading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-white gap-6">
         <div className="relative">
@@ -202,22 +154,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 <div className="w-2 h-2 bg-violet-600 rounded-full animate-ping"></div>
             </div>
         </div>
-        <div className="text-center px-6">
+        <div className="text-center">
           <p className="text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] mb-2">Seguridad Donia</p>
-          <p className="text-slate-900 font-black text-lg">Confirmando tu identidad...</p>
-          <p className="mt-4 text-xs text-slate-400 font-medium max-w-xs mx-auto leading-relaxed">
-            Estamos sincronizando tu sesión con los servidores de seguridad. Esto suele tomar un par de segundos.
-          </p>
-          {debugError && (
-              <div className="mt-8 flex flex-col items-center gap-3">
-                <p className="text-[10px] text-amber-600 font-bold bg-amber-50 px-4 py-2 rounded-full flex items-center gap-2">
-                    <AlertTriangle size={14} /> {debugError}
-                </p>
-                <button onClick={() => window.location.reload()} className="flex items-center gap-2 text-violet-600 font-black text-xs uppercase tracking-widest hover:underline">
-                    <RefreshCw size={14} /> Reintentar ahora
-                </button>
-              </div>
-          )}
+          <p className="text-slate-900 font-black text-lg">Validando acceso...</p>
         </div>
       </div>
     );
