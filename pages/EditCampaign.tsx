@@ -15,11 +15,89 @@ import {
   ShieldCheck,
   DollarSign,
   UserCheck,
-  Settings
+  Settings,
+  Sparkles,
+  Check,
+  Zap,
+  Heart
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { CampaignService } from '../services/CampaignService';
 import { CampaignData } from '../types';
+
+const ComparisonModal = ({ 
+  original, 
+  polished, 
+  onAccept, 
+  onClose,
+  isProcessing 
+}: { 
+  original: string, 
+  polished: string, 
+  onAccept: () => void, 
+  onClose: () => void,
+  isProcessing: boolean
+}) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="bg-white w-full max-w-5xl rounded-[40px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+      <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-violet-600 text-white rounded-2xl flex items-center justify-center shadow-lg">
+            <Sparkles size={24} />
+          </div>
+          <div>
+            <h3 className="text-2xl font-black text-slate-900 tracking-tight">Propuesta de optimización</h3>
+            <p className="text-slate-500 font-medium text-sm">Mejorando la estructura y el impacto de tu relato.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+           <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-100">
+              <Check size={12} /> Claridad
+           </div>
+           <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-50 text-violet-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-violet-100">
+              <Heart size={12} /> Empatía
+           </div>
+        </div>
+      </div>
+      <div className="flex-grow overflow-y-auto p-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="space-y-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Versión Actual</span>
+            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 text-slate-500 text-sm leading-relaxed italic min-h-[300px]">
+              {original}
+            </div>
+          </div>
+          <div className="space-y-4">
+            <span className="text-[10px] font-black uppercase tracking-widest text-violet-500 flex items-center gap-2">
+              <Zap size={12} className="fill-current" /> Propuesta de la IA
+            </span>
+            <div className="p-6 bg-violet-50/30 rounded-3xl border border-violet-100 text-slate-800 text-sm md:text-base font-medium leading-relaxed min-h-[300px] shadow-inner">
+              {isProcessing ? (
+                <div className="flex flex-col items-center justify-center h-full gap-4 py-20">
+                   <Loader2 size={32} className="text-violet-600 animate-spin" />
+                   <p className="text-violet-600 font-black text-xs uppercase tracking-widest">Generando mejoras...</p>
+                </div>
+              ) : polished}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="p-8 border-t border-slate-100 flex flex-col md:flex-row gap-4 justify-end items-center bg-white">
+        <p className="text-[11px] text-slate-400 font-medium md:mr-auto max-w-sm text-center md:text-left">
+          La IA optimiza la narrativa, pero la veracidad de los hechos sigue siendo tu responsabilidad.
+        </p>
+        <button onClick={onClose} className="px-8 py-4 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-slate-600 transition-colors">Cancelar</button>
+        <button 
+          onClick={onAccept}
+          disabled={isProcessing || !polished}
+          className="bg-violet-600 text-white px-10 py-4 rounded-2xl font-black hover:bg-violet-700 transition-all shadow-xl shadow-violet-200 flex items-center gap-2"
+        >
+          Aplicar cambios <Check size={20} />
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 const EditCampaign: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +110,8 @@ const EditCampaign: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [polishedProposal, setPolishedProposal] = useState('');
+  const [showAiModal, setShowAiModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -111,17 +191,25 @@ const EditCampaign: React.FC = () => {
     };
   };
 
-  const handleAiPolish = async () => {
+  const startAiPolish = async () => {
     if (!formData.historia || formData.historia.length < 20) return;
+    setShowAiModal(true);
     setIsAiProcessing(true);
     try {
       const polished = await service.polishStory(formData.historia);
-      setFormData(prev => ({ ...prev, historia: polished }));
+      setPolishedProposal(polished);
     } catch (err) {
       console.error("Error en pulido de IA:", err);
+      setShowAiModal(false);
     } finally {
       setIsAiProcessing(false);
     }
+  };
+
+  const handleAcceptProposal = () => {
+    setFormData({ ...formData, historia: polishedProposal });
+    setShowAiModal(false);
+    setPolishedProposal('');
   };
 
   const handleSave = async () => {
@@ -172,6 +260,16 @@ const EditCampaign: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
+      {showAiModal && (
+        <ComparisonModal 
+          original={formData.historia}
+          polished={polishedProposal}
+          onAccept={handleAcceptProposal}
+          onClose={() => setShowAiModal(false)}
+          isProcessing={isAiProcessing}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-12">
         <button 
           onClick={() => navigate('/dashboard')}
@@ -188,7 +286,6 @@ const EditCampaign: React.FC = () => {
       </div>
 
       <div className="space-y-8">
-        {/* Sección: Imagen */}
         <div className="bg-white rounded-[40px] border border-slate-100 p-8 shadow-sm">
            <div className="flex items-center gap-3 mb-6">
               <ImageIcon size={20} className="text-violet-600" />
@@ -231,7 +328,6 @@ const EditCampaign: React.FC = () => {
           </div>
         </div>
 
-        {/* Sección: General */}
         <div className="bg-white rounded-[40px] border border-slate-100 p-8 shadow-sm">
            <div className="flex items-center gap-3 mb-8">
               <Layout size={20} className="text-violet-600" />
@@ -279,7 +375,6 @@ const EditCampaign: React.FC = () => {
            </div>
         </div>
 
-        {/* Sección: Historia */}
         <div className="bg-white rounded-[40px] border border-slate-100 p-8 shadow-sm">
            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
               <div className="flex items-center gap-3">
@@ -287,7 +382,7 @@ const EditCampaign: React.FC = () => {
                  <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">El Relato</h2>
               </div>
               <button
-                onClick={handleAiPolish}
+                onClick={startAiPolish}
                 disabled={isAiProcessing || formData.historia.length < 20}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl text-[10px] font-black transition-all shadow-lg ${
                   isAiProcessing 
@@ -296,7 +391,7 @@ const EditCampaign: React.FC = () => {
                 }`}
               >
                 {isAiProcessing ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                {isAiProcessing ? 'Mejorando relato...' : 'Perfeccionar con IA'}
+                {isAiProcessing ? 'Analizando...' : 'Optimizar relato con IA'}
               </button>
            </div>
            
@@ -310,7 +405,6 @@ const EditCampaign: React.FC = () => {
            />
         </div>
 
-        {/* Sección: Transparencia */}
         <div className="bg-white rounded-[40px] border border-slate-100 p-8 shadow-sm border-l-8 border-l-sky-400">
            <div className="flex items-center gap-3 mb-8">
               <ShieldCheck size={20} className="text-sky-600" />
